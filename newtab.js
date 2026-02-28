@@ -1,0 +1,26 @@
+// AITools Newtab - Instant Redirect Handler
+
+console.log('[AITools Newtab] Redirecting...');
+
+const urls = {
+  'google': 'https://www.google.com/',
+  'startpage': 'https://www.startpage.com/',
+  'duckduckgo': 'https://www.duckduckgo.com/',
+  'github': 'https://github.com/'
+};
+
+// Get stored preference and redirect immediately
+chrome.storage.local.get(['newtabUrlPreset', 'newtabUrlCustom'], (data) => {
+  const preset = data.newtabUrlPreset || 'google';
+  const customUrl = data.newtabUrlCustom;
+  
+  let targetUrl = urls[preset] || urls['google'];
+  
+  if (preset === 'custom' && customUrl) {
+    targetUrl = customUrl;
+  }
+  
+  console.log('[AITools Newtab] Redirecting to:', targetUrl);
+  window.location.replace(targetUrl);
+});
+
