@@ -26,8 +26,18 @@ let elementVisibility = {
   summarizerBtn: true
 };
 
+// Button visibility state
+let buttonVisibility = {
+  googleButtons: true,
+  summarizerButton: true,
+  aiDetectorBadge: true,
+  translationButtons: true,
+  quickStatsWidget: true,
+  readingTimeBadge: true
+};
+
 // Load settings and visibility state from storage
-chrome.storage.local.get(['aiDetectorSensitivity', 'summarizerLength', 'summarizerLang', 'aitools-visibility', 'autoTranslatorEnabled', 'translatorTargetLang', 'cookieBlockerEnabled', 'readingTimeEnabled', 'quickStatsEnabled'], (result) => {
+chrome.storage.local.get(['aiDetectorSensitivity', 'summarizerLength', 'summarizerLang', 'aitools-visibility', 'autoTranslatorEnabled', 'translatorTargetLang', 'cookieBlockerEnabled', 'readingTimeEnabled', 'quickStatsEnabled', 'buttonVisibility'], (result) => {
   if (result.aiDetectorSensitivity) extensionSettings.aiDetectorSensitivity = parseInt(result.aiDetectorSensitivity);
   if (result.summarizerLength) extensionSettings.summarizerLength = parseInt(result.summarizerLength);
   if (result.summarizerLang) extensionSettings.summarizerLang = result.summarizerLang;
@@ -38,6 +48,9 @@ chrome.storage.local.get(['aiDetectorSensitivity', 'summarizerLength', 'summariz
   if (result.quickStatsEnabled !== undefined) extensionSettings.quickStatsEnabled = result.quickStatsEnabled;
   if (result['aitools-visibility']) {
     elementVisibility = { ...elementVisibility, ...result['aitools-visibility'] };
+  }
+  if (result.buttonVisibility) {
+    buttonVisibility = { ...buttonVisibility, ...result.buttonVisibility };
   }
 });
 
@@ -296,6 +309,12 @@ window.aiToolsAddNote = function(text) {
 function setupGoogleEnhancements() {
   // Only on Google
   if (!window.location.hostname.includes('google.')) return;
+  
+  // Check if Google buttons are enabled
+  if (!buttonVisibility.googleButtons) {
+    console.log('[AITools] Google buttons disabled in settings');
+    return;
+  }
   
   console.log('[AITools] Google enhancements loaded');
   
@@ -770,6 +789,12 @@ function tryClickAcceptButton(popup) {
 // AI DETECTOR - Automatic highlighting
 // ============================================================================
 function initAIDetector() {
+  // Check if AI detector badge is enabled
+  if (!buttonVisibility.aiDetectorBadge) {
+    console.log('[AITools] AI detector badge disabled in settings');
+    return;
+  }
+  
   if (!extensionSettings.aiDetectorEnabled) return;
   
   setTimeout(() => {
@@ -893,6 +918,12 @@ function showAIBadge(score) {
 // SUMMARIZER - Top button for page summarization
 // ============================================================================
 function initSummarizer() {
+  // Check if summarizer button is enabled
+  if (!buttonVisibility.summarizerButton) {
+    console.log('[AITools] Summarizer button disabled in settings');
+    return;
+  }
+  
   // Don't show summarizer on Google Search results
   if (window.location.hostname.includes('google.')) return;
   if (!extensionSettings.summarizerEnabled) return;
@@ -1952,6 +1983,61 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     chrome.storage.local.remove(['aitools-ai-badge-pos', 'aitools-summarize-btn-pos']);
     // Reload positions
     location.reload();
+  } else if (req.action === 'updateButtonVisibility') {
+    // Handle button visibility updates from popup
+    console.log('[AITools] Button visibility updated:', req.buttonType, req.isVisible);
+    
+    const buttonType = req.buttonType;
+    const isVisible = req.isVisible;
+    
+    if (buttonType === 'googleButtons') {
+      const container = document.getElementById('aitools-google-buttons');
+      if (container) {
+        container.style.display = isVisible ? 'flex' : 'none';
+        console.log('[AITools] Google buttons toggled:', isVisible);
+      }
+    } else if (buttonType === 'summarizerButton') {
+      const btn = document.getElementById('aitools-summarize-btn');
+      if (btn) {
+        btn.style.display = isVisible ? 'flex' : 'none';
+        console.log('[AITools] Summarizer button toggled:', isVisible);
+      }
+    } else if (buttonType === 'aiDetectorBadge') {
+      const badge = document.getElementById('aitools-ai-badge');
+      if (badge) {
+        badge.style.display = isVisible ? 'block' : 'none';
+        console.log('[AITools] AI badge toggled:', isVisible);
+      }
+    } else if (buttonType === 'translationButtons') {
+      document.querySelectorAll('.aitools-translate-btn').forEach(btn => {
+        btn.style.display = isVisible ? 'inline-block' : 'none';
+      });
+      console.log('[AITools] Translation buttons toggled:', isVisible);
+    } else if (buttonType === 'quickStatsWidget') {
+      const widget = document.getElementById('aitools-quick-stats');
+      if (widget) {
+        widget.style.display = isVisible ? 'block' : 'none';
+        console.log('[AITools] Quick stats widget toggled:', isVisible);
+      }
+    } else if (buttonType === 'readingTimeBadge') {
+      const badge = document.getElementById('aitools-rte-badge');
+      if (badge) {
+        badge.style.display = isVisible ? 'block' : 'none';
+        console.log('[AITools] Reading time badge toggled:', isVisible);
+      }
+    }
+  } else if (req.action === 'resetButtonPositions') {
+    // Reset all button positions
+    console.log('[AITools] Resetting all button positions');
+    chrome.storage.local.get(null, (data) => {
+      const positionKeys = Object.keys(data).filter(k => k.includes('-pos') && k.includes('aitools'));
+      if (positionKeys.length > 0) {
+        chrome.storage.local.remove(positionKeys, () => {
+          console.log('[AITools] Position keys removed:', positionKeys);
+          location.reload();
+        });
+      }
+    });
   } else if (req.action === 'updateGoogleButtons') {
     // Update Google button visibility and/or config, then re-render
     // Save visibility changes if provided

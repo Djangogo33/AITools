@@ -149,6 +149,85 @@
       </div>
     </section>
 
+    <!-- Buttons Management Tab -->
+    <section class="tab" id="buttons">
+      <h2>Gérer les boutons</h2>
+      
+      <!-- Google Search Buttons -->
+      <div class="section">
+        <p class="label">🔍 Boutons Google Search:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="googleButtonsVisible" checked class="button-toggle" data-button-type="googleButtons">
+          <span>Afficher les boutons</span>
+        </label>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Lucky • Filtres • Maps • ChatGPT</p>
+      </div>
+
+      <!-- Summarizer Button -->
+      <div class="section">
+        <p class="label">✂️ Bouton Résumé:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="summarizerButtonVisible" checked class="button-toggle" data-button-type="summarizerButton">
+          <span>Afficher le bouton résumé</span>
+        </label>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Résume automatiquement le contenu de la page</p>
+      </div>
+
+      <!-- AI Detector Badge -->
+      <div class="section">
+        <p class="label">⚠️ Badge Détecteur IA:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="aiDetectorBadgeVisible" checked class="button-toggle" data-button-type="aiDetectorBadge">
+          <span>Afficher le badge IA</span>
+        </label>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Détecte le contenu généré par IA</p>
+      </div>
+
+      <!-- Translation Buttons -->
+      <div class="section">
+        <p class="label">🌐 Boutons Traduction:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="translationButtonsVisible" checked class="button-toggle" data-button-type="translationButtons">
+          <span>Afficher les boutons traduction</span>
+        </label>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Traduit les paragraphes dans d'autres langues</p>
+      </div>
+
+      <!-- Quick Stats Widget -->
+      <div class="section">
+        <p class="label">📊 Widget Statistiques:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="quickStatsWidgetVisible" checked class="button-toggle" data-button-type="quickStatsWidget">
+          <span>Afficher le widget stats</span>
+        </label>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Affiche les stats de la page (liens, images, etc.)</p>
+      </div>
+
+      <!-- Reading Time Badge -->
+      <div class="section">
+        <p class="label">⏰ Badge Temps de lecture:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="readingTimeBadgeVisible" checked class="button-toggle" data-button-type="readingTimeBadge">
+          <span>Afficher le badge temps</span>
+        </label>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Estime le temps de lecture de la page</p>
+      </div>
+
+      <!-- Manage Positions -->
+      <div class="section" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e0e0e0;">
+        <p class="label">🎯 Gérer les positions:</p>
+        <button id="resetAllButtonPositionsBtn" class="btn btn-sm" style="width: 100%;">↺ Réinitialiser toutes positions</button>
+        <p style="font-size: 10px; color: #999; margin-top: 6px;">Remet tous les boutons à leur position par défaut</p>
+      </div>
+
+      <!-- Help -->
+      <div class="section" style="margin-top: 12px; padding: 10px; background: #f0f7ff; border-left: 3px solid #667eea; border-radius: 4px;">
+        <p style="font-size: 11px; color: #333; margin: 0;">
+          💡 <strong>Astuce:</strong> Vous pouvez déplacer les boutons en les glissant sur n'importe quelle page. Les positions sont sauvegardées automatiquement.
+        </p>
+      </div>
+    </section>
+
     <!-- Tools Tab -->
     <section class="tab" id="tools">
       <h2>Outils avancés</h2>

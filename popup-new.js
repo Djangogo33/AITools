@@ -222,6 +222,73 @@ document.addEventListener('DOMContentLoaded', () => {
   // Reset Button
   document.getElementById('resetBtn').addEventListener('click', resetExtension);
 
+  // ============================================================================
+  // BUTTON MANAGEMENT - NEW SECTION
+  // ============================================================================
+  
+  // Button Toggles
+  document.querySelectorAll('.button-toggle').forEach(toggle => {
+    toggle.addEventListener('change', (e) => {
+      const buttonType = e.target.dataset.buttonType;
+      const isVisible = e.target.checked;
+      
+      // Save to storage
+      const buttonVisibility = {};
+      buttonVisibility[buttonType] = isVisible;
+      chrome.storage.local.set({ buttonVisibility });
+      
+      // Notify all tabs
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'updateButtonVisibility',
+            buttonType: buttonType,
+            isVisible: isVisible
+          }).catch(() => {
+            // Silent fail for tabs that don't have content script
+          });
+        });
+      });
+      
+      console.log('[AITools Popup] Button visibility updated:', buttonType, isVisible);
+    });
+  });
+  
+  // Reset All Button Positions
+  document.getElementById('resetAllButtonPositionsBtn')?.addEventListener('click', () => {
+    if (!confirm('Êtes-vous sûr? Cela réinitialisera les positions de tous les boutons.')) return;
+    
+    // Remove all position data from storage
+    const keysToRemove = [
+      'aitools-ai-badge-pos',
+      'aitools-summarize-btn-pos',
+      'aitools-translate-btn-quick'
+    ];
+    
+    chrome.storage.local.remove(keysToRemove, () => {
+      // Also remove any 'aitools-translate-btn-' keys
+      chrome.storage.local.get(null, (data) => {
+        const translationPosKeys = Object.keys(data).filter(k => k.startsWith('aitools-translate-btn-'));
+        if (translationPosKeys.length > 0) {
+          chrome.storage.local.remove(translationPosKeys);
+        }
+      });
+    });
+    
+    // Notify all tabs to refresh positions
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'resetButtonPositions'
+        }).catch(() => {
+          // Silent fail
+        });
+      });
+    });
+    
+    alert('✅ Positions réinitialisées! Rechargez les pages pour voir les changements.');
+  });
+
   // AI Tools
   document.getElementById('aiDetectorBtn').addEventListener('click', detectAI);
   document.getElementById('translatorBtn').addEventListener('click', openTranslator);
