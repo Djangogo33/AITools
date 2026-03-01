@@ -393,7 +393,9 @@ function setupGoogleEnhancements() {
     console.log('[AITools] Injection check: input found?', !!searchInput, 'form found?', !!searchForm);
     
     if (!searchForm && !searchInput) {
-      console.log('[AITools] Search form/input not found');
+      console.log('[AITools] Search form/input not found, retrying in 1s...');
+      // Retry after 1 second if not found
+      setTimeout(injectGoogleButtons, 1000);
       return;
     }
     
@@ -409,13 +411,20 @@ function setupGoogleEnhancements() {
     container = document.createElement('div');
     container.id = 'aitools-google-buttons';
     container.style.cssText = `
+      position: fixed;
+      top: 80px;
+      right: 20px;
       display: flex;
       gap: 8px;
-      margin-top: 12px;
       flex-wrap: wrap;
-      padding: 8px 0;
+      padding: 8px 12px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      z-index: 9997;
+      max-width: 400px;
     `;
-    console.log('[AITools] Container created and styled');
+    console.log('[AITools] Container created with fixed positioning');
     
     // Inject styles
     if (!document.getElementById('aitools-google-styles')) {
@@ -447,6 +456,12 @@ function setupGoogleEnhancements() {
           color: #1f2937;
           border-bottom-color: #667eea;
           transform: translateY(0);
+        }
+        #aitools-google-buttons {
+          cursor: grab !important;
+        }
+        #aitools-google-buttons:active {
+          cursor: grabbing !important;
         }
       `;
       document.head.appendChild(style);
@@ -534,34 +549,32 @@ function setupGoogleEnhancements() {
         console.log('[AITools] Button appended to container:', def.key);
       });
       
-      // Make container draggable
-      if (window.layoutManager && window.layoutManager.registerElement) {
-        window.layoutManager.registerElement('aitools-google-buttons', container, {
-          width: 350,
-          height: 50,
-          priority: 6,
-          draggable: true
-        });
-      }
-      makeDraggable(container, 'aitools-google-buttons-pos');
-      
-      // Append to search form or before first search result
+      // Append to body (container is already fixed positioned)
       if (container.children.length > 0) {
         console.log('[AITools] Total buttons created:', container.children.length);
         
-        if (searchForm) {
-          console.log('[AITools] Appending to search form');
-          searchForm.appendChild(container);
-        } else {
-          const resultsDiv = document.getElementById('rso') || document.querySelector('[role="main"]');
-          if (resultsDiv) {
-            console.log('[AITools] Appending before results div');
-            resultsDiv.parentNode.insertBefore(container, resultsDiv);
-          } else {
-            console.warn('[AITools] No suitable parent found, appending to body');
-            document.body.appendChild(container);
+        document.body.appendChild(container);
+        console.log('[AITools] Container appended to body');
+        
+        // Register with layout manager for smart positioning
+        if (window.layoutManager && typeof window.layoutManager.registerElement === 'function') {
+          try {
+            window.layoutManager.registerElement('aitools-google-buttons', container, {
+              width: 420,
+              height: 50,
+              priority: 6,
+              draggable: true
+            });
+            console.log('[AITools] ✓ Registered with layout manager');
+          } catch (e) {
+            console.log('[AITools] Layout manager registration failed:', e.message);
           }
+        } else {
+          console.log('[AITools] Layout manager not available, using fixed positioning only');
         }
+        
+        // Make it draggable
+        makeDraggable(container, 'aitools-google-buttons-pos');
         
         console.log('[AITools] ✓ Buttons injected successfully on Google');
         console.log('[AITools] Container element:', container);
