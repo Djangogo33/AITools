@@ -18,7 +18,8 @@ let extensionSettings = {
   summarizerLength: 35,
   cookieBlockerEnabled: true,
   readingTimeEnabled: true,
-  quickStatsEnabled: true
+  quickStatsEnabled: true,
+  performanceModeEnabled: false
 };
 
 let elementVisibility = {
@@ -37,7 +38,7 @@ let buttonVisibility = {
 };
 
 // Load settings and visibility state from storage
-chrome.storage.local.get(['aiDetectorSensitivity', 'summarizerLength', 'summarizerLang', 'aitools-visibility', 'autoTranslatorEnabled', 'translatorTargetLang', 'cookieBlockerEnabled', 'readingTimeEnabled', 'quickStatsEnabled', 'buttonVisibility'], (result) => {
+chrome.storage.local.get(['aiDetectorSensitivity', 'summarizerLength', 'summarizerLang', 'aitools-visibility', 'autoTranslatorEnabled', 'translatorTargetLang', 'cookieBlockerEnabled', 'readingTimeEnabled', 'quickStatsEnabled', 'performanceModeEnabled', 'buttonVisibility'], (result) => {
   if (result.aiDetectorSensitivity) extensionSettings.aiDetectorSensitivity = parseInt(result.aiDetectorSensitivity);
   if (result.summarizerLength) extensionSettings.summarizerLength = parseInt(result.summarizerLength);
   if (result.summarizerLang) extensionSettings.summarizerLang = result.summarizerLang;
@@ -46,6 +47,7 @@ chrome.storage.local.get(['aiDetectorSensitivity', 'summarizerLength', 'summariz
   if (result.cookieBlockerEnabled !== undefined) extensionSettings.cookieBlockerEnabled = result.cookieBlockerEnabled;
   if (result.readingTimeEnabled !== undefined) extensionSettings.readingTimeEnabled = result.readingTimeEnabled;
   if (result.quickStatsEnabled !== undefined) extensionSettings.quickStatsEnabled = result.quickStatsEnabled;
+  if (result.performanceModeEnabled !== undefined) extensionSettings.performanceModeEnabled = result.performanceModeEnabled;
   if (result['aitools-visibility']) {
     elementVisibility = { ...elementVisibility, ...result['aitools-visibility'] };
   }
@@ -2110,8 +2112,15 @@ chrome.storage.local.get(null, (data) => {
   if (data.cookieBlockerEnabled !== undefined) extensionSettings.cookieBlockerEnabled = data.cookieBlockerEnabled;
   if (data.readingTimeEnabled !== undefined) extensionSettings.readingTimeEnabled = data.readingTimeEnabled;
   if (data.quickStatsEnabled !== undefined) extensionSettings.quickStatsEnabled = data.quickStatsEnabled;
+  if (data.performanceModeEnabled !== undefined) extensionSettings.performanceModeEnabled = data.performanceModeEnabled;
   
-  initAIDetector();
+  // Skip AI detector in performance mode (it's resource-intensive)
+  if (!extensionSettings.performanceModeEnabled) {
+    initAIDetector();
+  } else {
+    console.log('[AITools] AI Detector disabled due to performance mode');
+  }
+  
   initSummarizer();
   initAutoTranslator();
   initCookieBlocker();
@@ -2184,6 +2193,21 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
         });
       }
     });
+  } else if (req.action === 'togglePerformanceMode') {
+    // Toggle performance mode
+    console.log('[AITools] Performance mode:', req.enabled ? 'ENABLED' : 'DISABLED');
+    
+    if (req.enabled) {
+      // Disable AI detector in performance mode
+      if (document.getElementById('aitools-ai-badge')) {
+        document.getElementById('aitools-ai-badge').style.display = 'none';
+      }
+    } else {
+      // Re-enable AI detector
+      if (document.getElementById('aitools-ai-badge')) {
+        document.getElementById('aitools-ai-badge').style.display = 'block';
+      }
+    }
   } else if (req.action === 'updateGoogleButtons') {
     // Update Google button visibility and/or config, then re-render
     // Save visibility changes if provided
