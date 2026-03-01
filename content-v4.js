@@ -1303,8 +1303,10 @@ function showSummaryModal(summary) {
   
   // If language is different, translate the summary
   if (pageLanguage && pageLanguage !== targetLang) {
+    // Limit summary to 500 chars for API compatibility
+    const summaryToTranslate = summary.substring(0, 500);
     chrome.runtime.sendMessage(
-      { action: 'translateText', text: summary, targetLang: targetLang },
+      { action: 'translateText', text: summaryToTranslate, targetLang: targetLang },
       (response) => {
         if (response && response.success) {
           const translatedSummary = response.text || summary;
@@ -1665,9 +1667,12 @@ function translateAndShowModal(text, sourceLang, targetLang) {
   
   console.log('[AITools] Translating from', sourceLang, 'to', targetLang);
   
+  // Limit to 500 chars - both MyMemory and Reverso have this limit
+  const textToTranslate = text.substring(0, 500);
+  
   // Use background script to translate
   chrome.runtime.sendMessage(
-    { action: 'translateText', text: text.substring(0, 5000), targetLang: targetLang },
+    { action: 'translateText', text: textToTranslate, targetLang: targetLang },
     (response) => {
       if (btn) {
         btn.querySelector('span').textContent = originalText || '🌐 Traduire';
@@ -1676,7 +1681,7 @@ function translateAndShowModal(text, sourceLang, targetLang) {
       
       if (response && response.success) {
         console.log('[AITools] Translation successful');
-        showTranslationModal(text.substring(0, 1000), response.text || text, sourceLang, targetLang);
+        showTranslationModal(text.substring(0, 500), response.text || text, sourceLang, targetLang);
       } else {
         console.error('[AITools] Translation failed:', response?.error || 'Unknown error');
         alert('❌ Erreur lors de la traduction. Veuillez réessayer.');

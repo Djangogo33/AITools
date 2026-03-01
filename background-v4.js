@@ -27,7 +27,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           return;
         }
         
-        const textToTranslate = text.length > 1000 ? text.substring(0, 1000) : text;
+        // Limit text size: MyMemory allows 500, Reverso allows 500
+        const textToTranslate = text.length > 500 ? text.substring(0, 500) : text;
         
         // Language mapping for APIs
         const langMap = {
@@ -45,7 +46,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           url.searchParams.append('q', textToTranslate);
           url.searchParams.append('langpair', 'auto|' + apiLang);
           
-          console.log('[AITools] Calling MyMemory API: ' + url);
+          console.log('[AITools] Calling MyMemory API');
           const response = await fetch(url);
           const data = await response.json();
           
@@ -53,10 +54,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           
           if (data?.responseData?.translatedText && 
               data.responseData.translatedText.length > 0 && 
-              data.responseData.translatedText.toLowerCase() !== textToTranslate.toLowerCase()) {
+              data.responseData.translatedText.toLowerCase() !== textToTranslate.toLowerCase() &&
+              !data.responseData.translatedText.includes('QUERY LENGTH') &&
+              !data.responseData.translatedText.includes('error')) {
             console.log('[AITools] Translation successful via MyMemory');
             sendResponse({ success: true, text: data.responseData.translatedText });
             return;
+          } else {
+            console.log('[AITools] MyMemory response invalid:', data?.responseData?.translatedText?.substring(0, 100));
           }
         } catch (e1) {
           console.log('[AITools] MyMemory failed:', e1.message);
@@ -71,18 +76,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const reversoResponse = await fetch(reversoUrl);
           const reversoData = await reversoResponse.json();
           
-          if (reversoData?.translation && reversoData.translation.length > 0) {
+          console.log('[AITools] Reverso translation[0]:', reversoData?.translation?.[0]?.substring(0, 100));
+          
+          if (reversoData?.translation && 
+              reversoData.translation.length > 0 &&
+              !reversoData.translation[0].includes('QUERY LENGTH') &&
+              !reversoData.translation[0].includes('error') &&
+              reversoData.translation[0].toLowerCase() !== textToTranslate.toLowerCase()) {
             console.log('[AITools] Translation successful via Reverso');
             sendResponse({ success: true, text: reversoData.translation[0] });
             return;
+          } else {
+            console.log('[AITools] Reverso response invalid');
           }
         } catch (e2) {
           console.log('[AITools] Reverso API failed:', e2.message);
         }
         
         // All APIs failed
-        console.log('[AITools] All translation APIs failed');
-        sendResponse({ success: false, error: 'Translation service unavailable' });
+        console.log('[AITools] All translation APIs failed or returned errors');
+        sendResponse({ success: false, error: 'Translation service unavailable - APIs returned errors' });
         
       } catch (e) {
         console.error('[AITools] Translation error:', e.message);
