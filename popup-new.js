@@ -330,6 +330,60 @@ document.addEventListener('DOMContentLoaded', () => {
     alert('✅ Positions et visibilité réinitialisées! Rechargez les pages pour voir les changements.');
   });
 
+  // Layout Management
+  const layoutSelect = document.getElementById('layoutSelect');
+  if (layoutSelect) {
+    // Load saved layout
+    chrome.storage.local.get('aitools-layout', (data) => {
+      if (data['aitools-layout']) {
+        layoutSelect.value = data['aitools-layout'];
+      }
+    });
+
+    // Handle layout change
+    layoutSelect.addEventListener('change', (e) => {
+      const layout = e.target.value;
+      chrome.storage.local.set({ 'aitools-layout': layout });
+      
+      // Notify all tabs
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'setLayout',
+            layout: layout
+          }).catch(() => {
+            // Silent fail
+          });
+        });
+      });
+    });
+  }
+
+  // Reset Layout Button
+  const resetLayoutBtn = document.getElementById('resetLayoutBtn');
+  if (resetLayoutBtn) {
+    resetLayoutBtn.addEventListener('click', () => {
+      chrome.storage.local.set({
+        'aitools-layout': 'adaptive',
+        'aitools-layout-custom': {}
+      });
+      
+      if (layoutSelect) layoutSelect.value = 'adaptive';
+      
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'resetLayout'
+          }).catch(() => {
+            // Silent fail
+          });
+        });
+      });
+      
+      alert('✅ Layout réinitialisé par défaut!');
+    });
+  }
+
   // AI Tools
   document.getElementById('aiDetectorBtn').addEventListener('click', detectAI);
   document.getElementById('translatorBtn').addEventListener('click', openTranslator);
