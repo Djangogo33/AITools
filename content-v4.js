@@ -1216,7 +1216,7 @@ function detectLanguageOfText(text) {
     return 'zh';
   }
   
-  return null;
+  return 'en'; // Default to English
 }
 
 // Translate using Background Script (avoids CSP issues)

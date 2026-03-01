@@ -20,30 +20,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     (async () => {
       try {
-        if (!text) {
+        if (!text || text.trim().length === 0) {
           sendResponse({ success: false, error: 'Empty text' });
           return;
         }
         
-        const textToTranslate = text.length > 500 ? text.substring(0, 500) : text;
+        const textToTranslate = text.length > 1000 ? text.substring(0, 1000) : text;
         
-        // Try LibreTranslate first (free, no auth needed)
+        // Language mapping for APIs
+        const langMap = {
+          'fr': 'fr', 'en': 'en', 'es': 'es', 'de': 'de',
+          'it': 'it', 'pt': 'pt', 'ru': 'ru', 'ja': 'ja',
+          'zh': 'zh', 'ar': 'ar', 'ko': 'ko', 'tr': 'tr'
+        };
+        const apiLang = langMap[targetLang] || 'en';
+        
+        // Try MyMemory API (primary)
         try {
-          const response = await fetch(
-            'https://api.mymemory.translated.net/get',
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                q: textToTranslate,
-                langpair: `auto|${targetLang}`
-              })
-            }
-          );
+          const url = new URL('https://api.mymemory.translated.net/get');
+          url.searchParams.append('q', textToTranslate);
+          url.searchParams.append('langpair', 'auto|' + apiLang);
           
+          const response = await fetch(url);
           const data = await response.json();
           
-          if (data?.responseData?.translatedText && data.responseData.translatedText.length > 0 && data.responseData.translatedText !== textToTranslate) {
+          if (data?.responseData?.translatedText && 
+              data.responseData.translatedText.length > 0 && 
+              data.responseData.translatedText.toLowerCase() !== textToTranslate.toLowerCase()) {
             sendResponse({ success: true, text: data.responseData.translatedText });
             return;
           }
@@ -51,20 +54,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           console.log('[AITools] MyMemory failed:', e1.message);
         }
         
-        // Fallback: use simple reverso translation
+        // Fallback: try Reverso API
         try {
-          const reversoResponse = await fetch(
-            `https://api.reverso.net/translate/text/json?language_from=auto&language_to=${targetLang}&variant=${targetLang === 'fr' ? 'fr' : 'en'}&input=${encodeURIComponent(textToTranslate)}`,
-            { method: 'GET' }
-          );
+          const reversoUrl = 'https://api.reverso.net/translate/text/json?language_from=auto' +
+            '&language_to=' + apiLang + '&input=' + encodeURIComponent(textToTranslate);
           
+          const reversoResponse = await fetch(reversoUrl);
           const reversoData = await reversoResponse.json();
+          
           if (reversoData?.translation && reversoData.translation.length > 0) {
             sendResponse({ success: true, text: reversoData.translation[0] });
             return;
           }
         } catch (e2) {
-          console.log('[AITools] Reverso failed:', e2.message);
+          console.log('[AITools] Reverso API failed:', e2.message);
         }
         
         // All APIs failed

@@ -732,37 +732,57 @@ function hslToHex(h, s, l) {
 }
 
 function summarizeText(text) {
-  // Extract sentences
-  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  if (!text || text.length < 100) return text;
+  
+  // Smart sentence extraction
+  let sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  sentences = sentences.map(s => s.trim()).filter(s => s.length > 20);
   
   if (sentences.length <= 2) return text;
   
-  // Score sentences by keywords and position
-  const scores = sentences.map((sentence, index) => {
+  // Enhanced keyword scoring
+  const keywords = {
+    'important': 4, 'clé': 4, 'principal': 3, 'essentiel': 4,
+    'crucial': 4, 'résultat': 4, 'conclusion': 4, 'découvert': 4,
+    'innovation': 3, 'unique': 3, 'étude': 3, 'analyse': 2,
+    'impact': 4, 'succès': 3, 'donc': 2, 'cependant': 2,
+    'par conséquent': 2, 'finalement': 2
+  };
+
+  const scoredSentences = sentences.map((sentence, index) => {
     const words = sentence.toLowerCase().split(/\s+/);
-    let score = 0;
+    let score = 1;
     
-    // Position bonus
-    if (index === 0) score += 3;
-    if (index === sentences.length - 1) score += 2;
+    // Position scoring
+    if (index === 0) score += 5;
+    if (index === sentences.length - 1) score += 4;
+    if (index === sentences.length - 2) score += 2;
     
-    // Length check (avoid too short sentences)
-    if (words.length < 5) score -= 2;
+    // Length optimization (8-30 words ideal)
+    const wordCount = words.length;
+    if (wordCount >= 8 && wordCount <= 30) score += 3;
+    else if (wordCount >= 5 && wordCount < 8) score += 1;
+    else if (wordCount < 5) score -= 2;
     
-    // Keyword boost (common important words)
-    const keywords = ['important', 'cependant', 'donc', 'résultat', 'conclusion', 'premier', 'principal', 'clé'];
-    keywords.forEach(kw => {
-      if (sentence.toLowerCase().includes(kw)) score += 2;
-    });
+    // Keyword matching
+    for (const [keyword, weight] of Object.entries(keywords)) {
+      if (sentence.toLowerCase().includes(keyword)) score += weight;
+    }
     
-    return { sentence: sentence.trim(), score };
+    // Named entities (numbers, capitals)
+    if (/\d+/.test(sentence)) score += 1;
+    const capitals = (sentence.match(/[A-Z]/g) || []).length;
+    if (capitals > 3) score += 1;
+    
+    return { sentence: sentence.trim(), score, index };
   });
   
-  // Keep top 30-40% of sentences
+  // Select and restore order
   const keepCount = Math.max(2, Math.ceil(sentences.length * 0.35));
-  const summary = scores
+  const summary = scoredSentences
     .sort((a, b) => b.score - a.score)
     .slice(0, keepCount)
+    .sort((a, b) => a.index - b.index)
     .map(s => s.sentence)
     .join(' ');
   
