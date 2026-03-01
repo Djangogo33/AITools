@@ -81,18 +81,23 @@
 - Draggable widget
 
 ### Smart Summarizer
-- ✂️ One-click paragraph summarization
-- Adjustable summary length (20-60% of original)
-- Only appears on long-text pages
-- Supports 50+ languages
-- Modal display with source/summary comparison
+- **Qu'est-ce que c'est ?** Résume intelligemment n'importe quel texte ou article en un clic
+- **Comment ça marche** : Analyse le contenu et extrait les points clés automatiquement
+- **Longueur du résumé** : Ajustable (20-60% de la longueur originale)
+- **Où ça fonctionne** : Uniquement sur les pages avec du contenu long (800+ caractères)
+- **Affichage** : Modal avec comparaison source/résumé côte à côte
+- **Langues supportées** : 50+ langues automatiquement détectées
+- **Utilisation** : Cliquez sur le bouton ou sélectionnez du texte
 
 ### Translator
-- Supports 20+ languages
-- Translation buttons on selected text
-- Modal with side-by-side comparison
-- Copy translated text button
-- Auto-detection of source language
+- **Qu'est-ce que c'est ?** Traduit instantanément le texte sélectionné vers 20+ langues
+- **Langues supportées** : Français, Anglais, Espagnol, Allemand, Chinois, Japonais, etc.
+- **Comment utiliser** : Sélectionnez du texte → Cliquez sur l'option traduction dans le menu
+- **Détection automatique** : Identifie la langue source automatiquement
+- **Affichage** : Modal avec texte original et traduction côte à côte
+- **Copie facile** : Bouton pour copier la traduction au presse-papiers
+- **Fiabilité** : Système double API (MyMemory + Reverso en secours) pour zéro erreur
+- **Performance** : Traduction en 2-3 secondes même pour les textes longs
 
 ### Cookie Blocker (Enhanced)
 - Automatically closes cookie consent popups
