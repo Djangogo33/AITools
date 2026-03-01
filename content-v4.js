@@ -1150,32 +1150,52 @@ function betterSummarize(text) {
   if (sentences.length === 0) return text.substring(0, 300) + '...';
   if (sentences.length <= 2) return sentences.join(' ');
   
-  // Step 2: Score sentences with more relevant keywords
+  // Build list of common words to ignore (stop words)
+  const stopWords = new Set([
+    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from',
+    'be', 'is', 'are', 'was', 'were', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+    'le', 'la', 'les', 'de', 'du', 'des', 'et', 'ou', 'un', 'une', 'en', 'à', 'pour', 'par', 'qui', 'que',
+    'el', 'la', 'los', 'las', 'de', 'y', 'o', 'un', 'una', 'en', 'a', 'por', 'que'
+  ]);
+  
+  // Calculate TF-IDF-like scores
+  const allWords = cleanText.toLowerCase().split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w));
+  const wordFreq = {};
+  allWords.forEach(w => {
+    wordFreq[w] = (wordFreq[w] || 0) + 1;
+  });
+  
+  // Step 2: Score sentences with advanced algorithm
   const keywords = {
     // Importance
     'important': 6, 'clé': 6, 'capital': 5, 'crucial': 6, 'essentiel': 5,
+    'key': 6, 'critical': 6, 'significant': 5,
     // Results
     'résultat': 5, 'conclusion': 5, 'résultats': 5, 'conclusions': 5,
-    'démonstration': 4, 'montre': 4, 'prouve': 4, 'révèle': 4,
+    'result': 5, 'conclusion': 5, 'results': 5, 'conclusions': 5,
+    'démonstration': 4, 'montre': 4, 'prouve': 4, 'révèle': 4, 'shows': 4, 'proves': 4, 'finds': 4,
     // Discovery
-    'découvert': 5, 'découverte': 5, 'innovation': 4, 'novateur': 4,
-    'unique': 4, 'exclusivité': 4, 'nouveau': 3, 'inédit': 5,
+    'découvert': 5, 'découverte': 5, 'innovation': 4, 'novateur': 4, 'unique': 4,
+    'discovered': 5, 'discovery': 5, 'novel': 4, 'breakthrough': 5, 'finds': 4,
     // Data
-    'étude': 4, 'recherche': 4, 'données': 5, 'statistiques': 5,
-    'analyse': 4, 'rapport': 4, 'expert': 3,
+    'étude': 4, 'recherche': 4, 'données': 5, 'statistiques': 5, 'analyse': 4, 'rapport': 4,
+    'study': 4, 'research': 4, 'data': 5, 'statistics': 5, 'analysis': 4, 'report': 4,
     // Success
     'succès': 4, 'réussi': 4, 'victoire': 4, 'gagné': 3,
+    'success': 4, 'successfully': 4, 'victory': 4, 'won': 3,
     // Impact
     'impact': 5, 'influence': 4, 'effet': 3, 'conséquence': 3,
+    'effect': 3, 'consequence': 3, 'impact': 5,
     // Logic markers
-    'donc': 3, 'cependant': 2, 'mais': 2, 'pourtant': 2,
-    'c\'est pourquoi': 3, 'par conséquent': 3
+    'donc': 3, 'cependant': 2, 'mais': 2, 'pourtant': 2, 'c\'est pourquoi': 3,
+    'therefore': 3, 'however': 2, 'but': 2, 'thus': 3, 'so': 2
   };
   
   const scoredSentences = sentences.map((sentence, idx) => {
     let score = 1;
     const lowerSent = sentence.toLowerCase();
     const wordCount = sentence.split(/\s+/).length;
+    const words = lowerSent.split(/\s+/).filter(w => w.length > 3);
     
     // Keyword matching
     for (const [keyword, weight] of Object.entries(keywords)) {
@@ -1184,13 +1204,20 @@ function betterSummarize(text) {
       }
     }
     
+    // TF-IDF-like: score frequent words in this sentence
+    words.forEach(w => {
+      if (wordFreq[w] > 1 && !stopWords.has(w)) {
+        score += Math.log(wordFreq[w] + 1);
+      }
+    });
+    
     // Position bonus (first, second, last important)
     if (idx === 0) score += 5;      // First sentence very important
     if (idx === 1) score += 3;      // Second
     if (idx === sentences.length - 1) score += 4;  // Last sentence (conclusion)
     if (idx === sentences.length - 2) score += 2;  // Pre-last
     
-    // Optimal length: 15-50 words
+    // Optimal length: 15-50 words (better balance)
     if (wordCount >= 15 && wordCount <= 50) {
       score += 4;
     } else if (wordCount >= 10 && wordCount < 15) {
@@ -1201,14 +1228,23 @@ function betterSummarize(text) {
       score -= 2;  // Penalize very short or very long
     }
     
-    // Numbers/data/percentages
-    if (/\d+/.test(sentence)) score += 4;
+    // Numbers/data/percentages - very important!
+    if (/\d+%/.test(sentence) || /\d+\s*(million|billion|thousand)/.test(sentence)) {
+      score += 6;
+    } else if (/\d+/.test(sentence)) {
+      score += 4;
+    }
     
     // Questions (usually summary-worthy)
     if (sentence.includes('?')) score += 3;
     
     // Quoted text
     if (sentence.includes('"') || sentence.includes("'")) score += 2;
+    
+    // Subject indicators (starts with capital, likely topic sentence)
+    if (/^[A-Z][a-z]+ (is|was|are|being|appears|seems)/.test(sentence)) {
+      score += 3;
+    }
     
     return { sentence, score, index: idx };
   });
@@ -1393,7 +1429,7 @@ function detectLanguageOfText(text) {
   const spanishScore = (
     (/(el|la|los|las|de|para|que|es|está|son|están|una|un)/i.test(textToCheck) ? 2 : 0) +
     (/(á|é|í|ó|ú|ñ|¡|¿)/i.test(textToCheck) ? 3 : 0) +
-    (/\b(hola|gracias|qué|cómo|por qué|señor|señora|muy|bien|también)/b/i.test(textToCheck) ? 3 : 0)
+    (/\b(hola|gracias|qué|cómo|por qué|señor|señora|muy|bien|también)\b/i.test(textToCheck) ? 3 : 0)
   );
   
   // German indicators - improved
