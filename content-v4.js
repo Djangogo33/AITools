@@ -923,6 +923,16 @@ function showAIBadge(score) {
   
   document.body.appendChild(badge);
   
+  // Register with layout manager
+  if (window.layoutManager) {
+    window.layoutManager.registerElement('aitools-ai-badge', badge, {
+      width: 160,
+      height: 40,
+      priority: 2,
+      draggable: true
+    });
+  }
+  
   // Make it draggable
   makeDraggable(badge, 'aitools-ai-badge-pos');
   
@@ -1046,6 +1056,16 @@ function addSummarizerButton() {
   });
   
   document.body.appendChild(btn);
+  
+  // Register with layout manager
+  if (window.layoutManager) {
+    window.layoutManager.registerElement('aitools-summarizer-btn', btn, {
+      width: 140,
+      height: 40,
+      priority: 2,
+      draggable: true
+    });
+  }
   
   // Make it draggable
   makeDraggable(btn, 'aitools-summarize-btn-pos');
@@ -1495,6 +1515,16 @@ function addTranslatorButton(sourceLang, targetLang) {
   
   document.body.appendChild(btn);
   
+  // Register with layout manager
+  if (window.layoutManager) {
+    window.layoutManager.registerElement('aitools-translator-btn', btn, {
+      width: 130,
+      height: 40,
+      priority: 3,
+      draggable: true
+    });
+  }
+  
   // Make it draggable
   makeDraggable(btn, 'aitools-translator-btn-pos');
 }
@@ -1816,6 +1846,16 @@ function createStatsWidget(stats) {
   widget.appendChild(header);
   widget.appendChild(content);
   document.body.appendChild(widget);
+  
+  // Register with layout manager
+  if (window.layoutManager) {
+    window.layoutManager.registerElement('aitools-quick-stats', widget, {
+      width: 280,
+      height: 50,
+      priority: 5,
+      draggable: true
+    });
+  }
   
   // Hover effects
   widget.addEventListener('mouseover', () => {
@@ -2383,6 +2423,18 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     
     sendResponse({ text: text || null });
     return true;
+  } else if (req.action === 'setLayout') {
+    // Change layout globally
+    if (window.layoutManager) {
+      window.layoutManager.setLayout(req.layout);
+      console.log('[AITools] Layout changed to:', req.layout);
+    }
+  } else if (req.action === 'resetLayout') {
+    // Reset layout to defaults
+    if (window.layoutManager) {
+      window.layoutManager.resetPositions();
+      console.log('[AITools] Layout reset to defaults');
+    }
   }
   
   sendResponse({ status: 'ok' });
