@@ -266,26 +266,35 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Reset All Button Positions
   document.getElementById('resetAllButtonPositionsBtn')?.addEventListener('click', () => {
-    if (!confirm('Êtes-vous sûr? Cela réinitialisera les positions de tous les boutons.')) return;
+    if (!confirm('Êtes-vous sûr? Cela réinitialisera les positions ET visibilité de tous les boutons.')) return;
     
-    // Remove all position data from storage
-    const keysToRemove = [
-      'aitools-ai-badge-pos',
-      'aitools-summarize-btn-pos',
-      'aitools-translate-btn-quick'
-    ];
-    
-    chrome.storage.local.remove(keysToRemove, () => {
-      // Also remove any 'aitools-translate-btn-' keys
-      chrome.storage.local.get(null, (data) => {
-        const translationPosKeys = Object.keys(data).filter(k => k.startsWith('aitools-translate-btn-'));
-        if (translationPosKeys.length > 0) {
-          chrome.storage.local.remove(translationPosKeys);
-        }
-      });
+    // Get all storage data to find all position keys
+    chrome.storage.local.get(null, (data) => {
+      // Find all keys that contain position data
+      const keysToRemove = Object.keys(data).filter(k => 
+        k.includes('-pos') && k.includes('aitools')
+      );
+      
+      console.log('[AITools Popup] Removing position keys:', keysToRemove);
+      
+      if (keysToRemove.length > 0) {
+        chrome.storage.local.remove(keysToRemove);
+      }
+      
+      // Also restore default button visibility
+      const defaultButtonVisibility = {
+        googleButtons: true,
+        summarizerButton: true,
+        aiDetectorBadge: true,
+        translationButtons: true,
+        quickStatsWidget: true,
+        readingTimeBadge: true
+      };
+      
+      chrome.storage.local.set({ buttonVisibility: defaultButtonVisibility });
     });
     
-    // Notify all tabs to refresh positions
+    // Notify all tabs to refresh positions and visibility
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach(tab => {
         chrome.tabs.sendMessage(tab.id, {
@@ -296,7 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
     
-    alert('✅ Positions réinitialisées! Rechargez les pages pour voir les changements.');
+    alert('✅ Positions et visibilité réinitialisées! Rechargez les pages pour voir les changements.');
   });
 
   // AI Tools

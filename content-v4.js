@@ -1723,13 +1723,17 @@ function initQuickStats() {
   content.innerHTML = htmlContent;
   
   // Toggle expand/collapse
-  header.addEventListener('click', () => {
+  header.addEventListener('click', (e) => {
+    // Don't toggle if clicking on close button
+    if (e.target.closest('.aitools-close-btn')) return;
+    
     isExpanded = !isExpanded;
     if (isExpanded) {
       content.style.maxHeight = '400px';
       header.style.borderRadius = '12px 12px 0 0';
     } else {
       content.style.maxHeight = '0';
+      header.style.borderRadius = '12px';
     }
   });
   
