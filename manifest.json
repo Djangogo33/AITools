@@ -8,11 +8,7 @@
   "action": {
     "default_popup": "popup-new.html",
     "default_title": "AITools Pro - Outils intelligents",
-    "default_icon": {
-      "16": "aitools-logo-16.png",
-      "48": "aitools-logo-48.png",
-      "128": "aitools-logo-128.png"
-    }
+    "default_icon": "aitools-logo-new.svg"
   },
   "content_scripts": [
     {
@@ -29,8 +25,6 @@
     "newtab": "newtab.html"
   },
   "icons": {
-    "16": "aitools-logo-16.png",
-    "48": "aitools-logo-48.png",
-    "128": "aitools-logo-128.png"
+    "128": "aitools-logo-new.svg"
   }
 }
