@@ -332,18 +332,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Layout Management
   const layoutSelect = document.getElementById('layoutSelect');
-  if (layoutSelect) {
+  const layoutSelect2 = document.getElementById('layoutSelect2');
+  
+  function setupLayoutControl(selectElement) {
+    if (!selectElement) return;
+    
     // Load saved layout
     chrome.storage.local.get('aitools-layout', (data) => {
       if (data['aitools-layout']) {
-        layoutSelect.value = data['aitools-layout'];
+        selectElement.value = data['aitools-layout'];
       }
     });
 
     // Handle layout change
-    layoutSelect.addEventListener('change', (e) => {
+    selectElement.addEventListener('change', (e) => {
       const layout = e.target.value;
       chrome.storage.local.set({ 'aitools-layout': layout });
+      
+      // Sync both select elements
+      if (layoutSelect && layoutSelect !== selectElement) layoutSelect.value = layout;
+      if (layoutSelect2 && layoutSelect2 !== selectElement) layoutSelect2.value = layout;
       
       // Notify all tabs
       chrome.tabs.query({}, (tabs) => {
@@ -358,17 +366,22 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
+  
+  setupLayoutControl(layoutSelect);
+  setupLayoutControl(layoutSelect2);
 
   // Reset Layout Button
-  const resetLayoutBtn = document.getElementById('resetLayoutBtn');
-  if (resetLayoutBtn) {
-    resetLayoutBtn.addEventListener('click', () => {
+  function setupResetLayout(buttonElement) {
+    if (!buttonElement) return;
+    
+    buttonElement.addEventListener('click', () => {
       chrome.storage.local.set({
         'aitools-layout': 'adaptive',
         'aitools-layout-custom': {}
       });
       
       if (layoutSelect) layoutSelect.value = 'adaptive';
+      if (layoutSelect2) layoutSelect2.value = 'adaptive';
       
       chrome.tabs.query({}, (tabs) => {
         tabs.forEach(tab => {
@@ -383,6 +396,9 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('✅ Layout réinitialisé par défaut!');
     });
   }
+  
+  setupResetLayout(document.getElementById('resetLayoutBtn'));
+  setupResetLayout(document.getElementById('resetPositionsBtn2'));
 
   // AI Tools
   document.getElementById('aiDetectorBtn').addEventListener('click', detectAI);

@@ -151,79 +151,52 @@
 
     <!-- Buttons Management Tab -->
     <section class="tab" id="buttons">
-      <h2>Gérer les boutons</h2>
+      <h2>Position et Visibilité</h2>
       
-      <!-- Google Search Buttons -->
+      <div class="section" style="background: #f0f9ff; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
+        <p style="font-size: 11px; color: #0ea5e9; margin: 0;">
+          ℹ️ <strong>Note:</strong> Les boutons se repositionnent automatiquement sur chaque page pour éviter de bloquer le contenu.
+        </p>
+      </div>
+      
       <div class="section">
-        <p class="label">🔍 Boutons Google Search:</p>
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="googleButtonsVisible" checked class="button-toggle" data-button-type="googleButtons">
-          <span>Afficher les boutons</span>
-        </label>
-        <p style="font-size: 10px; color: #999; margin-top: 4px;">Lucky • Filtres • Maps • ChatGPT</p>
+        <p class="label" style="margin-bottom: 8px;">📍 Mode d'affichage:</p>
+        <select id="layoutSelect2" style="width: 100%; padding: 8px; margin-bottom: 8px; font-size: 12px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="adaptive">🔄 Adaptative (Intelligent)</option>
+          <option value="compact">📦 Compacte (Colonne droite)</option>
+          <option value="minimal">⚡ Minimale (Critiques uniquement)</option>
+          <option value="custom">🎨 Personnalisée (Manuel)</option>
+        </select>
+        <p style="font-size: 10px; color: #666; margin-top: 6px;">
+          <strong>Adaptative:</strong> Place les boutons intelligemment<br/>
+          <strong>Compacte:</strong> Tous les boutons en colonne à droite<br/>
+          <strong>Minimale:</strong> Affiche seulement les critiques<br/>
+          <strong>Personnalisée:</strong> Vous contrôlez chaque position
+        </p>
       </div>
 
-      <!-- Summarizer Button -->
-      <div class="section">
-        <p class="label">✂️ Bouton Résumé:</p>
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="summarizerButtonVisible" checked class="button-toggle" data-button-type="summarizerButton">
-          <span>Afficher le bouton résumé</span>
-        </label>
-        <p style="font-size: 10px; color: #999; margin-top: 4px;">Résume automatiquement le contenu de la page</p>
+      <div class="section" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+        <p class="label" style="margin-bottom: 8px;">🎯 Réinitialiser:</p>
+        <button id="resetPositionsBtn2" class="btn btn-sm" style="width: 100%;">↺ Réinitialiser positions par défaut</button>
+        <p style="font-size: 10px; color: #999; margin-top: 6px;">Remet tous les boutons à leurs positions automatiques</p>
       </div>
 
-      <!-- AI Detector Badge -->
       <div class="section">
-        <p class="label">⚠️ Badge Détecteur IA:</p>
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="aiDetectorBadgeVisible" checked class="button-toggle" data-button-type="aiDetectorBadge">
-          <span>Afficher le badge IA</span>
+        <p class="label" style="margin-bottom: 8px;">👁️ Visible sur:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+          <input type="checkbox" id="googleSearchPageToggle" checked>
+          <span style="font-size: 12px;">Google (Search pages)</span>
         </label>
-        <p style="font-size: 10px; color: #999; margin-top: 4px;">Détecte le contenu généré par IA</p>
-      </div>
-
-      <!-- Translation Buttons -->
-      <div class="section">
-        <p class="label">🌐 Boutons Traduction:</p>
         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="translationButtonsVisible" checked class="button-toggle" data-button-type="translationButtons">
-          <span>Afficher les boutons traduction</span>
+          <input type="checkbox" id="allPagesToggle" checked>
+          <span style="font-size: 12px;">Toutes les autres pages</span>
         </label>
-        <p style="font-size: 10px; color: #999; margin-top: 4px;">Traduit les paragraphes dans d'autres langues</p>
-      </div>
-
-      <!-- Quick Stats Widget -->
-      <div class="section">
-        <p class="label">📊 Widget Statistiques:</p>
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="quickStatsWidgetVisible" checked class="button-toggle" data-button-type="quickStatsWidget">
-          <span>Afficher le widget stats</span>
-        </label>
-        <p style="font-size: 10px; color: #999; margin-top: 4px;">Affiche les stats de la page (liens, images, etc.)</p>
-      </div>
-
-      <!-- Reading Time Badge -->
-      <div class="section">
-        <p class="label">⏰ Badge Temps de lecture:</p>
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" id="readingTimeBadgeVisible" checked class="button-toggle" data-button-type="readingTimeBadge">
-          <span>Afficher le badge temps</span>
-        </label>
-        <p style="font-size: 10px; color: #999; margin-top: 4px;">Estime le temps de lecture de la page</p>
-      </div>
-
-      <!-- Manage Positions -->
-      <div class="section" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e0e0e0;">
-        <p class="label">🎯 Gérer les positions:</p>
-        <button id="resetAllButtonPositionsBtn" class="btn btn-sm" style="width: 100%;">↺ Réinitialiser toutes positions</button>
-        <p style="font-size: 10px; color: #999; margin-top: 6px;">Remet tous les boutons à leur position par défaut</p>
       </div>
 
       <!-- Help -->
-      <div class="section" style="margin-top: 12px; padding: 10px; background: #f0f7ff; border-left: 3px solid #667eea; border-radius: 4px;">
-        <p style="font-size: 11px; color: #333; margin: 0;">
-          💡 <strong>Astuce:</strong> Vous pouvez déplacer les boutons en les glissant sur n'importe quelle page. Les positions sont sauvegardées automatiquement.
+      <div class="section" style="margin-top: 12px; padding: 10px; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 4px;">
+        <p style="font-size: 11px; color: #92400e; margin: 0;">
+          💡 <strong>Conseil:</strong> Vous pouvez déplacer les boutons en les glissant. Utilisez le mode "Adaptatif" pour des positions intelligentes.
         </p>
       </div>
     </section>
@@ -289,15 +262,39 @@
       <h2>Paramètres</h2>
       
       <div class="section">
-        <p class="label" style="margin-bottom: 8px;">📐 Disposition des boutons:</p>
+        <p class="label" style="margin-bottom: 8px;">� Position des éléments:</p>
         <select id="layoutSelect" style="width: 100%; padding: 8px; margin-bottom: 8px; font-size: 12px; border: 1px solid #ddd; border-radius: 4px;">
           <option value="adaptive">🔄 Adaptative (Auto)</option>
           <option value="compact">📦 Compacte (Colonne droite)</option>
           <option value="minimal">⚡ Minimale (Critiques seulement)</option>
           <option value="custom">🎨 Personnalisée</option>
         </select>
-        <p style="font-size: 10px; color: #999; margin: 8px 0 0 0;">Choisir comment les boutons s'affichent sur les pages</p>
-        <button id="resetLayoutBtn" class="btn btn-sm" style="width: 100%; margin-top: 8px;">↺ Réinitialiser positions</button>
+        <p style="font-size: 10px; color: #999; margin: 8px 0;">Les boutons se repositionnent automatiquement pour éviter les chevauchements</p>
+        <button id="resetLayoutBtn" class="btn btn-sm" style="width: 100%;">↺ Réinitialiser layout</button>
+      </div>
+      
+      <div class="section" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+        <p class="label" style="margin-bottom: 8px;">👁️ Quels boutons afficher:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+          <input type="checkbox" id="aiDetectorBadgeVisible" checked class="button-toggle" data-button-type="aiDetectorBadge">
+          <span style="font-size: 12px;">🤖 Détecteur IA</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+          <input type="checkbox" id="summarizerButtonVisible" checked class="button-toggle" data-button-type="summarizerButton">
+          <span style="font-size: 12px;">✂️ Bouton Résumé</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+          <input type="checkbox" id="translationButtonsVisible" checked class="button-toggle" data-button-type="translationButtons">
+          <span style="font-size: 12px;">🌐 Traducteur</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+          <input type="checkbox" id="quickStatsWidgetVisible" checked class="button-toggle" data-button-type="quickStatsWidget">
+          <span style="font-size: 12px;">📊 Stats page</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="googleButtonsVisible" checked class="button-toggle" data-button-type="googleButtons">
+          <span style="font-size: 12px;">🔍 Boutons Google</span>
+        </label>
       </div>
       
       <div class="section">
