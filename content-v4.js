@@ -621,7 +621,7 @@ chrome.storage.local.get(null, (data) => {
   if (!extensionEnabled) return;
   
   // Reading time estimator
-  if (data.readingTimeEnabled !== false) {
+  if (data.readingTimeEnabled !== false && buttonVisibility.readingTimeBadge) {
     const estimator = new ReadingTimeEstimator();
     setTimeout(() => estimator.showBadge(), 1500);
   }
@@ -1377,6 +1377,12 @@ async function translateText(text, targetLang = 'fr') {
 
 // Add translation buttons to paragraphs
 function initAutoTranslator() {
+  // Check if translation buttons are enabled
+  if (!buttonVisibility.translationButtons) {
+    console.log('[AITools] Translation buttons disabled in settings');
+    return;
+  }
+  
   if (!extensionSettings.autoTranslatorEnabled) return;
   
   setTimeout(() => {
@@ -1573,6 +1579,12 @@ function showTranslationModal(originalText, translatedText, sourceLang, targetLa
 // QUICK STATS - Display page statistics
 // ============================================================================
 function initQuickStats() {
+  // Check if quick stats widget is enabled
+  if (!buttonVisibility.quickStatsWidget) {
+    console.log('[AITools] Quick stats widget disabled in settings');
+    return;
+  }
+  
   // Don't show stats on Google Search results
   if (window.location.hostname.includes('google.')) return;
   
@@ -1624,10 +1636,52 @@ function initQuickStats() {
     font-size: 13px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     cursor: pointer;
   `;
-  header.innerHTML = '📊 Statistiques page';
+  
+  const headerLabel = document.createElement('span');
+  headerLabel.textContent = '📊 Statistiques page';
+  headerLabel.style.pointerEvents = 'none';
+  
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'aitools-close-btn';
+  closeBtn.innerHTML = '✕';
+  closeBtn.style.cssText = `
+    background: rgba(255, 255, 255, 0.3);
+    border: none;
+    color: white;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  `;
+  
+  closeBtn.addEventListener('mouseover', () => {
+    closeBtn.style.background = 'rgba(255, 255, 255, 0.5)';
+  });
+  closeBtn.addEventListener('mouseout', () => {
+    closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
+  });
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    widget.style.display = 'none';
+    // Update visibility in storage
+    if (!buttonVisibility) buttonVisibility = {};
+    buttonVisibility.quickStatsWidget = false;
+    chrome.storage.local.set({ buttonVisibility });
+    console.log('[AITools] Quick stats widget hidden');
+  });
+  
+  header.appendChild(headerLabel);
+  header.appendChild(closeBtn);
   
   let isExpanded = false;
   

@@ -22,7 +22,15 @@ let state = {
   readingTimeEnabled: true,
   quickStatsEnabled: true,
   youtubeEnabled: true,
-  paletteEnabled: true
+  paletteEnabled: true,
+  buttonVisibility: {
+    googleButtons: true,
+    summarizerButton: true,
+    aiDetectorBadge: true,
+    translationButtons: true,
+    quickStatsWidget: true,
+    readingTimeBadge: true
+  }
 };
 
 // ============================================================================
@@ -232,10 +240,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const buttonType = e.target.dataset.buttonType;
       const isVisible = e.target.checked;
       
+      // Update state
+      if (!state.buttonVisibility) state.buttonVisibility = {};
+      state.buttonVisibility[buttonType] = isVisible;
+      
       // Save to storage
-      const buttonVisibility = {};
-      buttonVisibility[buttonType] = isVisible;
-      chrome.storage.local.set({ buttonVisibility });
+      chrome.storage.local.set({ buttonVisibility: state.buttonVisibility });
+      
+      console.log('[AITools Popup] Button toggle:', buttonType, '=', isVisible);
       
       // Notify all tabs
       chrome.tabs.query({}, (tabs) => {
@@ -249,8 +261,6 @@ document.addEventListener('DOMContentLoaded', () => {
           });
         });
       });
-      
-      console.log('[AITools Popup] Button visibility updated:', buttonType, isVisible);
     });
   });
   
@@ -870,6 +880,26 @@ function updateUI() {
   document.getElementById('cookieBlockerEnabled').checked = state.cookieBlockerEnabled;
   document.getElementById('youtubeEnabled').checked = state.youtubeEnabled;
   document.getElementById('paletteEnabled').checked = state.paletteEnabled;
+  
+  // Button visibility toggles
+  if (document.getElementById('googleButtonsVisible')) {
+    document.getElementById('googleButtonsVisible').checked = state.buttonVisibility?.googleButtons !== false;
+  }
+  if (document.getElementById('summarizerButtonVisible')) {
+    document.getElementById('summarizerButtonVisible').checked = state.buttonVisibility?.summarizerButton !== false;
+  }
+  if (document.getElementById('aiDetectorBadgeVisible')) {
+    document.getElementById('aiDetectorBadgeVisible').checked = state.buttonVisibility?.aiDetectorBadge !== false;
+  }
+  if (document.getElementById('translationButtonsVisible')) {
+    document.getElementById('translationButtonsVisible').checked = state.buttonVisibility?.translationButtons !== false;
+  }
+  if (document.getElementById('quickStatsWidgetVisible')) {
+    document.getElementById('quickStatsWidgetVisible').checked = state.buttonVisibility?.quickStatsWidget !== false;
+  }
+  if (document.getElementById('readingTimeBadgeVisible')) {
+    document.getElementById('readingTimeBadgeVisible').checked = state.buttonVisibility?.readingTimeBadge !== false;
+  }
   
   if (state.darkMode) {
     document.body.classList.add('dark-mode');
