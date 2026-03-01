@@ -654,14 +654,20 @@ function initCookieBlocker() {
   setTimeout(() => {
     closeCookiePopups();
     blockCookieConsent();
-  }, 1000);
+  }, 1500);
   
-  // Watch for new popups (dynamic popups on SPAs)
+  // Watch for new popups with debouncing (throttle to max once per second)
+  let debounceTimer = null;
   const observer = new MutationObserver(() => {
-    closeCookiePopups();
+    if (debounceTimer) return;
+    debounceTimer = setTimeout(() => {
+      closeCookiePopups();
+      debounceTimer = null;
+    }, 300);
   });
   
-  observer.observe(document.body, {
+  // Only observe dynamic mutations instead of entire body
+  observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
     attributes: true,
@@ -797,16 +803,25 @@ function initAIDetector() {
   
   if (!extensionSettings.aiDetectorEnabled) return;
   
+  // Skip on Google, social media, and other non-article sites
+  const hostname = window.location.hostname;
+  if (hostname.includes('google.') || hostname.includes('facebook.') || hostname.includes('twitter.') || 
+      hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) {
+    return;
+  }
+  
   setTimeout(() => {
     const text = document.body.innerText;
-    if (text.length < 200) return;
+    if (text.length < 500) return; // Only on substantial content
     
-    const score = detectAIText(text);
+    // Only analyze first 10000 characters for performance
+    const scoreText = text.substring(0, 10000);
+    const score = detectAIText(scoreText);
     const threshold = extensionSettings.aiDetectorSensitivity || 60;
     if (score > threshold) {
       showAIBadge(score);
     }
-  }, 2000);
+  }, 3000); // Delayed to not interfere with page load
 }
 
 function detectAIText(text) {
@@ -1385,87 +1400,134 @@ function initAutoTranslator() {
   
   if (!extensionSettings.autoTranslatorEnabled) return;
   
+  // Don't show on Google Search
+  if (window.location.hostname.includes('google.')) return;
+  
   setTimeout(() => {
-    const paragraphs = document.querySelectorAll('p, article, h1, h2, h3, div[role="article"]');
-    let count = 0;
+    // Detect if page needs translation
+    const pageText = document.body.innerText;
+    if (pageText.length < 200) return;
     
-    paragraphs.forEach((para) => {
-      if (count >= 5) return; // Limit to 5 translation buttons per page
-      
-      const text = para.innerText;
-      if (text.length < 50) return;
-      
-      const detectedLang = detectLanguageOfText(text);
-      const targetLang = extensionSettings.translatorTargetLang || 'fr';
-      
-      // Only add button if text is in a different language
-      if (detectedLang && detectedLang !== targetLang) {
-        addTranslationButton(para, text, detectedLang, targetLang);
-        count++;
-      }
-    });
-  }, 2000);
+    const pageLanguage = detectLanguageOfText(pageText);
+    const targetLang = extensionSettings.translatorTargetLang || 'fr';
+    
+    // Only add button if page is in a different language
+    if (pageLanguage && pageLanguage !== targetLang) {
+      addTranslatorButton(pageLanguage, targetLang);
+    }
+  }, 1500);
 }
 
-function addTranslationButton(element, text, sourceLang, targetLang) {
-  // Check if button already added
-  if (element.querySelector('.aitools-translate-btn')) return;
+function addTranslatorButton(sourceLang, targetLang) {
+  // Don't add if already exists
+  if (document.getElementById('aitools-translator-btn')) return;
   
   const btn = document.createElement('button');
-  btn.className = 'aitools-translate-btn';
-  btn.innerHTML = '🌐 Traduire';
+  btn.id = 'aitools-translator-btn';
   btn.style.cssText = `
-    display: inline-block;
-    margin-left: 8px;
-    padding: 6px 12px;
-    background: #4CAF50;
+    position: fixed;
+    top: 60px;
+    right: 100px;
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
     color: white;
     border: none;
-    border-radius: 4px;
-    font-size: 11px;
-    cursor: grab;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 12px;
     font-weight: 600;
-    transition: all 0.2s;
-    position: relative;
-    z-index: 9998;
+    cursor: grab;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    user-select: none;
   `;
   
-  btn.addEventListener('mouseover', () => {
-    btn.style.background = '#45a049';
-    btn.style.cursor = 'grab';
+  const textSpan = document.createElement('span');
+  textSpan.textContent = '🌐 Traduire';
+  textSpan.style.pointerEvents = 'none';
+  
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'aitools-close-btn';
+  closeBtn.innerHTML = '✕';
+  closeBtn.style.cssText = `
+    background: rgba(255, 255, 255, 0.3);
+    border: none;
+    color: white;
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  `;
+  
+  closeBtn.addEventListener('mouseover', () => {
+    closeBtn.style.background = 'rgba(255, 255, 255, 0.5)';
   });
-  btn.addEventListener('mouseout', () => {
-    btn.style.background = '#4CAF50';
+  closeBtn.addEventListener('mouseout', () => {
+    closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
+  });
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    btn.style.display = 'none';
   });
   
-  btn.addEventListener('click', async (e) => {
-    e.preventDefault();
-    btn.innerHTML = '⏳...';
-    btn.disabled = true;
-    
-    const translated = await translateText(text, targetLang);
-    
-    if (translated) {
-      showTranslationModal(text, translated, sourceLang, targetLang);
-      btn.innerHTML = '✅ Traduit!';
-      setTimeout(() => {
-        btn.innerHTML = '🌐 Traduire';
-        btn.disabled = false;
-      }, 2000);
-    } else {
-      btn.innerHTML = '❌ Erreur';
-      setTimeout(() => {
-        btn.innerHTML = '🌐 Traduire';
-        btn.disabled = false;
-      }, 2000);
+  btn.appendChild(textSpan);
+  btn.appendChild(closeBtn);
+  btn.title = 'Déplaçable - Cliquez pour traduire la page';
+  
+  btn.addEventListener('click', (e) => {
+    if (!e.target.closest('.aitools-close-btn')) {
+      const pageText = document.body.innerText;
+      translateAndShowModal(pageText, sourceLang, targetLang);
     }
   });
   
-  element.appendChild(btn);
+  document.body.appendChild(btn);
   
-  // Make button draggable with unique storage key
-  const uniqueKey = 'aitools-translate-btn-' + Math.random().toString(36).substring(7);
-  makeDraggable(btn, uniqueKey);
+  // Make it draggable
+  makeDraggable(btn, 'aitools-translator-btn-pos');
+}
+
+function translateAndShowModal(text, sourceLang, targetLang) {
+  // Show loading state
+  const btn = document.getElementById('aitools-translator-btn');
+  if (btn) {
+    const originalText = btn.querySelector('span')?.textContent;
+    btn.querySelector('span').textContent = '⏳ Traduction...';
+    btn.disabled = true;
+  }
+  
+  // Use background script to translate
+  chrome.runtime.sendMessage(
+    { action: 'translateText', text: text.substring(0, 5000), targetLang: targetLang },
+    (response) => {
+      if (btn) {
+        btn.querySelector('span').textContent = originalText;
+        btn.disabled = false;
+      }
+      
+      if (response && response.success) {
+        showTranslationModal(text.substring(0, 1000), response.text || text, sourceLang, targetLang);
+      } else {
+        alert('❌ Erreur lors de la traduction');
+      }
+    }
+  );
+}
+
+// DEPRECATED: Old function - now using single translator button instead of multiple
+function addTranslationButton(element, text, sourceLang, targetLang) {
+  // This function is no longer used - replaced with single translator button
+  return;
 }
 
 function showTranslationModal(originalText, translatedText, sourceLang, targetLang) {
@@ -1585,27 +1647,39 @@ function initQuickStats() {
     return;
   }
   
-  // Don't show stats on Google Search results
+  // Don't show stats on Google Search results or single-page apps
   if (window.location.hostname.includes('google.')) return;
+  const hostname = window.location.hostname;
+  if (hostname.includes('facebook.') || hostname.includes('twitter.') || 
+      hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) {
+    return;
+  }
   
-  // Calculate page statistics
-  const stats = {
-    images: document.querySelectorAll('img').length,
-    links: document.querySelectorAll('a').length,
-    paragraphs: document.querySelectorAll('p').length,
-    headings: document.querySelectorAll('h1, h2, h3, h4, h5, h6').length,
-    videos: document.querySelectorAll('iframe[src*="youtube"], iframe[src*="vimeo"]').length,
-    forms: document.querySelectorAll('form').length,
-    inputs: document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"]').length,
-    buttons: document.querySelectorAll('button').length,
-    tables: document.querySelectorAll('table').length,
-    codeBlocks: document.querySelectorAll('code, pre').length
-  };
-  
-  // Don't show if no meaningful data
-  const totalInteractiveElements = stats.links + stats.forms + stats.buttons;
-  if (totalInteractiveElements < 3) return;
-  
+  // Delay to not impact page load
+  setTimeout(() => {
+    // Only calculate stats once page is stable
+    const stats = {
+      images: document.querySelectorAll('img').length,
+      links: document.querySelectorAll('a').length,
+      paragraphs: document.querySelectorAll('p').length,
+      headings: document.querySelectorAll('h1, h2, h3, h4, h5, h6').length,
+      videos: document.querySelectorAll('iframe[src*="youtube"], iframe[src*="vimeo"]').length,
+      forms: document.querySelectorAll('form').length,
+      inputs: document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"]').length,
+      buttons: document.querySelectorAll('button').length,
+      tables: document.querySelectorAll('table').length,
+      codeBlocks: document.querySelectorAll('code, pre').length
+    };
+    
+    // Don't show if no meaningful data
+    const totalInteractiveElements = stats.links + stats.forms + stats.buttons;
+    if (totalInteractiveElements < 3) return;
+    
+    createStatsWidget(stats);
+  }, 4000); // Longer delay to ensure page is loaded
+}
+
+function createStatsWidget(stats) {
   // Create stats widget
   const widget = document.createElement('div');
   widget.id = 'aitools-quick-stats';
