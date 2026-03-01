@@ -8,7 +8,7 @@
   "action": {
     "default_popup": "popup-new.html",
     "default_title": "AITools Pro - Outils intelligents",
-    "default_icon": "aitools-logo-new.svg"
+    "default_icon": "rocket-icon.svg"
   },
   "content_scripts": [
     {
@@ -25,6 +25,6 @@
     "newtab": "newtab.html"
   },
   "icons": {
-    "128": "aitools-logo-new.svg"
+    "128": "rocket-icon.svg"
   }
 }
