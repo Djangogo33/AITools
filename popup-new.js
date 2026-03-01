@@ -1191,7 +1191,7 @@ function showNotesModal() {
   const list = document.getElementById('notesList');
   
   if (state.notes.length === 0) {
-    list.innerHTML = '<p style="color: #999; font-size: 12px;">Pas de notes encore. Surligné un texte sur une page!</p>';
+    list.innerHTML = '<p style="color: #999; font-size: 12px;">Pas de notes encore. Surlignez un texte sur une page!</p>';
   } else {
     list.innerHTML = state.notes
       .map((note, i) => `

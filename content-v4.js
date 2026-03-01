@@ -1073,6 +1073,9 @@ function addSummarizerButton() {
   btn.title = 'Déplaçable - Cliquez pour résumer la page';
   
   btn.addEventListener('click', (e) => {
+    // Stop propagation to prevent modal from immediately reopening
+    e.stopPropagation();
+    
     if (!e.target.closest('.aitools-close-btn')) {
       const summary = summarizePage();
       showSummaryModal(summary);
@@ -1373,13 +1376,18 @@ function showSummaryModal(summary) {
 function setupCloseButton(overlay, modal) {
   const closeBtn = overlay.querySelector('#aitools-close-summary');
   if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
       overlay.remove();
     });
   }
   
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) overlay.remove();
+    if (e.target === overlay) {
+      e.stopPropagation();
+      overlay.remove();
+    }
   });
 }
 
@@ -1403,7 +1411,10 @@ function getLanguageName(lang) {
 
 // Language detection patterns
 function detectLanguageOfText(text) {
-  if (!text || text.length < 5) return null;
+  if (!text || text.length < 5) {
+    console.log('[AITools] Text too short for language detection');
+    return null;
+  }
   
   // First, try HTML lang attribute
   const htmlLang = document.documentElement.lang;
@@ -1455,11 +1466,13 @@ function detectLanguageOfText(text) {
   
   // Japanese (Very basic - just check for Japanese characters)
   if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g.test(text)) {
+    console.log('[AITools] Language detected: Japanese');
     return 'ja';
   }
   
   // Chinese (Simplified and Traditional)
   if (/[\u4E00-\u9FFF\u3400-\u4DBF]/g.test(text)) {
+    console.log('[AITools] Language detected: Chinese');
     return 'zh';
   }
   
@@ -1473,12 +1486,15 @@ function detectLanguageOfText(text) {
   };
   
   const maxScore = Math.max(...Object.values(scores));
+  console.log('[AITools] Language scores:', scores, 'max:', maxScore);
+  
   if (maxScore > 4) {
     const detected = Object.keys(scores).find(lang => scores[lang] === maxScore);
     console.log('[AITools] Language detected:', detected, 'with score:', maxScore);
     return detected;
   }
   
+  console.log('[AITools] No clear language detected, defaulting to English');
   return 'en'; // Default to English
 }
 
@@ -1509,30 +1525,48 @@ function initAutoTranslator() {
     return;
   }
   
-  if (!extensionSettings.autoTranslatorEnabled) return;
+  if (!extensionSettings.autoTranslatorEnabled) {
+    console.log('[AITools] Auto-translator disabled');
+    return;
+  }
   
   // Don't show on Google Search
-  if (window.location.hostname.includes('google.')) return;
+  if (window.location.hostname.includes('google.')) {
+    console.log('[AITools] Skipping translator on Google');
+    return;
+  }
   
   setTimeout(() => {
     // Detect if page needs translation
     const pageText = document.body.innerText;
-    if (pageText.length < 200) return;
+    if (pageText.length < 200) {
+      console.log('[AITools] Page text too short for translation');
+      return;
+    }
     
     const pageLanguage = detectLanguageOfText(pageText);
     const targetLang = extensionSettings.translatorTargetLang || 'fr';
     
+    console.log('[AITools] Detected language:', pageLanguage, 'Target:', targetLang);
+    
     // Only add button if page is in a different language
     if (pageLanguage && pageLanguage !== targetLang) {
+      console.log('[AITools] Adding translator button for', pageLanguage, '->', targetLang);
       addTranslatorButton(pageLanguage, targetLang);
+    } else {
+      console.log('[AITools] No translation needed or detection failed');
     }
   }, 1500);
 }
 
 function addTranslatorButton(sourceLang, targetLang) {
   // Don't add if already exists
-  if (document.getElementById('aitools-translator-btn')) return;
+  if (document.getElementById('aitools-translator-btn')) {
+    console.log('[AITools] Translator button already exists');
+    return;
+  }
   
+  console.log('[AITools] Creating translator button:', sourceLang, '->', targetLang);
   const btn = document.createElement('button');
   btn.id = 'aitools-translator-btn';
   btn.style.cssText = `
@@ -1588,6 +1622,7 @@ function addTranslatorButton(sourceLang, targetLang) {
   });
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    e.preventDefault();
     btn.style.display = 'none';
   });
   
@@ -1621,25 +1656,30 @@ function addTranslatorButton(sourceLang, targetLang) {
 function translateAndShowModal(text, sourceLang, targetLang) {
   // Show loading state
   const btn = document.getElementById('aitools-translator-btn');
+  const originalText = btn?.querySelector('span')?.textContent;
+  
   if (btn) {
-    const originalText = btn.querySelector('span')?.textContent;
     btn.querySelector('span').textContent = '⏳ Traduction...';
     btn.disabled = true;
   }
+  
+  console.log('[AITools] Translating from', sourceLang, 'to', targetLang);
   
   // Use background script to translate
   chrome.runtime.sendMessage(
     { action: 'translateText', text: text.substring(0, 5000), targetLang: targetLang },
     (response) => {
       if (btn) {
-        btn.querySelector('span').textContent = originalText;
+        btn.querySelector('span').textContent = originalText || '🌐 Traduire';
         btn.disabled = false;
       }
       
       if (response && response.success) {
+        console.log('[AITools] Translation successful');
         showTranslationModal(text.substring(0, 1000), response.text || text, sourceLang, targetLang);
       } else {
-        alert('❌ Erreur lors de la traduction');
+        console.error('[AITools] Translation failed:', response?.error || 'Unknown error');
+        alert('❌ Erreur lors de la traduction. Veuillez réessayer.');
       }
     }
   );

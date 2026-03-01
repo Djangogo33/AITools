@@ -17,10 +17,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Handle translation requests from content script
   if (message.action === 'translateText') {
     const { text, targetLang } = message;
+    console.log('[AITools] Translation request: targetLang=' + targetLang + ', textLength=' + (text?.length || 0));
     
     (async () => {
       try {
         if (!text || text.trim().length === 0) {
+          console.log('[AITools] Translation failed: empty text');
           sendResponse({ success: false, error: 'Empty text' });
           return;
         }
@@ -35,18 +37,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         };
         const apiLang = langMap[targetLang] || 'en';
         
+        console.log('[AITools] Attempting translation to: ' + apiLang);
+        
         // Try MyMemory API (primary)
         try {
           const url = new URL('https://api.mymemory.translated.net/get');
           url.searchParams.append('q', textToTranslate);
           url.searchParams.append('langpair', 'auto|' + apiLang);
           
+          console.log('[AITools] Calling MyMemory API: ' + url);
           const response = await fetch(url);
           const data = await response.json();
+          
+          console.log('[AITools] MyMemory response status:', data?.responseStatus);
           
           if (data?.responseData?.translatedText && 
               data.responseData.translatedText.length > 0 && 
               data.responseData.translatedText.toLowerCase() !== textToTranslate.toLowerCase()) {
+            console.log('[AITools] Translation successful via MyMemory');
             sendResponse({ success: true, text: data.responseData.translatedText });
             return;
           }
@@ -59,10 +67,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const reversoUrl = 'https://api.reverso.net/translate/text/json?language_from=auto' +
             '&language_to=' + apiLang + '&input=' + encodeURIComponent(textToTranslate);
           
+          console.log('[AITools] Calling Reverso API');
           const reversoResponse = await fetch(reversoUrl);
           const reversoData = await reversoResponse.json();
           
           if (reversoData?.translation && reversoData.translation.length > 0) {
+            console.log('[AITools] Translation successful via Reverso');
             sendResponse({ success: true, text: reversoData.translation[0] });
             return;
           }
@@ -71,6 +81,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
         
         // All APIs failed
+        console.log('[AITools] All translation APIs failed');
         sendResponse({ success: false, error: 'Translation service unavailable' });
         
       } catch (e) {
