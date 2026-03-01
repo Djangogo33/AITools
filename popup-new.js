@@ -23,6 +23,7 @@ let state = {
   quickStatsEnabled: true,
   youtubeEnabled: true,
   paletteEnabled: true,
+  performanceModeEnabled: false,
   buttonVisibility: {
     googleButtons: true,
     summarizerButton: true,
@@ -167,6 +168,27 @@ document.addEventListener('DOMContentLoaded', () => {
       cleanupTabs();
     }
   });
+  
+  // Performance Mode Toggle
+  const perfModeToggle = document.getElementById('performanceModeEnabled');
+  if (perfModeToggle) {
+    perfModeToggle.addEventListener('change', (e) => {
+      state.performanceModeEnabled = e.target.checked;
+      chrome.storage.local.set({ performanceModeEnabled: e.target.checked });
+      
+      console.log('[AITools] Performance mode:', e.target.checked ? 'ENABLED' : 'DISABLED');
+      
+      // Notify content scripts about performance mode
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          chrome.tabs.sendMessage(tab.id, {
+            action: 'togglePerformanceMode',
+            enabled: e.target.checked
+          }).catch(() => {});
+        });
+      });
+    });
+  }
   
   // Notes Button
   document.getElementById('notesViewBtn').addEventListener('click', showNotesModal);
@@ -889,6 +911,12 @@ function updateUI() {
   document.getElementById('cookieBlockerEnabled').checked = state.cookieBlockerEnabled;
   document.getElementById('youtubeEnabled').checked = state.youtubeEnabled;
   document.getElementById('paletteEnabled').checked = state.paletteEnabled;
+  
+  // Performance mode toggle
+  const perfModeToggle = document.getElementById('performanceModeEnabled');
+  if (perfModeToggle) {
+    perfModeToggle.checked = state.performanceModeEnabled;
+  }
   
   // Button visibility toggles
   if (document.getElementById('googleButtonsVisible')) {

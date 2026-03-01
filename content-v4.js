@@ -1830,82 +1830,96 @@ function createStatsWidget(stats) {
   makeDraggable(widget, 'aitools-quick-stats-pos');
 }
 function initReadingTime() {
-  // Don't show reading time on Google Search results
+  // Don't show reading time on Google Search results or social media
   if (window.location.hostname.includes('google.')) return;
+  const hostname = window.location.hostname;
+  if (hostname.includes('facebook.') || hostname.includes('twitter.') || 
+      hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) {
+    return;
+  }
   if (!extensionSettings.readingTimeEnabled) return;
   
-  const mainContent = document.body.innerText || '';
-  const words = mainContent.split(/\s+/).filter(w => w.length > 0).length;
-  
-  // Average reading speed: 200-250 words per minute
-  const readingTimeMinutes = Math.ceil(words / 225);
-  
-  if (readingTimeMinutes < 1 || words < 300) return; // Too short to display
-  
-  const timeDisplay = readingTimeMinutes === 1 
-    ? '1 min de lecture' 
-    : `${readingTimeMinutes} min de lecture`;
-  
-  // Create reading time badge
-  const badge = document.createElement('div');
-  badge.id = 'aitools-reading-time';
-  badge.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 10px 16px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 600;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    z-index: 999999;
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  `;
-  
-  badge.innerHTML = `📖 ${timeDisplay}`;
-  
-  badge.addEventListener('mouseover', () => {
-    badge.style.transform = 'scale(1.05)';
-    badge.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.6)';
-  });
-  
-  badge.addEventListener('mouseout', () => {
-    badge.style.transform = 'scale(1)';
-    badge.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
-  });
-  
-  badge.title = `Temps estimé: ${words.toLocaleString('fr-FR')} mots`;
-  
-  document.body.appendChild(badge);
-  
-  // Auto-hide badge after 5 seconds if not hovered
-  let hideTimer = setTimeout(() => {
-    if (document.getElementById('aitools-reading-time')) {
-      badge.style.opacity = '0.3';
-    }
-  }, 5000);
-  
-  // Show on hover
-  badge.addEventListener('mouseover', () => {
-    clearTimeout(hideTimer);
-    badge.style.opacity = '1';
-  });
-  
-  badge.addEventListener('mouseout', () => {
-    hideTimer = setTimeout(() => {
-      badge.style.opacity = '0.3';
+  // Delay to not impact page load
+  setTimeout(() => {
+    // Try to find main article content instead of entire page
+    const mainElement = document.querySelector('article') || 
+                       document.querySelector('[role="main"]') || 
+                       document.querySelector('main') ||
+                       document.body;
+    
+    const mainContent = (mainElement?.innerText || '').slice(0, 50000); // Limit text analysis
+    const words = mainContent.split(/\s+/).filter(w => w.length > 0).length;
+    
+    // Average reading speed: 200-250 words per minute
+    const readingTimeMinutes = Math.ceil(words / 225);
+    
+    if (readingTimeMinutes < 1 || words < 300) return; // Too short to display
+    
+    const timeDisplay = readingTimeMinutes === 1 
+      ? '1 min de lecture' 
+      : `${readingTimeMinutes} min de lecture`;
+    
+    // Create reading time badge
+    const badge = document.createElement('div');
+    badge.id = 'aitools-reading-time';
+    badge.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 10px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      z-index: 999999;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    `;
+    
+    badge.innerHTML = `📖 ${timeDisplay}`;
+    
+    badge.addEventListener('mouseover', () => {
+      badge.style.transform = 'scale(1.05)';
+      badge.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.6)';
+    });
+    
+    badge.addEventListener('mouseout', () => {
+      badge.style.transform = 'scale(1)';
+      badge.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+    });
+    
+    badge.title = `Temps estimé: ${words.toLocaleString('fr-FR')} mots`;
+    
+    document.body.appendChild(badge);
+    
+    // Auto-hide badge after 5 seconds if not hovered
+    let hideTimer = setTimeout(() => {
+      if (document.getElementById('aitools-reading-time')) {
+        badge.style.opacity = '0.3';
+      }
     }, 5000);
-  });
-  
-  // Draggable
-  makeDraggable(badge, 'aitools-reading-time-pos');
+    
+    // Show on hover
+    badge.addEventListener('mouseover', () => {
+      clearTimeout(hideTimer);
+      badge.style.opacity = '1';
+    });
+    
+    badge.addEventListener('mouseout', () => {
+      hideTimer = setTimeout(() => {
+        badge.style.opacity = '0.3';
+      }, 5000);
+    });
+    
+    // Draggable
+    makeDraggable(badge, 'aitools-reading-time-pos');
+  }, 4000); // Delay 4 seconds to not impact page load
 }
 
 // ============================================================================
