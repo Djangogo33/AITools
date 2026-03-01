@@ -18,7 +18,7 @@
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["content-v4.js"],
+      "js": ["layout-manager.js", "content-v4.js"],
       "run_at": "document_start",
       "all_frames": false
     }

@@ -289,6 +289,18 @@
       <h2>Paramètres</h2>
       
       <div class="section">
+        <p class="label" style="margin-bottom: 8px;">📐 Disposition des boutons:</p>
+        <select id="layoutSelect" style="width: 100%; padding: 8px; margin-bottom: 8px; font-size: 12px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="adaptive">🔄 Adaptative (Auto)</option>
+          <option value="compact">📦 Compacte (Colonne droite)</option>
+          <option value="minimal">⚡ Minimale (Critiques seulement)</option>
+          <option value="custom">🎨 Personnalisée</option>
+        </select>
+        <p style="font-size: 10px; color: #999; margin: 8px 0 0 0;">Choisir comment les boutons s'affichent sur les pages</p>
+        <button id="resetLayoutBtn" class="btn btn-sm" style="width: 100%; margin-top: 8px;">↺ Réinitialiser positions</button>
+      </div>
+      
+      <div class="section">
         <p class="label" style="margin-bottom: 8px;">🧠 Outils IA:</p>
         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
           <input type="checkbox" id="aiDetectorEnabled" checked>
