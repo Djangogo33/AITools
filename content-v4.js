@@ -299,17 +299,55 @@ function setupGoogleEnhancements() {
   
   console.log('[AITools] Google enhancements loaded');
   
-  // Inject buttons after page loads
+  // Find Google search input with multiple strategies
+  function getGoogleSearchInput() {
+    // Strategy 1: Find by name attribute
+    let input = document.querySelector('input[name="q"]');
+    if (input && input.offsetParent !== null) return input;
+    
+    // Strategy 2: Find by type=text in main search form
+    const searchForm = document.querySelector('form[action*="/search"]');
+    if (searchForm) {
+      input = searchForm.querySelector('input[type="text"]');
+      if (input) return input;
+    }
+    
+    // Strategy 3: Look for visible input with placeholder
+    const inputs = document.querySelectorAll('input[type="text"]');
+    for (let inp of inputs) {
+      if (inp.offsetParent !== null && (inp.placeholder === 'Rechercher' || inp.placeholder.includes('Search'))) {
+        return inp;
+      }
+    }
+    
+    // Strategy 4: Find any visible input in top area
+    for (let inp of inputs) {
+      if (inp.offsetParent !== null && inp.getBoundingClientRect().top < 200) {
+        return inp;
+      }
+    }
+    
+    return null;
+  }
+  
+  // Find Google search form
+  function getGoogleSearchForm() {
+    return document.querySelector('form[action*="/search"]') || 
+           document.querySelector('form[role="search"]') ||
+           document.querySelector('form');
+  }
+  
   let isInjecting = false;
   const injectGoogleButtons = () => {
-    // Prevent concurrent injections
     if (isInjecting) return;
     
-    const searchForm = document.querySelector('form[action*="/search"]') || 
-                       document.querySelector('form[role="search"]') ||
-                       document.querySelector('form');
+    const searchInput = getGoogleSearchInput();
+    const searchForm = getGoogleSearchForm();
     
-    if (!searchForm) return;
+    if (!searchForm && !searchInput) {
+      console.log('[AITools] Search form/input not found');
+      return;
+    }
     
     let container = document.getElementById('aitools-google-buttons');
     if (container) return; // Already injected
@@ -323,6 +361,7 @@ function setupGoogleEnhancements() {
       gap: 8px;
       margin-top: 12px;
       flex-wrap: wrap;
+      padding: 8px 0;
     `;
     
     // Inject styles
@@ -349,21 +388,22 @@ function setupGoogleEnhancements() {
         .aitools-gb:hover {
           color: #202124;
           border-bottom-color: #d3d3d3;
+          transform: translateY(-2px);
         }
-        .aitools-gb.active {
+        .aitools-gb:active {
           color: #1f2937;
           border-bottom-color: #667eea;
+          transform: translateY(0);
         }
       `;
       document.head.appendChild(style);
     }
     
-    // Load visibility settings and custom config from storage
+    // Load settings from storage
     chrome.storage.local.get(['googleButtonsVisibility', 'googleButtonsConfig'], (result) => {
       const visibility = result.googleButtonsVisibility || {};
       const config = result.googleButtonsConfig || {};
       
-      // Button definitions with defaults
       const buttonDefs = [
         { key: 'lucky', label: '🍀 Chance', action: 'lucky' },
         { key: 'filters', label: '🔍 Filtres', action: 'filters' },
@@ -372,10 +412,8 @@ function setupGoogleEnhancements() {
       ];
       
       buttonDefs.forEach((def) => {
-        // Skip if disabled in settings
         if (visibility[def.key] === false) return;
         
-        // Get custom config or defaults
         const customConfig = config[def.key] || {};
         const label = customConfig.label || def.label;
         const action = customConfig.action || def.action;
@@ -390,10 +428,15 @@ function setupGoogleEnhancements() {
         
         btn.addEventListener('click', (e) => {
           e.preventDefault();
-          const input = searchForm.querySelector('input[name="q"]');
-          const query = input?.value || '';
+          e.stopPropagation();
           
-          if (!query.trim()) {
+          // Get search query from input
+          const input = getGoogleSearchInput();
+          const query = input?.value?.trim() || '';
+          
+          console.log('[AITools] Button clicked:', action, 'Query:', query);
+          
+          if (!query) {
             alert('⚠️ Entrez une recherche');
             return;
           }
@@ -403,13 +446,13 @@ function setupGoogleEnhancements() {
               window.location.href = `https://www.google.com/search?q=${encodeURIComponent(query)}&btnI=1`;
               break;
             case 'maps':
-              window.open(`https://www.google.com/maps/search/${encodeURIComponent(query)}`);
+              window.open(`https://www.google.com/maps/search/${encodeURIComponent(query)}`, '_blank');
               break;
             case 'chatgpt':
-              window.open(`https://chatgpt.com?q=${encodeURIComponent(query)}`);
+              window.open(`https://chatgpt.com`, '_blank');
               break;
             case 'filters':
-              alert('Les filtres avancés s\'ouvrent du menu de l\'extension');
+              alert('Utilisez les filtres avancés de Google en cliquant sur "Outils" dans la barre de recherche');
               break;
           }
         });
@@ -417,31 +460,38 @@ function setupGoogleEnhancements() {
         container.appendChild(btn);
       });
       
-      // Only append container if has buttons
+      // Append to search form or before first search result
       if (container.children.length > 0) {
-        searchForm.appendChild(container);
+        if (searchForm) {
+          searchForm.appendChild(container);
+        } else {
+          const resultsDiv = document.getElementById('rso') || document.querySelector('[role="main"]');
+          if (resultsDiv) {
+            resultsDiv.parentNode.insertBefore(container, resultsDiv);
+          }
+        }
         
-        // Make container draggable
-        makeDraggable(container, 'aitools-google-buttons-pos');
-        
-        console.log('[AITools] Buttons injected on Google');
+        console.log('[AITools] Buttons injected successfully on Google');
       }
       isInjecting = false;
     });
   };
   
+  // Initial injection
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', injectGoogleButtons);
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(injectGoogleButtons, 500);
+    });
   } else {
-    injectGoogleButtons();
+    setTimeout(injectGoogleButtons, 500);
   }
   
-  // Handle SPA navigation
+  // Watch for SPA navigation and re-inject if needed
   new MutationObserver(() => {
-    if (!document.getElementById('aitools-google-buttons')) {
-      injectGoogleButtons();
+    if (!document.getElementById('aitools-google-buttons') && document.querySelector('form[action*="/search"]')) {
+      setTimeout(injectGoogleButtons, 100);
     }
-  }).observe(document.body, { childList: true, subtree: true });
+  }).observe(document.body, { childList: true, subtree: false });
 }
 
 // ============================================================================
