@@ -356,6 +356,19 @@ function setupGoogleEnhancements() {
       }
     }
     
+    // Strategy 5: Try to get query from URL if input not found
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const query = params.get('q') || params.get('search') || '';
+      if (query) {
+        console.log('[AITools] ✓ Query extracted from URL:', query);
+        // Return a fake input object with the URL query
+        return { value: query, fromURL: true };
+      }
+    } catch (e) {
+      console.log('[AITools] Could not parse URL');
+    }
+    
     console.warn('[AITools] ✗ Input NOT found! All strategies failed');
     return null;
   }
@@ -520,6 +533,17 @@ function setupGoogleEnhancements() {
         container.appendChild(btn);
         console.log('[AITools] Button appended to container:', def.key);
       });
+      
+      // Make container draggable
+      if (window.layoutManager && window.layoutManager.registerElement) {
+        window.layoutManager.registerElement('aitools-google-buttons', container, {
+          width: 350,
+          height: 50,
+          priority: 6,
+          draggable: true
+        });
+      }
+      makeDraggable(container, 'aitools-google-buttons-pos');
       
       // Append to search form or before first search result
       if (container.children.length > 0) {
@@ -1345,40 +1369,53 @@ function getLanguageName(lang) {
 function detectLanguageOfText(text) {
   if (!text || text.length < 5) return null;
   
-  // French indicators
-  if (/\b(le|la|les|de|des|et|un|une|est|sont|était|au|à|pour|que|qui)\b/i.test(text)) {
-    if (/(ç|œ|é|è|ê|ë|à|ù|û|ô|ö)/i.test(text) || /\b(bonjour|salut|merci|s'il|c'est|qu'est|quoi|comment|pourquoi)\b/i.test(text)) {
-      return 'fr';
+  // First, try HTML lang attribute
+  const htmlLang = document.documentElement.lang;
+  if (htmlLang && htmlLang.length >= 2) {
+    const langCode = htmlLang.substring(0, 2).toLowerCase();
+    if (['en', 'fr', 'es', 'de', 'it', 'pt', 'ja', 'zh'].includes(langCode)) {
+      console.log('[AITools] Language detected from HTML lang attribute:', langCode);
+      return langCode;
     }
   }
   
-  // Spanish indicators
-  if (/\b(el|la|los|las|de|para|que|es|está|son|están|una|un)\b/i.test(text)) {
-    if (/(á|é|í|ó|ú|ñ|¡|¿)/i.test(text) || /\b(hola|gracias|qué|cómo|por qué|señor|señora)\b/i.test(text)) {
-      return 'es';
-    }
-  }
+  const textLower = text.toLowerCase();
+  const textToCheck = text.substring(0, 5000); // Check first 5000 chars
   
-  // German indicators
-  if (/\b(der|die|das|und|in|mit|zu|von|ein|eine|ist|sind|war|waren)\b/i.test(text)) {
-    if (/(ä|ö|ü|ß)/i.test(text) || /\b(hallo|danke|ja|nein|wie|was|wo|wann)\b/i.test(text)) {
-      return 'de';
-    }
-  }
+  // French indicators - improved
+  const frenchScore = (
+    (/(le|la|les|de|des|et|un|une|est|sont|était|au|à|pour|que|qui)/i.test(textToCheck) ? 2 : 0) +
+    (/(ç|œ|é|è|ê|ë|à|ù|û|ô|ö)/i.test(textToCheck) ? 3 : 0) +
+    (/\b(bonjour|salut|merci|s'il|c'est|qu'est|quoi|comment|pourquoi|très|bien|avec|sans|plus|moins)\b/i.test(textToCheck) ? 3 : 0)
+  );
   
-  // Italian indicators
-  if (/\b(il|lo|la|i|gli|le|di|da|per|che|è|sono|sono)\b/i.test(text)) {
-    if (/(à|è|é|ì|ò|ù)/i.test(text) || /\b(ciao|grazie|per favore|come|cosa|dove)\b/i.test(text)) {
-      return 'it';
-    }
-  }
+  // Spanish indicators - improved
+  const spanishScore = (
+    (/(el|la|los|las|de|para|que|es|está|son|están|una|un)/i.test(textToCheck) ? 2 : 0) +
+    (/(á|é|í|ó|ú|ñ|¡|¿)/i.test(textToCheck) ? 3 : 0) +
+    (/\b(hola|gracias|qué|cómo|por qué|señor|señora|muy|bien|también)/b/i.test(textToCheck) ? 3 : 0)
+  );
   
-  // Portuguese indicators
-  if (/\b(o|a|os|as|de|para|que|é|são|um|uma|em|com)\b/i.test(text)) {
-    if (/(ã|õ|ç|á|é|í|ó|ú|à)/i.test(text) || /\b(olá|obrigado|por favor|como|qual|onde)\b/i.test(text)) {
-      return 'pt';
-    }
-  }
+  // German indicators - improved
+  const germanScore = (
+    (/(der|die|das|und|in|mit|zu|von|ein|eine|ist|sind|war|waren)/i.test(textToCheck) ? 2 : 0) +
+    (/(ä|ö|ü|ß)/i.test(textToCheck) ? 3 : 0) +
+    (/\b(hallo|danke|ja|nein|wie|was|wo|wann|sehr|auch|nach|bitte)\b/i.test(textToCheck) ? 3 : 0)
+  );
+  
+  // Italian indicators - improved
+  const italianScore = (
+    (/(il|lo|la|i|gli|le|di|da|per|che|è|sono)/i.test(textToCheck) ? 2 : 0) +
+    (/(à|è|é|ì|ò|ù)/i.test(textToCheck) ? 3 : 0) +
+    (/\b(ciao|grazie|per favore|come|cosa|dove|buongiorno|arrivederci)\b/i.test(textToCheck) ? 3 : 0)
+  );
+  
+  // Portuguese indicators - improved
+  const portugueseScore = (
+    (/(o|a|os|as|de|para|que|é|são|um|uma|em|com)/i.test(textToCheck) ? 2 : 0) +
+    (/(ã|õ|ç|á|é|í|ó|ú|à)/i.test(textToCheck) ? 3 : 0) +
+    (/\b(olá|obrigado|por favor|como|qual|onde|muito|bem|com)\b/i.test(textToCheck) ? 3 : 0)
+  );
   
   // Japanese (Very basic - just check for Japanese characters)
   if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g.test(text)) {
@@ -1388,6 +1425,22 @@ function detectLanguageOfText(text) {
   // Chinese (Simplified and Traditional)
   if (/[\u4E00-\u9FFF\u3400-\u4DBF]/g.test(text)) {
     return 'zh';
+  }
+  
+  // Find language with highest score
+  const scores = {
+    'fr': frenchScore,
+    'es': spanishScore,
+    'de': germanScore,
+    'it': italianScore,
+    'pt': portugueseScore
+  };
+  
+  const maxScore = Math.max(...Object.values(scores));
+  if (maxScore > 4) {
+    const detected = Object.keys(scores).find(lang => scores[lang] === maxScore);
+    console.log('[AITools] Language detected:', detected, 'with score:', maxScore);
+    return detected;
   }
   
   return 'en'; // Default to English
