@@ -434,66 +434,32 @@ function setupGoogleEnhancements() {
           display: inline-flex;
           align-items: center;
           padding: 8px 12px;
-          background: white;
+          background: transparent;
           color: #5f6368;
-          border: 1px solid #dadce0;
-          border-radius: 6px;
+          border: none;
+          border-radius: 4px;
           font-size: 13px;
           font-weight: 500;
           cursor: pointer;
-          transition: all 0.15s;
+          transition: all 0.2s;
           white-space: nowrap;
           margin: 0;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
         }
         .aitools-gb:hover {
           color: #202124;
-          border-color: #bdc1c6;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.12);
-          transform: translateY(-1px);
+          background: rgba(0,0,0,0.05);
+          border-radius: 4px;
         }
         .aitools-gb:active {
           color: #1f2937;
-          border-color: #667eea;
-          box-shadow: 0 1px 3px rgba(102, 126, 234, 0.2);
-          transform: translateY(0);
-          background: #f8f9ff;
+          background: rgba(102, 126, 234, 0.1);
         }
         #aitools-google-buttons {
           cursor: grab !important;
         }
         #aitools-google-buttons:active {
           cursor: grabbing !important;
-        }
-        .aitools-gb-close {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 28px;
-          height: 28px;
-          background: rgba(255,255,255,0.9);
-          border: 1px solid #dadce0;
-          border-radius: 50%;
-          color: #5f6368;
-          cursor: pointer;
-          font-size: 18px;
-          padding: 0;
-          margin: 0;
-          transition: all 0.15s;
-          font-family: Arial, sans-serif;
-          font-weight: bold;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        }
-        .aitools-gb-close:hover {
-          background: rgba(255,255,255,1);
-          border-color: #bdc1c6;
-          color: #1f2937;
-          box-shadow: 0 2px 5px rgba(0,0,0,0.12);
-        }
-        .aitools-gb-close:active {
-          background: #f8f9ff;
-          color: #667eea;
         }
       `;
       document.head.appendChild(style);
@@ -581,39 +547,12 @@ function setupGoogleEnhancements() {
         console.log('[AITools] Button appended to container:', def.key);
       });
       
-      // Add close button to hide the container
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'aitools-gb-close';
-      closeBtn.innerHTML = '✕';
-      closeBtn.type = 'button';
-      closeBtn.title = 'Masquer les boutons Google';
-      closeBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('[AITools] Close button clicked, hiding Google buttons');
-        container.style.display = 'none';
-        // Save visibility state
-        chrome.storage.local.set({ 'aitools-google-buttons-hidden': true });
-      });
-      container.appendChild(closeBtn);
-      console.log('[AITools] Close button added');
-      
       // Append to body (container is already fixed positioned)
       if (container.children.length > 0) {
         console.log('[AITools] Total buttons created:', container.children.length);
         
         document.body.appendChild(container);
         console.log('[AITools] Container appended to body');
-        
-        // Check if buttons were previously hidden
-        chrome.storage.local.get(['aitools-google-buttons-hidden'], (result) => {
-          if (result['aitools-google-buttons-hidden']) {
-            console.log('[AITools] Google buttons were hidden, keeping hidden');
-            container.style.display = 'none';
-          } else {
-            console.log('[AITools] Google buttons visible');
-          }
-        });
         
         // Register with layout manager for smart positioning
         if (window.layoutManager && typeof window.layoutManager.registerElement === 'function') {
