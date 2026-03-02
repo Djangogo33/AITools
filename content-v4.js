@@ -1319,7 +1319,7 @@ function showSummaryModal(summary) {
     // Limit summary to 500 chars for API compatibility
     const summaryToTranslate = summary.substring(0, 500);
     chrome.runtime.sendMessage(
-      { action: 'translateText', text: summaryToTranslate, targetLang: targetLang },
+      { action: 'translateText', text: summaryToTranslate, sourceLang: pageLanguage, targetLang: targetLang },
       (response) => {
         if (response && response.success) {
           const translatedSummary = response.text || summary;
@@ -1685,7 +1685,7 @@ function translateAndShowModal(text, sourceLang, targetLang) {
   
   // Use background script to translate
   chrome.runtime.sendMessage(
-    { action: 'translateText', text: textToTranslate, targetLang: targetLang },
+    { action: 'translateText', text: textToTranslate, sourceLang: sourceLang, targetLang: targetLang },
     (response) => {
       if (btn) {
         btn.querySelector('span').textContent = originalText || '🌐 Traduire';

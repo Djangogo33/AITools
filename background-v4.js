@@ -16,8 +16,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   // Handle translation requests from content script
   if (message.action === 'translateText') {
-    const { text, targetLang } = message;
-    console.log('[AITools] Translation request: targetLang=' + targetLang + ', textLength=' + (text?.length || 0));
+    const { text, sourceLang, targetLang } = message;
+    console.log('[AITools] Translation request: ' + (sourceLang || 'auto') + ' -> ' + targetLang + ', textLength=' + (text?.length || 0));
     
     (async () => {
       try {
@@ -40,13 +40,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         console.log('[AITools] Attempting translation to: ' + apiLang);
         
-        // Try MyMemory API (primary)
+        // Use source language from message, or detect it
+        // MyMemory requires a real language code, not 'auto'
+        const validLangs = ['en', 'fr', 'es', 'de', 'it', 'pt', 'ru', 'ja', 'zh', 'ar', 'ko', 'tr'];
+        let sourceLangCode = validLangs.includes(sourceLang) ? sourceLang : 'en';
+        
+        console.log('[AITools] Using source language code:', sourceLangCode);
         try {
           const url = new URL('https://api.mymemory.translated.net/get');
           url.searchParams.append('q', textToTranslate);
-          url.searchParams.append('langpair', 'auto|' + apiLang);
+          url.searchParams.append('langpair', sourceLangCode + '|' + apiLang);
           
-          console.log('[AITools] Calling MyMemory API');
+          console.log('[AITools] Calling MyMemory API with langpair: ' + sourceLangCode + '|' + apiLang);
           const response = await fetch(url);
           const data = await response.json();
           
@@ -56,23 +61,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               data.responseData.translatedText.length > 0 && 
               data.responseData.translatedText.toLowerCase() !== textToTranslate.toLowerCase() &&
               !data.responseData.translatedText.includes('QUERY LENGTH') &&
+              !data.responseData.translatedText.includes('INVALID') &&
               !data.responseData.translatedText.includes('error')) {
             console.log('[AITools] Translation successful via MyMemory');
             sendResponse({ success: true, text: data.responseData.translatedText });
             return;
           } else {
-            console.log('[AITools] MyMemory response invalid:', data?.responseData?.translatedText?.substring(0, 100));
+            console.log('[AITools] MyMemory response invalid or error:', data?.responseData?.translatedText?.substring(0, 100));
           }
         } catch (e1) {
           console.log('[AITools] MyMemory failed:', e1.message);
         }
         
-        // Fallback: try Reverso API
+        // Fallback: try Reverso API with the same source language
         try {
-          const reversoUrl = 'https://api.reverso.net/translate/text/json?language_from=auto' +
+          const reversoUrl = 'https://api.reverso.net/translate/text/json?language_from=' + sourceLangCode +
             '&language_to=' + apiLang + '&input=' + encodeURIComponent(textToTranslate);
           
-          console.log('[AITools] Calling Reverso API');
+          console.log('[AITools] Calling Reverso API with language_from=' + sourceLangCode);
           const reversoResponse = await fetch(reversoUrl);
           const reversoData = await reversoResponse.json();
           
