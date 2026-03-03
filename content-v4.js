@@ -599,27 +599,15 @@ function setupGoogleEnhancements() {
         document.body.appendChild(container);
         console.log('[AITools] Container appended to body');
         
-        // Register with layout manager for smart positioning
-        if (window.layoutManager && typeof window.layoutManager.registerElement === 'function') {
-          try {
-            window.layoutManager.registerElement('aitools-google-buttons', container, {
-              width: 420,
-              height: 50,
-              priority: 6,
-              draggable: true
-            });
-            console.log('[AITools] ✓ Registered with layout manager');
-          } catch (e) {
-            console.log('[AITools] Layout manager registration failed:', e.message);
-          }
-        } else {
-          console.log('[AITools] Layout manager not available, using fixed positioning only');
-        }
+        // DO NOT register with layout manager - buttons are too wide and need to stay fixed
+        // The layout manager would hide them with display: none when it can't fit them
         
         // Make it draggable
         makeDraggable(container, 'aitools-google-buttons-pos');
         
-        console.log('[AITools] ✓ Buttons injected successfully on Google');
+        // Ensure container is visible
+        container.style.display = 'flex';
+        console.log('[AITools] Ensured container is visible');
         console.log('[AITools] Container element:', container);
         console.log('[AITools] Button elements:', container.querySelectorAll('.aitools-gb'));
       } else {
@@ -2202,7 +2190,12 @@ function initFocusMode() {
     focusBtn.style.boxShadow = '0 4px 12px rgba(245, 87, 108, 0.4)';
   });
   
-  document.body.appendChild(focusBtn);
+  // Safely append to body (check if body exists)
+  if (document.body) {
+    document.body.appendChild(focusBtn);
+  } else {
+    console.warn('[AITools] document.body is null, cannot append focus button');
+  }
 }
 
 function toggleFocusMode() {
