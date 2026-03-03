@@ -60,12 +60,15 @@ chrome.storage.local.get(['aiDetectorSensitivity', 'summarizerLength', 'summariz
 // DRAGGABLE UTILITY - Makes elements draggable and saves position
 // ============================================================================
 function makeDraggable(element, storageKey) {
+  console.log('[AITools] makeDraggable called for:', storageKey);
+  
   let isDragging = false;
   let startX = 0;
   let startY = 0;
   let offsetX = 0;
   let offsetY = 0;
-  let wasFixed = false;
+  let dragThreshold = 5; // pixels before considering it a drag
+  let dragDistance = 0;
 
   // Load saved position
   chrome.storage.local.get([storageKey], (result) => {
@@ -79,20 +82,42 @@ function makeDraggable(element, storageKey) {
   });
 
   element.addEventListener('mousedown', (e) => {
-    // Don't drag if clicking buttons, close buttons, or interactive elements
-    if (e.target.closest('button, a, input, select, textarea, .aitools-close-btn, .aitools-gb')) return;
+    // Only drag if:
+    // 1. Not clicking on interactive elements (inputs, etc.)
+    // 2. Not clicking on close buttons
+    // 3. Is a button (can drag from buttons to move container)
     
+    const isButton = e.target.closest('.aitools-gb, button');
+    const isInteractive = e.target.closest('input, select, textarea, a');
+    const isCloseBtn = e.target.closest('.aitools-close-btn');
+    
+    console.log('[AITools] Mousedown - isButton:', !!isButton, 'isInteractive:', !!isInteractive, 'isCloseBtn:', !!isCloseBtn);
+    
+    // Allow dragging from buttons and regular container areas
+    // But not from other interactive elements or close buttons
+    if (isInteractive && !isButton) {
+      console.log('[AITools] Blocking drag: interactive element');
+      return;
+    }
+    if (isCloseBtn) {
+      console.log('[AITools] Blocking drag: close button');
+      return;
+    }
+    
+    console.log('[AITools] Starting drag from:', e.clientX, e.clientY);
     isDragging = true;
+    dragDistance = 0;
     startX = e.clientX;
     startY = e.clientY;
     
     // Save original position state
-    wasFixed = element.style.position === 'fixed';
+    const wasFixed = element.style.position === 'fixed';
     
     // Switch to fixed positioning for dragging
     element.style.position = 'fixed';
     
     // Ensure the element is visible
+    const originalZIndex = element.style.zIndex;
     element.style.zIndex = '999999';
     
     // Calculate offset from mouse to element's top-left
@@ -100,11 +125,23 @@ function makeDraggable(element, storageKey) {
     offsetX = rect.left - e.clientX;
     offsetY = rect.top - e.clientY;
     
+    console.log('[AITools] Drag setup - rect:', rect, 'offset:', offsetX, offsetY);
     element.style.cursor = 'grabbing';
   });
 
   document.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
+    
+    // Calculate distance moved
+    dragDistance = Math.sqrt(
+      Math.pow(e.clientX - startX, 2) + 
+      Math.pow(e.clientY - startY, 2)
+    );
+    
+    // Only start visual drag after threshold
+    if (dragDistance < dragThreshold) return;
+    
+    console.log('[AITools] Dragging... distance:', dragDistance.toFixed(1), 'pos:', e.clientX, e.clientY);
     
     const newX = e.clientX + offsetX;
     const newY = e.clientY + offsetY;
@@ -116,22 +153,28 @@ function makeDraggable(element, storageKey) {
 
   document.addEventListener('mouseup', () => {
     if (isDragging) {
+      console.log('[AITools] Mouse up - drag distance:', dragDistance.toFixed(1), 'threshold:', dragThreshold);
       isDragging = false;
       element.style.cursor = 'grab';
+      element.style.zIndex = '10000';
       
-      // Save position
-      const rect = element.getBoundingClientRect();
-      const pos = {
-        top: rect.top,
-        left: rect.left
-      };
-      chrome.storage.local.set({ [storageKey]: pos });
+      // Only save position if it actually moved (not just a click)
+      if (dragDistance >= dragThreshold) {
+        const rect = element.getBoundingClientRect();
+        const pos = {
+          top: rect.top,
+          left: rect.left
+        };
+        chrome.storage.local.set({ [storageKey]: pos });
+        console.log('[AITools] Saved position:', pos);
+      } else {
+        console.log('[AITools] Drag distance too small, not saving position');
+      }
     }
   });
   
   // Add visual feedback
   element.style.cursor = 'grab';
-  element.style.transition = isDragging ? 'none' : 'all 0.2s';
 }
 
 // ============================================================================
@@ -445,6 +488,8 @@ function setupGoogleEnhancements() {
           white-space: nowrap;
           margin: 0;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          pointer-events: auto;
+          user-select: none;
         }
         .aitools-gb:hover {
           color: #202124;
