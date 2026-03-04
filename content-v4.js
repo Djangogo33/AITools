@@ -332,7 +332,7 @@ function setupHighlighter() {
     setTimeout(() => {
       const m = document.getElementById('aitools-highlight-menu');
       if (m) m.remove();
-    }, 5000);
+    }, 3000);
   });
 }
 
