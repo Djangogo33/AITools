@@ -11,7 +11,7 @@
 - **Blocage des annonces** : Supprimez les résultats sponsorisés de vos recherches
 
 ### ⚡ Accès Rapide
-- **Ouvrez vos services préférés en 1 clic** : WhatsApp, ChatGPT, Google Maps
+- **Ouvrez vos services préférés en 1 clic** : WhatsApp, ChatGPT, Discord ou Optitools
 - **Bouton "Je suis chanceux"** pour des découvertes surprenantes
 - **Popup compacte et efficace** : Tous vos outils au portée
 
@@ -30,20 +30,6 @@
 - **Convertisseur de devises** : Cliquez droit sur un montant pour convertir
 - **Sauvegarde & Restauration** : Exportez vos notes en JSON ou restaurez vos données
 - **Réinitialisation complète** : Repartez à zéro en un clic si nécessaire
-
-## 📦 Installation
-
-### Méthode 1 : Mode Développeur (Recommandé)
-
-1. Ouvrez Chrome et accédez à `chrome://extensions/`
-2. Activez le **"Mode développeur"** (coin supérieur droit)
-3. Cliquez sur **"Charger l'extension non empaquetée"**
-4. Sélectionnez le dossier `/AITools` du projet
-5. ✅ Extension prête à l'emploi!
-
-### Méthode 2 : Extension Compilée (.crx)
-- Fichier : `AITools-v4.0.crx`
-- Installez en double-cliquant sur le fichier
 
 ## 🎯 Guide de Démarrage
 
