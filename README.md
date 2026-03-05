@@ -165,6 +165,7 @@ chrome.runtime.sendMessage({
 - **Signalez l'erreur** : Ouvrez la console (F12) et copiez les messages
 - **Décrivez le contexte** : Sur quelle page ? Quel bouton avez-vous cliqué ?
 - **Joignez une capture d'écran** : Montrez visuellement le problème
+- **Envoyez tout** : Sur le discord d'AITools : https://discord.gg/J2ssa2Wkjr
 
 ## 📄 Licence
 
