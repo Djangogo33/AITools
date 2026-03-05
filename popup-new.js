@@ -63,7 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('whatsappBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://whatsapp.com/channel/0029VbCJCg06GcG7aLZPGu1f' });
   });
-  
+  document.getElementById('discordBtn').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://discord.gg/J2ssa2Wkjr' });
+  });
   document.getElementById('chatgptBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://chatgpt.com' });
   });
