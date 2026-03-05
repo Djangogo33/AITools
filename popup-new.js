@@ -66,6 +66,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('discordBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://discord.gg/J2ssa2Wkjr' });
   });
+  document.getElementById('siteBtn').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://aitools.odoo.com' });
+    chrome.tabs.create({ url: 'https://tutofacile.netlify.app' });
+  });
   document.getElementById('chatgptBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://chatgpt.com' });
   });
