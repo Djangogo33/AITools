@@ -10,7 +10,8 @@ const urls = {
   'startpage': 'https://www.startpage.com/',
   'yahoo': 'https://search.yahoo.com/',
   'ecosia': 'https://www.ecosia.org/',
-  'github': 'https://github.com/'
+  'github': 'https://github.com/',
+  'brave': 'https://search.brave.com/'
 };
 
 // Get stored preference and redirect immediately
