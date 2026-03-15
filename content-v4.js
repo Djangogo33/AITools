@@ -2211,8 +2211,7 @@ function initFocusMode() {
     justify-content: center;
   `;
   closeBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-
+  e.stopPropagation();  
   disableFocusMode();
 
   // Mettre à jour l'état dans le storage
@@ -2316,15 +2315,16 @@ function enableFocusMode() {
 
 function disableFocusMode() {
   document.body.removeAttribute('data-aitools-focus');
-  
-  // Remove focus mode styles
+
   const style = document.getElementById('aitools-focus-mode-styles');
   if (style) style.remove();
-  
-  // Show toast notification
+
+  chrome.storage.local.set({
+    focusModeEnabled: false
+  });
+
   showFocusNotification('Mode focus désactivé');
-  
-  // Update button style
+
   const btn = document.getElementById('aitools-focus-mode-btn');
   if (btn) {
     btn.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
