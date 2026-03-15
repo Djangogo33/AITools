@@ -15,6 +15,7 @@ let state = {
   notes: [],
   aiDetectorEnabled: true,
   summarizerEnabled: true,
+  focusModeEnabled: true,
   autoTranslatorEnabled: true,
   translatorTargetLang: 'fr',
   translatorEnabled: true,
@@ -27,6 +28,7 @@ let state = {
   buttonVisibility: {
     googleButtons: true,
     summarizerButton: true,
+    focusModeBadge: true,
     aiDetectorBadge: true,
     translationButtons: true,
     quickStatsWidget: true,
@@ -312,6 +314,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const defaultButtonVisibility = {
         googleButtons: true,
         summarizerButton: true,
+        focusModeBadge: true,
         aiDetectorBadge: true,
         translationButtons: true,
         quickStatsWidget: true,
@@ -424,6 +427,13 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.set({ summarizerEnabled: e.target.checked });
     notifyContentScript({ action: 'updateSettings', settings: state });
   });
+
+  document.getElementById('focusModeEnabled').addEventListener('change', (e) => {
+    state.focusModeEnabled = e.target.checked;
+    chrome.storage.local.set({ focusModeEnabled: e.target.checked });
+    notifyContentScript({ action: 'updateSettings', settings: state });
+  });
+
 
   document.getElementById('autoTranslatorEnabled').addEventListener('change', (e) => {
     state.autoTranslatorEnabled = e.target.checked;
@@ -982,6 +992,8 @@ function updateUI() {
   // AI Tools toggles
   document.getElementById('aiDetectorEnabled').checked = state.aiDetectorEnabled;
   document.getElementById('summarizerEnabled').checked = state.summarizerEnabled;
+  document.getElementById('focusModeEnabled').checked = state.focusModeEnabled;
+  document.getElementById('autoTranslatorEnabled').checked = state.autoTranslatorEnabled;
   document.getElementById('translatorEnabled').checked = state.translatorEnabled;
   document.getElementById('cookieBlockerEnabled').checked = state.cookieBlockerEnabled;
   document.getElementById('youtubeEnabled').checked = state.youtubeEnabled;
@@ -1000,6 +1012,10 @@ function updateUI() {
   if (document.getElementById('summarizerButtonVisible')) {
     document.getElementById('summarizerButtonVisible').checked = state.buttonVisibility?.summarizerButton !== false;
   }
+  if (document.getElementById('focusModeBadgeVisible')) {
+    document.getElementById('focusModeBadgeVisible').checked = state.buttonVisibility?.focusModeBadge !== false;
+  }
+
   if (document.getElementById('aiDetectorBadgeVisible')) {
     document.getElementById('aiDetectorBadgeVisible').checked = state.buttonVisibility?.aiDetectorBadge !== false;
   }
@@ -1076,6 +1092,7 @@ function disableAll() {
     readingTimeEnabled: false,
     quickStatsEnabled: false,
     blockSponsoredEnabled: false,
+    focusModeEnabled: false,
     paletteEnabled: false,
     youtubeEnabled: false,
     cookieBlockerEnabled: false,
@@ -1089,6 +1106,7 @@ function disableAll() {
   const checkboxesToUncheck = [
     'aiDetectorEnabled',
     'summarizerEnabled',
+    'focusModeEnabled',
     'autoTranslatorEnabled',
     'translatorEnabled',
     'readingTimeEnabled',
@@ -1293,6 +1311,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (changes.currencyConverterEnabled) state.currencyConverterEnabled = changes.currencyConverterEnabled.newValue;
     if (changes.aiDetectorEnabled) state.aiDetectorEnabled = changes.aiDetectorEnabled.newValue;
     if (changes.summarizerEnabled) state.summarizerEnabled = changes.summarizerEnabled.newValue;
+    if (changes.focusModeEnabled) state.focusModeEnabled = changes.focusModeEnabled.newValue;
     if (changes.translatorEnabled) state.translatorEnabled = changes.translatorEnabled.newValue;
     if (changes.youtubeEnabled) state.youtubeEnabled = changes.youtubeEnabled.newValue;
     if (changes.paletteEnabled) state.paletteEnabled = changes.paletteEnabled.newValue;
