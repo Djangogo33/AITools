@@ -2212,8 +2212,16 @@ function initFocusMode() {
   `;
   closeBtn.addEventListener('click', (e) => {
   e.stopPropagation();
+
   disableFocusMode();
-  focusBtn.remove(); // ferme le popup/bouton
+
+  // Mettre à jour l'état dans le storage
+  chrome.storage.local.set({
+    focusModeEnabled: false
+  });
+
+  // Supprimer le bouton
+  focusBtn.remove();
 });
 
   focusBtn.appendChild(closeBtn);
