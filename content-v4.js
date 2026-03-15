@@ -5,11 +5,13 @@ let extensionEnabled = true;
 let darkModeEnabled = false;
 let readingTimeBadgeShown = false;
 let aiDetectorEnabled = true;
+let focusModeEnabled = true;
 let summarizerEnabled = true;
 
 // Settings state
 let extensionSettings = {
   aiDetectorEnabled: true,
+  focusModeEnabled: true,
   summarizerEnabled: true,
   autoTranslatorEnabled: true,
   translatorTargetLang: 'fr',
@@ -31,6 +33,7 @@ let elementVisibility = {
 let buttonVisibility = {
   googleButtons: true,
   summarizerButton: true,
+  focusModeBadge: true,
   aiDetectorBadge: true,
   translationButtons: true,
   quickStatsWidget: true,
@@ -47,6 +50,7 @@ chrome.storage.local.get(['aiDetectorSensitivity', 'summarizerLength', 'summariz
   if (result.cookieBlockerEnabled !== undefined) extensionSettings.cookieBlockerEnabled = result.cookieBlockerEnabled;
   if (result.readingTimeEnabled !== undefined) extensionSettings.readingTimeEnabled = result.readingTimeEnabled;
   if (result.quickStatsEnabled !== undefined) extensionSettings.quickStatsEnabled = result.quickStatsEnabled;
+  if (result.focusModeEnabled !== undefined) extensionSettings.focusModeEnabled = result.focusModeEnabled;
   if (result.performanceModeEnabled !== undefined) extensionSettings.performanceModeEnabled = result.performanceModeEnabled;
   if (result['aitools-visibility']) {
     elementVisibility = { ...elementVisibility, ...result['aitools-visibility'] };
@@ -706,7 +710,12 @@ chrome.storage.local.get(null, (data) => {
   
   // Google features
   setupGoogleEnhancements();
-  
+
+  // Focus mode
+  if (data.focusModeEnabled) {
+    enableFocusMode();
+  }
+
   // Block sponsored
   if (data.blockSponsoredEnabled) {
     setTimeout(() => blockSponsoredResults(), 2000);
@@ -2153,7 +2162,9 @@ function initFocusMode() {
       toggleFocusMode();
     }
   });
-  
+
+  if (extensionSettings.focusModeEnabled) return; // Don't add button if focus mode is enabled by default
+
   // Also add a quick button near reading time badge
   const focusBtn = document.createElement('button');
   focusBtn.id = 'aitools-focus-mode-btn';
@@ -2179,7 +2190,31 @@ function initFocusMode() {
     align-items: center;
     justify-content: center;
   `;
-  
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'aitools-close-btn';
+  closeBtn.innerHTML = '✕';
+  closeBtn.style.cssText = `
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ff4757;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  `;
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    disableFocusMode();
+  });
+  focusBtn.appendChild(closeBtn);
   focusBtn.addEventListener('click', toggleFocusMode);
   focusBtn.addEventListener('mouseover', () => {
     focusBtn.style.transform = 'scale(1.1)';
@@ -2332,6 +2367,8 @@ chrome.storage.local.get(null, (data) => {
   if (data.summarizerEnabled !== undefined) extensionSettings.summarizerEnabled = data.summarizerEnabled;
   if (data.autoTranslatorEnabled !== undefined) extensionSettings.autoTranslatorEnabled = data.autoTranslatorEnabled;
   if (data.translatorTargetLang) extensionSettings.translatorTargetLang = data.translatorTargetLang;
+  if (data.focusModeEnabled !== undefined) extensionSettings.focusModeEnabled = data.focusModeEnabled;
+  if (data.focusModeBadge !== undefined) extensionSettings.focusModeBadge = data.focusModeBadge;
   if (data.cookieBlockerEnabled !== undefined) extensionSettings.cookieBlockerEnabled = data.cookieBlockerEnabled;
   if (data.readingTimeEnabled !== undefined) extensionSettings.readingTimeEnabled = data.readingTimeEnabled;
   if (data.quickStatsEnabled !== undefined) extensionSettings.quickStatsEnabled = data.quickStatsEnabled;
