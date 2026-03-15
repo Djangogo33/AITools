@@ -5,13 +5,13 @@ let extensionEnabled = true;
 let darkModeEnabled = false;
 let readingTimeBadgeShown = false;
 let aiDetectorEnabled = true;
-let focusModeEnabled = true;
+let focusModeEnabled = false;
 let summarizerEnabled = true;
 
 // Settings state
 let extensionSettings = {
   aiDetectorEnabled: true,
-  focusModeEnabled: true,
+  focusModeEnabled: false,
   summarizerEnabled: true,
   autoTranslatorEnabled: true,
   translatorTargetLang: 'fr',
