@@ -2211,9 +2211,11 @@ function initFocusMode() {
     justify-content: center;
   `;
   closeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    disableFocusMode();
-  });
+  e.stopPropagation();
+  disableFocusMode();
+  focusBtn.remove(); // ferme le popup/bouton
+});
+
   focusBtn.appendChild(closeBtn);
   focusBtn.addEventListener('click', toggleFocusMode);
   focusBtn.addEventListener('mouseover', () => {
