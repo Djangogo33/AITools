@@ -28,7 +28,7 @@
     "newtab": "newtab.html"
   },
   "icons": {
-    "256": "icons/logo aitools sans fond sans texte.png",
-    "512": "icons/logo aitools sans fond.png"
+    "512": "icons/logo aitools sans fond sans texte.png",
+    "256": "icons/logo aitools sans fond.png"
   }
 }
