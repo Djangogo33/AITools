@@ -148,7 +148,7 @@ chrome.runtime.sendMessage({
 });
 ```
 
-## � Feuille de Route Futur
+## � Feuille de Route Future
 
 - [ ] **Thèmes personnalisés** : Créez vos propres palettes de couleurs
 - [ ] **Synchronisation cloud** : Vos données sur tous vos appareils
