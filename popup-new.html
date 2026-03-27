@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AITools Pro v4.0</title>
+  <link rel="stylesheet" href="styles-new.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-content">
+      <div class="logo-container">
+        <img src="icons/logo aitools sans fond sans texte.png" alt="AITools" class="logo-img">
+      </div>
+      <div class="header-controls">
+        <button id="disableAllBtn" class="icon-btn" title="Désactiver tout">⊘</button>
+        <button id="darkModeBtn" class="icon-btn" title="Mode sombre">🌙</button>
+        <button id="toggleExtension" class="icon-btn active" title="Activer/Désactiver">✓</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="nav">
+    <button class="nav-btn active" data-tab="quick">⚡</button>
+    <button class="nav-btn" data-tab="google">🔍</button>
+    <button class="nav-btn" data-tab="buttons">🔘</button>
+    <button class="nav-btn" data-tab="tools">🛠️</button>
+    <button class="nav-btn" data-tab="ai">🧠</button>
+    <button class="nav-btn" data-tab="settings">⚙️</button>
+  </nav>
+
+  <!-- Content -->
+  <main class="content">
+    <!-- Quick Tools Tab -->
+    <section class="tab active" id="quick">
+      <h2>Accès rapide</h2>
+      
+      <div class="btn-group">
+        <button id="whatsappBtn" class="btn btn-green" title="WhatsApp">💬 WhatsApp</button>
+        <button id="discordBtn" class="btn btn-blue" title="Discord">📨 Discord</button>
+        <button id="siteBtn" class="btn btn-orange" title="Site Internet">🌐 Site Internet</button>
+        <button id="chatgptBtn" class="btn btn-grey" title="ChatGPT">🤖 ChatGPT</button>
+      </div>
+
+      <div class="section">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="darkModeToggle" title="Activer le mode sombre global">
+          <span>Mode sombre</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px;">
+          <input type="checkbox" id="blockSponsored" title="Bloquer les résultats sponsorisés">
+          <span>Sans publicités</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Google Tools Tab -->
+    <section class="tab" id="google">
+      <h2>Google Avancé</h2>
+      
+      <div class="section">
+        <input 
+          type="text" 
+          id="googleSearchInput" 
+          placeholder="🔎 Cherchez..." 
+          class="input-field"
+        >
+      </div>
+
+      <div class="section">
+        <p class="label">Catégories:</p>
+        <div class="categories">
+          <button class="category-badge" data-category="orthographe">✏️ Ortho</button>
+          <button class="category-badge" data-category="wiki">📖 Wiki</button>
+          <button class="category-badge" data-category="trends">📈 Tendances</button>
+          <button class="category-badge" data-category="news">📰 Actualités</button>
+          <button class="category-badge" data-category="images">🎨 Images</button>
+          <button class="category-badge" data-category="videos">🎬 Vidéos</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <p class="label" style="margin-bottom: 12px;">🔘 Boutons de recherche:</p>
+        
+        <!-- Visibility Controls -->
+        <p style="font-size: 11px; color: #666; margin-bottom: 6px;">Visibilité:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 4px;">
+          <input type="checkbox" id="googleButtonLucky" checked>
+          <span>🍀 Chance</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 4px;">
+          <input type="checkbox" id="googleButtonFilters" checked>
+          <span>🔍 Filtres</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 4px;">
+          <input type="checkbox" id="googleButtonMaps" checked>
+          <span>🗺️ Maps</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 4px;">
+          <input type="checkbox" id="googleButtonChatGPT" checked>
+          <span>🤖 ChatGPT</span>
+        </label>
+        
+        <!-- Customization Section -->
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+          <p style="font-size: 11px; color: #666; margin: 0 0 10px 0;">Personnaliser:</p>
+          
+          <select id="googleButtonCustomizeSelect" style="width: 100%; padding: 6px; margin-bottom: 10px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px;">
+            <option value="">Sélectionner un bouton...</option>
+            <option value="lucky">🍀 Chance</option>
+            <option value="filters">🔍 Filtres</option>
+            <option value="maps">🗺️ Maps</option>
+            <option value="chatgpt">🤖 ChatGPT</option>
+          </select>
+          
+          <div id="googleButtonCustomizeView" style="display: none;">
+            <!-- Label Input -->
+            <div style="margin-bottom: 8px;">
+              <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Étiquette:</label>
+              <input type="text" id="googleButtonCustomizeLabel" placeholder="p.ex: 🍀 Chance" style="width: 100%; padding: 6px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;">
+            </div>
+            
+            <!-- Color Picker -->
+            <div style="margin-bottom: 8px;">
+              <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Couleur:</label>
+              <input type="color" id="googleButtonCustomizeColor" value="#5f6368" style="width: 100%; height: 28px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">
+            </div>
+            
+            <!-- Action Dropdown -->
+            <div style="margin-bottom: 8px;">
+              <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">Action:</label>
+              <select id="googleButtonCustomizeAction" style="width: 100%; padding: 6px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px;">
+                <option value="lucky">Google Chance (I'm Feeling Lucky)</option>
+                <option value="maps">Google Maps</option>
+                <option value="chatgpt">ChatGPT</option>
+                <option value="filters">Filtres avancés (alerte)</option>
+              </select>
+            </div>
+            
+            <!-- Reset Button -->
+            <button id="googleButtonCustomizeReset" style="width: 100%; padding: 6px; font-size: 11px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; color: #666;">↻ Réinitialiser</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <p class="label">Opérateurs avancés:</p>
+        <button id="filterMenuBtn" class="btn btn-sm">📊 Filtres</button>
+      </div>
+    </section>
+
+    <!-- Buttons Management Tab -->
+    <section class="tab" id="buttons">
+      <h2>Position et Visibilité</h2>
+      
+      <div class="section" style="background: #f0f9ff; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
+        <p style="font-size: 11px; color: #0ea5e9; margin: 0;">
+          ℹ️ <strong>Note:</strong> Les boutons se repositionnent automatiquement sur chaque page pour éviter de bloquer le contenu.
+        </p>
+      </div>
+      
+      <div class="section">
+        <p class="label" style="margin-bottom: 8px;">📍 Mode d'affichage:</p>
+        <select id="layoutSelect2" style="width: 100%; padding: 8px; margin-bottom: 8px; font-size: 12px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="adaptive">🔄 Adaptative (Intelligent)</option>
+          <option value="compact">📦 Compacte (Colonne droite)</option>
+          <option value="minimal">⚡ Minimale (Critiques uniquement)</option>
+          <option value="custom">🎨 Personnalisée (Manuel)</option>
+        </select>
+        <p style="font-size: 10px; color: #666; margin-top: 6px;">
+          <strong>Adaptative:</strong> Place les boutons intelligemment<br/>
+          <strong>Compacte:</strong> Tous les boutons en colonne à droite<br/>
+          <strong>Minimale:</strong> Affiche seulement les critiques<br/>
+          <strong>Personnalisée:</strong> Vous contrôlez chaque position
+        </p>
+      </div>
+
+      <div class="section" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+        <p class="label" style="margin-bottom: 8px;">🎯 Réinitialiser:</p>
+        <button id="resetPositionsBtn2" class="btn btn-sm" style="width: 100%;">↺ Réinitialiser positions par défaut</button>
+        <p style="font-size: 10px; color: #999; margin-top: 6px;">Remet tous les boutons à leurs positions automatiques</p>
+      </div>
+
+      <div class="section">
+        <p class="label" style="margin-bottom: 8px;">👁️ Visible sur:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+          <input type="checkbox" id="googleSearchPageToggle" checked>
+          <span style="font-size: 12px;">Google (Search pages)</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="allPagesToggle" checked>
+          <span style="font-size: 12px;">Toutes les autres pages</span>
+        </label>
+      </div>
+
+      <!-- Help -->
+      <div class="section" style="margin-top: 12px; padding: 10px; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 4px;">
+        <p style="font-size: 11px; color: #92400e; margin: 0;">
+          💡 <strong>Conseil:</strong> Vous pouvez déplacer les boutons en les glissant. Utilisez le mode "Adaptatif" pour des positions intelligentes.
+        </p>
+      </div>
+    </section>
+
+    <!-- Tools Tab -->
+    <section class="tab" id="tools">
+      <h2>Outils avancés</h2>
+      
+      <div class="section">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="pomodoroToggle">
+          <span>⏱️ Pomodoro (25min)</span>
+        </label>
+        <div id="pomodoroStatus" style="font-size: 12px; color: #999; margin-top: 4px; display: none;"></div>
+      </div>
+
+      <div class="section">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="tabCleanerToggle">
+          <span>🗂️ Nettoyer les onglets</span>
+        </label>
+      </div>
+
+      <div class="section">
+        <button id="notesViewBtn" class="btn btn-sm">📝 Mes notes</button>
+        <button id="summarizeBtn" class="btn btn-sm" style="margin-top: 8px;">✂️ Résumer page</button>
+        <button id="clearNotesBtn" class="btn btn-sm btn-danger" style="margin-top: 8px;">🗑️ Effacer notes</button>
+      </div>
+    </section>
+
+    <!-- AI Tools Tab -->
+    <section class="tab" id="ai">
+      <h2>Outils IA</h2>
+      
+      <div class="section">
+        <button id="aiDetectorBtn" class="btn btn-sm" style="width: 100%;">🤖 Détecteur IA</button>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Analyse si un texte est généré par IA</p>
+      </div>
+
+      <div class="section">
+        <button id="translatorBtn" class="btn btn-sm" style="width: 100%;">🌐 Traducteur</button>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Traduire du texte</p>
+      </div>
+
+      <div class="section">
+        <button id="paletteBtn" class="btn btn-sm" style="width: 100%;">🎨 Palette couleur</button>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Générer des palettes</p>
+      </div>
+
+      <div class="section">
+        <button id="youtubeBtn" class="btn btn-sm" style="width: 100%;">▶️ YouTube Enhancer</button>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Features YouTube premium</p>
+      </div>
+
+      <div class="section">
+        <button id="pdfBtn" class="btn btn-sm" style="width: 100%;">📄 PDF Tools</button>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Extraire texte des PDF</p>
+      </div>
+    </section>
+
+    <!-- Settings Tab -->
+    <section class="tab" id="settings">
+      <h2>Paramètres</h2>
+      
+      <div class="section">
+        <p class="label" style="margin-bottom: 8px;">� Position des éléments:</p>
+        <select id="layoutSelect" style="width: 100%; padding: 8px; margin-bottom: 8px; font-size: 12px; border: 1px solid #ddd; border-radius: 4px;">
+          <option value="adaptive">🔄 Adaptative (Auto)</option>
+          <option value="compact">📦 Compacte (Colonne droite)</option>
+          <option value="minimal">⚡ Minimale (Critiques seulement)</option>
+          <option value="custom">🎨 Personnalisée</option>
+        </select>
+        <p style="font-size: 10px; color: #999; margin: 8px 0;">Les boutons se repositionnent automatiquement pour éviter les chevauchements</p>
+        <button id="resetLayoutBtn" class="btn btn-sm" style="width: 100%;">↺ Réinitialiser layout</button>
+      </div>
+      
+      <div class="section" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+        <p class="label" style="margin-bottom: 8px;">👁️ Quels boutons afficher:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+          <input type="checkbox" id="aiDetectorBadgeVisible" checked class="button-toggle" data-button-type="aiDetectorBadge">
+          <span style="font-size: 12px;">🤖 Détecteur IA</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+          <input type="checkbox" id="focusModeBadgeVisible" checked class="button-toggle" data-button-type="focusModeBadge">
+          <span style="font-size: 12px;"> 🎯 Focus Mode</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+          <input type="checkbox" id="summarizerButtonVisible" checked class="button-toggle" data-button-type="summarizerButton">
+          <span style="font-size: 12px;">✂️ Bouton Résumé</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+          <input type="checkbox" id="translationButtonsVisible" checked class="button-toggle" data-button-type="translationButtons">
+          <span style="font-size: 12px;">🌐 Traducteur</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 6px;">
+          <input type="checkbox" id="quickStatsWidgetVisible" checked class="button-toggle" data-button-type="quickStatsWidget">
+          <span style="font-size: 12px;">📊 Stats page</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="googleButtonsVisible" checked class="button-toggle" data-button-type="googleButtons">
+          <span style="font-size: 12px;">🔍 Boutons Google</span>
+        </label>
+      </div>
+      
+      <div class="section">
+        <p class="label" style="margin-bottom: 8px;">🧠 Outils IA:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="aiDetectorEnabled" checked>
+          <span>Détecteur IA automatique</span>
+        </label>
+        <div style="margin-left: 24px; margin-top: 6px; font-size: 11px;">
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="range" id="aiDetectorSensitivity" min="40" max="90" value="60" style="width: 100px;">
+            <span>Sensibilité: <span id="aiSensValue">60</span>%</span>
+          </label>
+        </div>
+        
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 6px;">
+          <input type="checkbox" id="summarizerEnabled" checked>
+          <span>Résumeur de page</span>
+        </label>
+        <div style="margin-left: 24px; margin-top: 6px; font-size: 11px;">
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="range" id="summarizerLength" min="20" max="60" value="35" style="width: 100px;">
+            <span>Longueur: <span id="sumLenValue">35</span>%</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin-top: 8px;">
+            <span>Langue:</span>
+            <select id="summarizerLang" style="padding: 4px 6px; font-size: 11px;">
+              <option value="fr">Français</option>
+              <option value="en">Anglais</option>
+              <option value="es">Espagnol</option>
+              <option value="de">Allemand</option>
+              <option value="it">Italien</option>
+              <option value="pt">Portugais</option>
+              <option value="ja">Japonais</option>
+              <option value="zh">Chinois</option>
+            </select>
+          </label>
+        </div>
+        
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 6px;">
+          <input type="checkbox" id="autoTranslatorEnabled" checked>
+          <span>🌐 Traducteur automatique</span>
+        </label>
+        <div style="margin-left: 24px; margin-top: 6px; font-size: 11px;">
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <span>Langue cible:</span>
+            <select id="translatorTargetLang" style="padding: 4px 6px; font-size: 11px;">
+              <option value="fr">Français</option>
+              <option value="en">Anglais</option>
+              <option value="es">Espagnol</option>
+              <option value="de">Allemand</option>
+              <option value="it">Italien</option>
+              <option value="pt">Portugais</option>
+              <option value="ja">Japonais</option>
+              <option value="zh">Chinois</option>
+            </select>
+          </label>
+        </div>
+        
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 6px;">
+          <input type="checkbox" id="translatorEnabled" checked>
+          <span>Traducteur</span>
+        </label>
+        
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 6px;">
+          <input type="checkbox" id="cookieBlockerEnabled" checked>
+          <span>🍪 Fermer popups cookies</span>
+        </label>
+        
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 6px;">
+          <input type="checkbox" id="readingTimeEnabled" checked>
+          <span>📖 Temps de lecture</span>
+        </label>
+        
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 6px;">
+          <input type="checkbox" id="quickStatsEnabled" checked>
+          <span>📊 Stats page</span>
+        </label>
+        
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 6px;">
+          <input type="checkbox" id="youtubeEnabled" checked>
+          <span>YouTube Enhancer</span>
+        </label>
+        
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 6px;">
+          <input type="checkbox" id="paletteEnabled" checked>
+          <span>Générateur palette</span>
+        </label>
+      </div>
+      
+      <div class="section">
+        <p class="label" style="margin-bottom: 8px;">⚙️ Autres:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="readingTimeToggle" checked>
+          <span>⏰ Temps de lecture</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 6px;">
+          <input type="checkbox" id="currencyConverterToggle">
+          <span>💱 Convertisseur devises</span>
+        </label>
+        <div style="margin-top: 12px;">
+          <label style="display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: #666;">🆕 Page nouvelle fenetre:</label>
+          <select id="newtabUrlPreset" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; margin-bottom: 6px;">
+            <option value="google">🔵 Google</option>
+            <option value="bing">🔹 Bing</option>
+            <option value="qwant">🔴 Qwant</option>
+            <option value="duckduckgo">🦆 DuckDuckGo</option>
+            <option value="startpage">🔒 StartPage</option>
+            <option value="yahoo">🟡 Yahoo</option>
+            <option value="ecosia">🌱 Ecosia</option>
+            <option value="brave">🦁 Brave</option>
+            <option value="custom">⚙️ Personnalisee</option>
+          </select>
+          <input type="text" id="newtabUrlCustom" placeholder="https://example.com" style="width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; font-size: 11px; display: none;">
+        </div>
+      </div>
+
+      <div class="section">
+        <p class="label" style="margin-bottom: 8px;">⏱️ Performance:</p>
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+          <input type="checkbox" id="performanceModeEnabled" checked>
+          <span>Mode performance (réduit utilisation)️</span>
+        </label>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Désactive les fonctionnalités lourdes et délai les initialisations</p>
+      </div>
+
+      <div class="section">
+        <p class="label" style="margin-bottom: 8px;">🎯 Réinitialiser positions:</p>
+        <button id="resetPositionsBtn" class="btn btn-sm" style="width: 100%;">↺ Réinitialiser positions</button>
+        <p style="font-size: 10px; color: #999; margin-top: 4px;">Réaffiche tous les boutons à leur position par défaut</p>
+      </div>
+
+      <div class="section">
+        <button id="exportDataBtn" class="btn btn-sm">📥 Exporter données</button>
+        <button id="resetBtn" class="btn btn-sm btn-danger" style="margin-top: 8px;">🔄 Réinitialiser tout</button>
+      </div>
+
+      <div class="footer">
+        <p>AITools Pro v4.0</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Filter Modal -->
+  <div id="filterModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>Opérateurs de recherche</h3>
+      <div class="filters-grid">
+        <button class="filter-item" data-operator="intitle:" data-label="Mot dans titre">📌 Titre</button>
+        <button class="filter-item" data-operator="inurl:" data-label="Mot dans URL">🔗 URL</button>
+        <button class="filter-item" data-operator='site:' data-label="Sur un site">🌐 Site</button>
+        <button class="filter-item" data-operator='filetype:' data-label="Type fichier">📄 Type</button>
+        <button class="filter-item" data-operator="after:" data-label="Après date">📅 Après</button>
+        <button class="filter-item" data-operator="before:" data-label="Avant date">📅 Avant</button>
+        <button class="filter-item" data-operator='related:' data-label="Sites similaires">🔀 Similaires</button>
+        <button class="filter-item" data-operator='"' data-label="Recherche exacte">💬 Exact</button>
+      </div>
+      <button id="closeFilterBtn" class="btn btn-sm" style="margin-top: 12px; width: 100%;">Fermer</button>
+    </div>
+  </div>
+
+  <!-- Notes Modal -->
+  <div id="notesModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>📝 Mes notes</h3>
+      <div id="notesList" style="max-height: 300px; overflow-y: auto; margin-bottom: 12px;"></div>
+      <button id="closeNotesBtn" class="btn btn-sm" style="width: 100%;">Fermer</button>
+    </div>
+  </div>
+
+  <script src="popup-new.js"></script>
+</body>
+</html>

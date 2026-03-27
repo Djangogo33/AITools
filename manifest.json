@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "AITools Pro",
+  "version": "4.0.0",
+  "description": "Suite complète d'outils IA: Recherche Google, Mode Sombre, Temps de lecture, Notes",
+  "permissions": ["activeTab", "scripting", "storage", "tabs", "notifications", "tabGroups"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "popup-new.html",
+    "default_title": "AITools Pro - Outils intelligents",
+    "default_icon": {
+      "2048": "icons/logo aitools sans fond.png",
+      "1024": "icons/logo aitools sans fond sans texte.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["layout-manager.js", "content-v4.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "background": {
+    "service_worker": "background-v4.js"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "icons": {
+    "256": "icons/logo aitools sans fond sans texte.png",
+    "512": "icons/logo aitools sans fond.png"
+  }
+}
