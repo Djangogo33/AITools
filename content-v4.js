@@ -1,14 +1,13 @@
 // AITools Content Script v4.0 - Optimized
 // All features: Reading time, Dark mode, Notes, Google enhancements, Sponsor blocker, AI detector, Summarizer
 
+const DEBUG = false;
+
 let extensionEnabled = true;
 let darkModeEnabled = false;
 let readingTimeBadgeShown = false;
-let aiDetectorEnabled = true;
-let focusModeEnabled = false;
-let summarizerEnabled = true;
+let highlighterEnabled = true;
 
-// Settings state
 let extensionSettings = {
   aiDetectorEnabled: true,
   focusModeEnabled: false,
@@ -29,7 +28,6 @@ let elementVisibility = {
   summarizerBtn: true
 };
 
-// Button visibility state
 let buttonVisibility = {
   googleButtons: true,
   summarizerButton: true,
@@ -37,11 +35,12 @@ let buttonVisibility = {
   aiDetectorBadge: true,
   translationButtons: true,
   quickStatsWidget: true,
-  readingTimeBadge: true
+  readingTimeBadge: true,
+  notesHighlighter: true
 };
 
-// Load settings and visibility state from storage
-chrome.storage.local.get(['aiDetectorSensitivity', 'summarizerLength', 'summarizerLang', 'aitools-visibility', 'autoTranslatorEnabled', 'translatorTargetLang', 'cookieBlockerEnabled', 'readingTimeEnabled', 'quickStatsEnabled', 'performanceModeEnabled', 'buttonVisibility'], (result) => {
+// Load all settings from storage
+chrome.storage.local.get(null, (result) => {
   if (result.aiDetectorSensitivity) extensionSettings.aiDetectorSensitivity = parseInt(result.aiDetectorSensitivity);
   if (result.summarizerLength) extensionSettings.summarizerLength = parseInt(result.summarizerLength);
   if (result.summarizerLang) extensionSettings.summarizerLang = result.summarizerLang;
@@ -50,7 +49,6 @@ chrome.storage.local.get(['aiDetectorSensitivity', 'summarizerLength', 'summariz
   if (result.cookieBlockerEnabled !== undefined) extensionSettings.cookieBlockerEnabled = result.cookieBlockerEnabled;
   if (result.readingTimeEnabled !== undefined) extensionSettings.readingTimeEnabled = result.readingTimeEnabled;
   if (result.quickStatsEnabled !== undefined) extensionSettings.quickStatsEnabled = result.quickStatsEnabled;
-  if (result.focusModeEnabled !== undefined) extensionSettings.focusModeEnabled = result.focusModeEnabled;
   if (result.performanceModeEnabled !== undefined) extensionSettings.performanceModeEnabled = result.performanceModeEnabled;
   if (result['aitools-visibility']) {
     elementVisibility = { ...elementVisibility, ...result['aitools-visibility'] };
@@ -58,23 +56,21 @@ chrome.storage.local.get(['aiDetectorSensitivity', 'summarizerLength', 'summariz
   if (result.buttonVisibility) {
     buttonVisibility = { ...buttonVisibility, ...result.buttonVisibility };
   }
+  highlighterEnabled = buttonVisibility.notesHighlighter !== false;
 });
 
 // ============================================================================
-// DRAGGABLE UTILITY - Makes elements draggable and saves position
+// DRAGGABLE UTILITY
 // ============================================================================
 function makeDraggable(element, storageKey) {
-  console.log('[AITools] makeDraggable called for:', storageKey);
-  
-  let isDragging = false;
-  let startX = 0;
-  let startY = 0;
-  let offsetX = 0;
-  let offsetY = 0;
-  let dragThreshold = 5; // pixels before considering it a drag
-  let dragDistance = 0;
+  if (DEBUG) console.log('[AITools] makeDraggable:', storageKey);
 
-  // Load saved position
+  let isDragging = false;
+  let startX = 0, startY = 0;
+  let offsetX = 0, offsetY = 0;
+  let dragDistance = 0;
+  const dragThreshold = 5;
+
   chrome.storage.local.get([storageKey], (result) => {
     if (result[storageKey]) {
       const pos = result[storageKey];
@@ -86,199 +82,55 @@ function makeDraggable(element, storageKey) {
   });
 
   element.addEventListener('mousedown', (e) => {
-    // Only drag if:
-    // 1. Not clicking on interactive elements (inputs, etc.)
-    // 2. Not clicking on close buttons
-    // 3. Is a button (can drag from buttons to move container)
-    
-    const isButton = e.target.closest('.aitools-gb, button');
-    const isInteractive = e.target.closest('input, select, textarea, a');
-    const isCloseBtn = e.target.closest('.aitools-close-btn');
-    
-    console.log('[AITools] Mousedown - isButton:', !!isButton, 'isInteractive:', !!isInteractive, 'isCloseBtn:', !!isCloseBtn);
-    
-    // Allow dragging from buttons and regular container areas
-    // But not from other interactive elements or close buttons
-    if (isInteractive && !isButton) {
-      console.log('[AITools] Blocking drag: interactive element');
-      return;
-    }
-    if (isCloseBtn) {
-      console.log('[AITools] Blocking drag: close button');
-      return;
-    }
-    
-    console.log('[AITools] Starting drag from:', e.clientX, e.clientY);
+    if (e.target.closest('input, select, textarea, a')) return;
+    if (e.target.closest('.aitools-close-btn')) return;
+
     isDragging = true;
     dragDistance = 0;
     startX = e.clientX;
     startY = e.clientY;
-    
-    // Save original position state
-    const wasFixed = element.style.position === 'fixed';
-    
-    // Switch to fixed positioning for dragging
+
     element.style.position = 'fixed';
-    
-    // Ensure the element is visible
-    const originalZIndex = element.style.zIndex;
     element.style.zIndex = '999999';
-    
-    // Calculate offset from mouse to element's top-left
+
     const rect = element.getBoundingClientRect();
     offsetX = rect.left - e.clientX;
     offsetY = rect.top - e.clientY;
-    
-    console.log('[AITools] Drag setup - rect:', rect, 'offset:', offsetX, offsetY);
     element.style.cursor = 'grabbing';
   });
 
   document.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
-    
-    // Calculate distance moved
-    dragDistance = Math.sqrt(
-      Math.pow(e.clientX - startX, 2) + 
-      Math.pow(e.clientY - startY, 2)
-    );
-    
-    // Only start visual drag after threshold
+    dragDistance = Math.sqrt(Math.pow(e.clientX - startX, 2) + Math.pow(e.clientY - startY, 2));
     if (dragDistance < dragThreshold) return;
-    
-    console.log('[AITools] Dragging... distance:', dragDistance.toFixed(1), 'pos:', e.clientX, e.clientY);
-    
-    const newX = e.clientX + offsetX;
-    const newY = e.clientY + offsetY;
-    
-    element.style.left = newX + 'px';
-    element.style.top = newY + 'px';
+    element.style.left = (e.clientX + offsetX) + 'px';
+    element.style.top = (e.clientY + offsetY) + 'px';
     element.style.right = 'auto';
   });
 
   document.addEventListener('mouseup', () => {
-    if (isDragging) {
-      console.log('[AITools] Mouse up - drag distance:', dragDistance.toFixed(1), 'threshold:', dragThreshold);
-      isDragging = false;
-      element.style.cursor = 'grab';
-      element.style.zIndex = '10000';
-      
-      // Only save position if it actually moved (not just a click)
-      if (dragDistance >= dragThreshold) {
-        const rect = element.getBoundingClientRect();
-        const pos = {
-          top: rect.top,
-          left: rect.left
-        };
-        chrome.storage.local.set({ [storageKey]: pos });
-        console.log('[AITools] Saved position:', pos);
-      } else {
-        console.log('[AITools] Drag distance too small, not saving position');
-      }
+    if (!isDragging) return;
+    isDragging = false;
+    element.style.cursor = 'grab';
+    element.style.zIndex = '10000';
+    if (dragDistance >= dragThreshold) {
+      const rect = element.getBoundingClientRect();
+      chrome.storage.local.set({ [storageKey]: { top: rect.top, left: rect.left } });
     }
   });
-  
-  // Add visual feedback
+
   element.style.cursor = 'grab';
 }
 
 // ============================================================================
-// READING TIME ESTIMATOR - Popup discret en top
-// ============================================================================
-class ReadingTimeEstimator {
-  constructor() {
-    this.WORDS_PER_MINUTE = 200;
-  }
-
-  estimateReadingTime() {
-    const text = document.body.innerText;
-    const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
-    const readingTime = Math.ceil(wordCount / this.WORDS_PER_MINUTE);
-    return { wordCount, readingTime };
-  }
-
-  showBadge() {
-    // Only show once per page
-    if (readingTimeBadgeShown) return;
-    
-    const { readingTime } = this.estimateReadingTime();
-    const textLength = document.body.innerText.length;
-    
-    // Only show on article-like content (>2000 chars, >2 min read)
-    if (textLength < 2000 || readingTime < 2) return;
-    
-    readingTimeBadgeShown = true;
-    const badge = document.createElement('div');
-    badge.id = 'aitools-rte-badge';
-    badge.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 12px 18px;
-      border-radius: 24px;
-      font-size: 12px;
-      font-weight: 600;
-      z-index: 10000;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      cursor: pointer;
-    `;
-    badge.innerHTML = `⏰ ${readingTime} min`;
-    badge.title = 'Temps de lecture estimé';
-    
-    document.body.appendChild(badge);
-    
-    // Auto-hide after 8 seconds
-    setTimeout(() => {
-      if (badge && badge.parentNode) {
-        badge.style.opacity = '0';
-        badge.style.transition = 'opacity 0.3s';
-        setTimeout(() => badge.remove?.(), 300);
-      }
-    }, 8000);
-  }
-}
-
-// ============================================================================
-// CURRENCY CONVERTER - Right-click menu
-// ============================================================================
-class CurrencyConverter {
-  constructor() {
-    this.rates = {};
-    this.loadRates();
-  }
-
-  async loadRates() {
-    try {
-      const response = await fetch('https://open.er-api.com/v6/latest/USD');
-      const data = await response.json();
-      this.rates = data.rates || {};
-    } catch (e) {
-      console.log('[AITools] Cannot load exchange rates');
-    }
-  }
-
-  convert(amount) {
-    const eurRate = this.rates['EUR'] || 0.92;
-    return (amount * eurRate).toFixed(2);
-  }
-}
-
-// ============================================================================
-// DARK MODE INJECTOR
+// DARK MODE
 // ============================================================================
 function enableDarkMode() {
   if (document.getElementById('aitools-dark-css')) return;
-  
   const style = document.createElement('style');
   style.id = 'aitools-dark-css';
   style.textContent = `
-    * { 
-      background-color: #1e1e1e !important; 
-      color: #e4e4e4 !important;
-      border-color: #444 !important;
-    }
+    * { background-color: #1e1e1e !important; color: #e4e4e4 !important; border-color: #444 !important; }
     a { color: #64b5f6 !important; }
     img, video { opacity: 0.8; }
     input, textarea { background: #333 !important; color: #fff !important; }
@@ -297,11 +149,23 @@ function disableDarkMode() {
 // NOTES HIGHLIGHTER
 // ============================================================================
 function setupHighlighter() {
+  if (!highlighterEnabled) return;
+
+  let menu = null;
+
   document.addEventListener('mouseup', () => {
+    if (!highlighterEnabled) return;
     const selected = window.getSelection().toString().trim();
+
+    // Remove existing menu
+    if (menu && menu.parentNode) {
+      menu.remove();
+      menu = null;
+    }
+
     if (!selected) return;
-    
-    const menu = document.createElement('div');
+
+    menu = document.createElement('div');
     menu.id = 'aitools-highlight-menu';
     menu.style.cssText = `
       position: fixed;
@@ -313,42 +177,39 @@ function setupHighlighter() {
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       font-size: 12px;
     `;
-    
+
     const rect = window.getSelection().getRangeAt(0).getBoundingClientRect();
-    menu.style.left = rect.left + 'px';
-    menu.style.top = (rect.bottom + 10) + 'px';
-    
-    menu.innerHTML = `
-      <button id="aitools-note-btn" data-text="${selected.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')}">📝 Ajouter note</button>
-    `;
-    
+    menu.style.left = Math.min(rect.left, window.innerWidth - 160) + 'px';
+    menu.style.top = (rect.bottom + 8) + 'px';
+
+    const noteBtn = document.createElement('button');
+    noteBtn.textContent = '📝 Ajouter note';
+    noteBtn.style.cssText = 'border:none;background:none;cursor:pointer;font-size:12px;padding:4px 8px;border-radius:4px;white-space:nowrap;';
+    noteBtn.addEventListener('mouseover', () => noteBtn.style.background = '#f0f0f0');
+    noteBtn.addEventListener('mouseout', () => noteBtn.style.background = 'none');
+    noteBtn.addEventListener('click', () => {
+      aiToolsAddNote(selected);
+      if (menu) { menu.remove(); menu = null; }
+    });
+
+    menu.appendChild(noteBtn);
     document.body.appendChild(menu);
-    
-    // Add event listener for note button (CSP compliant - no inline onclick)
-    const noteBtn = document.getElementById('aitools-note-btn');
-    if (noteBtn) {
-      noteBtn.addEventListener('click', function() {
-        const text = this.getAttribute('data-text');
-        aiToolsAddNote(text);
-      });
+  });
+
+  // Disappear immediately when selection is cleared
+  document.addEventListener('selectionchange', () => {
+    const selected = window.getSelection().toString().trim();
+    if (!selected && menu && menu.parentNode) {
+      menu.remove();
+      menu = null;
     }
-    
-    setTimeout(() => {
-      const m = document.getElementById('aitools-highlight-menu');
-      if (m) m.remove();
-    }, 3000);
   });
 }
 
 window.aiToolsAddNote = function(text) {
   chrome.runtime.sendMessage({
     action: 'addNote',
-    data: {
-      text: text,
-      url: window.location.href,
-      title: document.title,
-      timestamp: new Date().toISOString()
-    }
+    data: { text, url: window.location.href, title: document.title, timestamp: new Date().toISOString() }
   });
 };
 
@@ -356,106 +217,71 @@ window.aiToolsAddNote = function(text) {
 // GOOGLE SEARCH ENHANCEMENTS
 // ============================================================================
 function setupGoogleEnhancements() {
-  // Only on Google
   if (!window.location.hostname.includes('google.')) return;
-  
-  // Check if Google buttons are enabled
-  if (!buttonVisibility.googleButtons) {
-    console.log('[AITools] Google buttons disabled in settings');
+
+  // Only show buttons if there's an active search query
+  function hasActiveSearch() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('q');
+      return q && q.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  if (!hasActiveSearch()) {
+    if (DEBUG) console.log('[AITools] No search query, skipping Google buttons');
     return;
   }
-  
-  console.log('[AITools] Google enhancements loaded');
-  
-  // Find Google search input with multiple strategies
+
+  // Check if globally enabled (default true)
+  if (buttonVisibility.googleButtons === false) {
+    if (DEBUG) console.log('[AITools] Google buttons disabled');
+    return;
+  }
+
   function getGoogleSearchInput() {
-    // Strategy 1: Find by name attribute
     let input = document.querySelector('input[name="q"]');
-    if (input && input.offsetParent !== null) {
-      console.log('[AITools] ✓ Input found (Strategy 1: name="q")', input.value);
-      return input;
-    }
-    
-    // Strategy 2: Find by type=text in main search form
+    if (input && input.offsetParent !== null) return input;
+
     const searchForm = document.querySelector('form[action*="/search"]');
     if (searchForm) {
       input = searchForm.querySelector('input[type="text"]');
-      if (input) {
-        console.log('[AITools] ✓ Input found (Strategy 2: form input)', input.value);
-        return input;
-      }
+      if (input) return input;
     }
-    
-    // Strategy 3: Look for visible input with placeholder
+
     const inputs = document.querySelectorAll('input[type="text"]');
     for (let inp of inputs) {
-      if (inp.offsetParent !== null && (inp.placeholder === 'Rechercher' || inp.placeholder.includes('Search'))) {
-        console.log('[AITools] ✓ Input found (Strategy 3: placeholder)', inp.value);
-        return inp;
-      }
+      if (inp.offsetParent !== null && inp.getBoundingClientRect().top < 200) return inp;
     }
-    
-    // Strategy 4: Find any visible input in top area
-    for (let inp of inputs) {
-      if (inp.offsetParent !== null && inp.getBoundingClientRect().top < 200) {
-        console.log('[AITools] ✓ Input found (Strategy 4: top area)', inp.value);
-        return inp;
-      }
-    }
-    
-    // Strategy 5: Try to get query from URL if input not found
+
     try {
       const params = new URLSearchParams(window.location.search);
-      const query = params.get('q') || params.get('search') || '';
-      if (query) {
-        console.log('[AITools] ✓ Query extracted from URL:', query);
-        // Return a fake input object with the URL query
-        return { value: query, fromURL: true };
-      }
-    } catch (e) {
-      console.log('[AITools] Could not parse URL');
-    }
-    
-    console.warn('[AITools] ✗ Input NOT found! All strategies failed');
+      const query = params.get('q') || '';
+      if (query) return { value: query, fromURL: true };
+    } catch {}
+
     return null;
   }
-  
-  // Find Google search form
-  function getGoogleSearchForm() {
-    return document.querySelector('form[action*="/search"]') || 
-           document.querySelector('form[role="search"]') ||
-           document.querySelector('form');
-  }
-  
+
   let isInjecting = false;
+
   const injectGoogleButtons = () => {
-    if (isInjecting) {
-      console.log('[AITools] Injection already in progress, skipping');
-      return;
-    }
-    
+    if (isInjecting) return;
+    if (!hasActiveSearch()) return;
+
     const searchInput = getGoogleSearchInput();
-    const searchForm = getGoogleSearchForm();
-    
-    console.log('[AITools] Injection check: input found?', !!searchInput, 'form found?', !!searchForm);
-    
-    if (!searchForm && !searchInput) {
-      console.log('[AITools] Search form/input not found, retrying in 1s...');
-      // Retry after 1 second if not found
+    if (!searchInput) {
       setTimeout(injectGoogleButtons, 1000);
       return;
     }
-    
-    let container = document.getElementById('aitools-google-buttons');
-    if (container) {
-      console.log('[AITools] Container already exists, not re-injecting');
-      return;
-    }
-    
+
+    if (document.getElementById('aitools-google-buttons')) return;
+
     isInjecting = true;
-    console.log('[AITools] Starting button injection...');
-    
-    container = document.createElement('div');
+
+    const container = document.createElement('div');
     container.id = 'aitools-google-buttons';
     container.style.cssText = `
       position: fixed;
@@ -465,179 +291,124 @@ function setupGoogleEnhancements() {
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
-      padding: 0;
       background: transparent;
       z-index: 10000;
       max-width: 400px;
     `;
-    console.log('[AITools] Container created with fixed positioning');
-    
-    // Inject styles
+
     if (!document.getElementById('aitools-google-styles')) {
       const style = document.createElement('style');
       style.id = 'aitools-google-styles';
       style.textContent = `
         .aitools-gb {
-          display: inline-flex;
-          align-items: center;
-          padding: 8px 12px;
-          background: transparent;
-          color: #5f6368;
-          border: none;
-          border-radius: 4px;
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-          white-space: nowrap;
-          margin: 0;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          pointer-events: auto;
-          user-select: none;
+          display: inline-flex; align-items: center; padding: 8px 12px;
+          background: transparent; color: #5f6368; border: none; border-radius: 4px;
+          font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;
+          white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          pointer-events: auto; user-select: none;
         }
-        .aitools-gb:hover {
-          color: #202124;
-          background: rgba(0,0,0,0.05);
-          border-radius: 4px;
-        }
-        .aitools-gb:active {
-          color: #1f2937;
-          background: rgba(102, 126, 234, 0.1);
-        }
-        #aitools-google-buttons {
-          cursor: grab !important;
-        }
-        #aitools-google-buttons:active {
-          cursor: grabbing !important;
-        }
+        .aitools-gb:hover { color: #202124; background: rgba(0,0,0,0.05); border-radius: 4px; }
+        .aitools-gb:active { background: rgba(102,126,234,0.1); }
+        #aitools-google-buttons { cursor: grab !important; }
+        #aitools-google-buttons:active { cursor: grabbing !important; }
       `;
       document.head.appendChild(style);
-      console.log('[AITools] Styles injected');
     }
-    
-    // Load settings from storage
+
     chrome.storage.local.get(['googleButtonsVisibility', 'googleButtonsConfig'], (result) => {
-      const visibility = result.googleButtonsVisibility || {};
+      const visibility = result.googleButtonsVisibility || { lucky: true, filters: true, maps: true, chatgpt: true };
       const config = result.googleButtonsConfig || {};
-      
-      console.log('[AITools] Settings loaded - visibility:', Object.keys(visibility), 'config:', Object.keys(config));
-      
+
       const buttonDefs = [
         { key: 'lucky', label: '🍀 Chance', action: 'lucky' },
         { key: 'filters', label: '🔍 Filtres', action: 'filters' },
         { key: 'maps', label: '🗺️ Maps', action: 'maps' },
         { key: 'chatgpt', label: '🤖 ChatGPT', action: 'chatgpt' }
       ];
-      
+
+      // Check if music search → add YouTube Music button
+      const currentQuery = getGoogleSearchInput()?.value?.trim() || new URLSearchParams(window.location.search).get('q') || '';
+      const musicKeywords = ['music', 'musique', 'chanson', 'song', 'album', 'artist', 'artiste', 'lyrics', 'paroles', 'titre', 'track', 'remix', 'feat', 'clip', 'discographie'];
+      const isMusicSearch = musicKeywords.some(kw => currentQuery.toLowerCase().includes(kw));
+      if (isMusicSearch) {
+        buttonDefs.push({ key: 'ytmusic', label: '🎵 YT Music', action: 'ytmusic' });
+      }
+
       buttonDefs.forEach((def) => {
-        if (visibility[def.key] === false) {
-          console.log('[AITools] Skipping button (hidden):', def.key);
-          return;
-        }
-        
+        // ytmusic has no visibility toggle, always shown when music search
+        if (def.key !== 'ytmusic' && visibility[def.key] === false) return;
+
         const customConfig = config[def.key] || {};
         const label = customConfig.label || def.label;
         const action = customConfig.action || def.action;
         const color = customConfig.color || '#5f6368';
-        
+
         const btn = document.createElement('button');
         btn.className = 'aitools-gb';
         btn.innerHTML = label;
         btn.type = 'button';
         btn.id = `aitools-gb-${def.key}`;
         btn.style.color = color;
-        
-        console.log('[AITools] Button created:', def.key, '| ID:', btn.id, '| Label:', label, '| Action:', action);
-        
+
         btn.addEventListener('click', (e) => {
-          console.log('[AITools] CLICK EVENT FIRED on button:', def.key);
           e.preventDefault();
           e.stopPropagation();
-          
-          // Get search query from input
+
           const input = getGoogleSearchInput();
-          const query = input?.value?.trim() || '';
-          
-          console.log('[AITools] Button action:', action);
-          console.log('[AITools] Found input:', !!input);
-          console.log('[AITools] Input element:', input);
-          console.log('[AITools] Query value:', query);
-          console.log('[AITools] Query truthy?:', !!query);
-          
+          const query = input?.value?.trim() || new URLSearchParams(window.location.search).get('q') || '';
+
           if (!query) {
-            console.warn('[AITools] ⚠️ No query found - input is empty or not found');
             alert('⚠️ Entrez une recherche');
             return;
           }
-          
-          console.log('[AITools] ✓ Proceeding with action:', action, 'Query:', query);
-          
+
           switch (action) {
             case 'lucky':
-              console.log('[AITools] → Redirecting to Lucky search:', query);
               window.location.href = `https://www.google.com/search?q=${encodeURIComponent(query)}&btnI=1`;
               break;
             case 'maps':
-              console.log('[AITools] → Opening Maps search:', query);
               window.open(`https://www.google.com/maps/search/${encodeURIComponent(query)}`, '_blank');
               break;
             case 'chatgpt':
-              console.log('[AITools] → Opening ChatGPT');
-              window.open(`https://chatgpt.com`, '_blank');
+              window.open(`https://chatgpt.com/?q=${encodeURIComponent(query)}`, '_blank');
+              break;
+            case 'ytmusic':
+              window.open(`https://music.youtube.com/search?q=${encodeURIComponent(query)}`, '_blank');
               break;
             case 'filters':
-              console.log('[AITools] → Showing filter help');
               alert('Utilisez les filtres avancés de Google en cliquant sur "Outils" dans la barre de recherche');
               break;
           }
         });
-        
+
         container.appendChild(btn);
-        console.log('[AITools] Button appended to container:', def.key);
       });
-      
-      // Append to body (container is already fixed positioned)
+
       if (container.children.length > 0) {
-        console.log('[AITools] Total buttons created:', container.children.length);
-        
         document.body.appendChild(container);
-        console.log('[AITools] Container appended to body');
-        
-        // DO NOT register with layout manager - buttons are too wide and need to stay fixed
-        // The layout manager would hide them with display: none when it can't fit them
-        
-        // Make it draggable
         makeDraggable(container, 'aitools-google-buttons-pos');
-        
-        // Ensure container is visible
         container.style.display = 'flex';
-        console.log('[AITools] Ensured container is visible');
-        console.log('[AITools] Container element:', container);
-        console.log('[AITools] Button elements:', container.querySelectorAll('.aitools-gb'));
-      } else {
-        console.warn('[AITools] No buttons were created');
       }
       isInjecting = false;
     });
   };
-  
-  // Initial injection
+
   if (document.readyState === 'loading') {
-    console.log('[AITools] DOM loading... waiting for DOMContentLoaded');
-    document.addEventListener('DOMContentLoaded', () => {
-      console.log('[AITools] DOMContentLoaded fired, scheduling injection in 500ms');
-      setTimeout(injectGoogleButtons, 500);
-    });
+    document.addEventListener('DOMContentLoaded', () => setTimeout(injectGoogleButtons, 500));
   } else {
-    console.log('[AITools] DOM already loaded, scheduling injection in 500ms');
     setTimeout(injectGoogleButtons, 500);
   }
-  
-  // Watch for SPA navigation and re-inject if needed
+
+  // Watch for SPA navigation
+  let lastUrl = window.location.href;
   new MutationObserver(() => {
-    console.log('[AITools] DOM mutation detected');
-    if (!document.getElementById('aitools-google-buttons') && document.querySelector('form[action*="/search"]')) {
-      console.log('[AITools] Buttons missing after mutation, re-injecting...');
+    if (window.location.href !== lastUrl) {
+      lastUrl = window.location.href;
+      const container = document.getElementById('aitools-google-buttons');
+      if (container) container.remove();
+      isInjecting = false;
+      if (hasActiveSearch()) setTimeout(injectGoogleButtons, 300);
+    } else if (!document.getElementById('aitools-google-buttons') && hasActiveSearch()) {
       setTimeout(injectGoogleButtons, 100);
     }
   }).observe(document.body, { childList: true, subtree: false });
@@ -648,17 +419,696 @@ function setupGoogleEnhancements() {
 // ============================================================================
 function blockSponsoredResults() {
   if (!window.location.hostname.includes('google.')) return;
-  
   document.querySelectorAll('[data-sokoban-container]').forEach(el => {
-    if (el.textContent.includes('Annonce') || el.textContent.includes('Ad')) {
-      el.remove();
+    if (el.textContent.includes('Annonce') || el.textContent.includes('Ad')) el.remove();
+  });
+  document.querySelectorAll('div[data-ad-layout="ad"]').forEach(el => el.remove());
+}
+
+// ============================================================================
+// COOKIE BLOCKER
+// ============================================================================
+let cookieObserver = null;
+let cookieObserverPaused = false;
+
+function initCookieBlocker() {
+  if (!extensionSettings.cookieBlockerEnabled) return;
+
+  setTimeout(() => {
+    closeCookiePopups();
+  }, 1500);
+
+  let debounceTimer = null;
+  cookieObserver = new MutationObserver(() => {
+    if (cookieObserverPaused) return;
+    if (debounceTimer) return;
+    debounceTimer = setTimeout(() => {
+      closeCookiePopups();
+      debounceTimer = null;
+    }, 300);
+  });
+
+  cookieObserver.observe(document.body, {
+    childList: true,
+    subtree: false
+  });
+}
+
+const COOKIE_KEYWORDS = ['cookie', 'cookies', 'gdpr', 'consentement', 'consent', 'privacy', 'vie privée', 'données personnelles', 'personal data', 'accepter', 'accept', 'politique de confidentialité'];
+
+function elementHasCookieKeyword(element) {
+  const text = element.innerText?.toLowerCase() || '';
+  return COOKIE_KEYWORDS.some(kw => text.includes(kw));
+}
+
+function closeCookiePopups() {
+  const popupSelectors = [
+    '[id*="cookie"], [class*="cookie"]',
+    '[id*="consent"], [class*="consent"]',
+    '[id*="gdpr"], [class*="gdpr"]',
+    '[role="dialog"][aria-label*="cookie" i]',
+    '[role="dialog"][aria-label*="consent" i]',
+    '[id*="onetrust"], [class*="onetrust"]',
+    '[id*="cookiepro"], [class*="cookiepro"]',
+    '[id*="borlabs"], [class*="borlabs"]',
+    '[id*="termly"], [class*="termly"]'
+  ];
+
+  document.querySelectorAll(popupSelectors.join(', ')).forEach(popup => {
+    if (!isVisible(popup)) return;
+    // Must be tall enough and have cookie keywords
+    if (popup.offsetHeight < 50) return;
+    const text = popup.innerText || '';
+    if (text.length < 20) return;
+    if (!elementHasCookieKeyword(popup)) return;
+
+    const clicked = tryClickAcceptButton(popup);
+    if (clicked) {
+      // Pause observer for 5 seconds to avoid loops
+      cookieObserverPaused = true;
+      setTimeout(() => { cookieObserverPaused = false; }, 5000);
     }
   });
-  
-  // Alternative method
-  document.querySelectorAll('div[data-ad-layout="ad"]').forEach(el => {
-    el.remove();
+}
+
+function isVisible(element) {
+  if (!element) return false;
+  const style = window.getComputedStyle(element);
+  return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && element.offsetHeight > 0;
+}
+
+function tryClickAcceptButton(popup) {
+  const acceptPatterns = [
+    'accept all', 'accepter tout', 'tout accepter', 'j\'accepte', 'agree',
+    'allow all', 'autoriser tout', 'confirm', 'continue', 'ok', 'accept',
+    'aceptar', 'alle akzeptieren', 'accetta', 'concordo', 'oui', 'yes'
+  ];
+
+  const buttons = popup.querySelectorAll('button, a[role="button"], [role="button"]');
+  for (const btn of buttons) {
+    const btnText = btn.textContent.toLowerCase().trim();
+    const btnClass = btn.className.toLowerCase();
+    const btnId = btn.id.toLowerCase();
+
+    for (const pattern of acceptPatterns) {
+      if (btnText.includes(pattern)) {
+        btn.click();
+        return true;
+      }
+    }
+
+    if (btnClass.includes('accept') || btnClass.includes('agree') || btnId.includes('accept') || btnId.includes('agree')) {
+      btn.click();
+      return true;
+    }
+  }
+
+  // Hide as fallback only if very clearly a cookie popup
+  popup.style.display = 'none';
+  return false;
+}
+
+// ============================================================================
+// AI DETECTOR
+// ============================================================================
+function initAIDetector() {
+  if (buttonVisibility.aiDetectorBadge === false) return;
+  if (!extensionSettings.aiDetectorEnabled) return;
+
+  const hostname = window.location.hostname;
+  if (hostname.includes('google.') || hostname.includes('facebook.') || hostname.includes('twitter.') ||
+    hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) return;
+
+  setTimeout(() => {
+    const text = document.body.innerText;
+    if (text.length < 500) return;
+    const score = detectAIText(text.substring(0, 10000));
+    const threshold = extensionSettings.aiDetectorSensitivity || 60;
+    if (score > threshold) showAIBadge(score);
+  }, 3000);
+}
+
+function detectAIText(text) {
+  let score = 0;
+  const passiveCount = (text.match(/(\bwas\b|\bwere\b|\bbeing\b|\bby\b)/gi) || []).length;
+  const structureCount = (text.match(/(\.\s[A-Z][a-z]{3,})/g) || []).length;
+  const formalCount = (text.match(/(\bthus\b|\btherefore\b|\bin conclusion\b|\bmoreover\b)/gm) || []).length;
+  const wordCount = text.split(/\s+/).length;
+  score += (passiveCount / wordCount * 100) * 0.3;
+  score += (structureCount / text.split('.').length * 100) * 0.4;
+  score += (formalCount / Math.max(1, text.split('\n').length) * 100) * 0.3;
+  return Math.min(100, Math.round(score));
+}
+
+function showAIBadge(score) {
+  if (!elementVisibility.aiBadge) return;
+  if (document.getElementById('aitools-ai-badge')) return;
+
+  const badge = document.createElement('div');
+  badge.id = 'aitools-ai-badge';
+  badge.style.cssText = `
+    position: fixed; top: 80px; right: 20px;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    color: white; padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    z-index: 9999; box-shadow: 0 4px 16px rgba(255,107,107,0.3); cursor: grab;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; user-select: none;
+  `;
+
+  const scoreSpan = document.createElement('span');
+  scoreSpan.textContent = `⚠️ IA: ${score}%`;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'aitools-close-btn';
+  closeBtn.innerHTML = '✕';
+  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
+  closeBtn.addEventListener('click', () => {
+    elementVisibility.aiBadge = false;
+    chrome.storage.local.set({ 'aitools-visibility': elementVisibility });
+    badge.remove();
   });
+
+  badge.appendChild(scoreSpan);
+  badge.appendChild(closeBtn);
+  document.body.appendChild(badge);
+
+  if (window.layoutManager) {
+    window.layoutManager.registerElement('aitools-ai-badge', badge, { width: 160, height: 40, priority: 2, draggable: true });
+  }
+  makeDraggable(badge, 'aitools-ai-badge-pos');
+  setTimeout(() => { if (badge.isConnected) badge.style.opacity = '0.7'; }, 3000);
+}
+
+// ============================================================================
+// SUMMARIZER
+// ============================================================================
+function initSummarizer() {
+  if (buttonVisibility.summarizerButton === false) return;
+  if (window.location.hostname.includes('google.')) return;
+  if (!extensionSettings.summarizerEnabled) return;
+
+  setTimeout(() => { checkAndShowSummarizerButton(); }, 1500);
+
+  const obs = new MutationObserver(() => setTimeout(checkAndShowSummarizerButton, 500));
+  obs.observe(document.body, { childList: true, subtree: true });
+}
+
+function checkAndShowSummarizerButton() {
+  const pageText = document.body.innerText;
+  if (!document.getElementById('aitools-summarize-btn') && pageText.length > 800) {
+    addSummarizerButton();
+  } else if (document.getElementById('aitools-summarize-btn') && pageText.length < 300) {
+    document.getElementById('aitools-summarize-btn')?.remove();
+  }
+}
+
+function addSummarizerButton() {
+  const btn = document.createElement('button');
+  btn.id = 'aitools-summarize-btn';
+  btn.style.cssText = `
+    position: fixed; top: 20px; right: 100px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white; border: none; padding: 10px 14px; border-radius: 6px;
+    font-size: 12px; font-weight: 600; cursor: grab; z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    display: flex; align-items: center; gap: 8px; user-select: none;
+  `;
+
+  const textSpan = document.createElement('span');
+  textSpan.textContent = '✂️ Résumer';
+  textSpan.style.pointerEvents = 'none';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'aitools-close-btn';
+  closeBtn.innerHTML = '✕';
+  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    elementVisibility.summarizerBtn = false;
+    chrome.storage.local.set({ 'aitools-visibility': elementVisibility });
+    btn.remove();
+  });
+
+  btn.appendChild(textSpan);
+  btn.appendChild(closeBtn);
+
+  btn.addEventListener('click', (e) => {
+    if (!e.target.closest('.aitools-close-btn')) {
+      showSummaryModal(betterSummarize(summarizePage()));
+    }
+  });
+
+  document.body.appendChild(btn);
+
+  if (window.layoutManager) {
+    window.layoutManager.registerElement('aitools-summarizer-btn', btn, { width: 140, height: 40, priority: 2, draggable: true });
+  }
+  makeDraggable(btn, 'aitools-summarize-btn-pos');
+}
+
+function summarizePage() {
+  return Array.from(document.querySelectorAll('p, article, section, div[role="main"]'))
+    .map(el => el.innerText).filter(t => t.length > 100).slice(0, 20).join('\n\n');
+}
+
+function betterSummarize(text) {
+  if (!text || text.length < 100) return text;
+  let cleanText = text.replace(/\s+/g, ' ').trim();
+  let sentences = [];
+  let current = '';
+  for (let i = 0; i < cleanText.length; i++) {
+    const char = cleanText[i];
+    current += char;
+    if ((char === '.' || char === '!' || char === '?') && i < cleanText.length - 1) {
+      const nextChar = cleanText[i + 1];
+      if (nextChar === ' ') { sentences.push(current.trim()); current = ''; }
+    } else if ((char === '.' || char === '!' || char === '?') && i === cleanText.length - 1) {
+      sentences.push(current.trim()); current = '';
+    }
+  }
+  if (current.length > 0) sentences.push(current.trim());
+  sentences = sentences.filter(s => s.length > 20 && s.split(/\s+/).length > 3);
+  if (sentences.length === 0) return text.substring(0, 300) + '...';
+  if (sentences.length <= 2) return sentences.join(' ');
+
+  const stopWords = new Set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by','from','be','is','are','was','were','le','la','les','de','du','des','et','ou','un','une','en','à','pour','que','qui']);
+  const allWords = cleanText.toLowerCase().split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w));
+  const wordFreq = {};
+  allWords.forEach(w => { wordFreq[w] = (wordFreq[w] || 0) + 1; });
+
+  const scored = sentences.map((sentence, idx) => {
+    let score = 1;
+    const words = sentence.toLowerCase().split(/\s+/);
+    if (idx === 0) score += 5;
+    if (idx === sentences.length - 1) score += 4;
+    words.forEach(w => { if (wordFreq[w] > 1 && !stopWords.has(w)) score += Math.log(wordFreq[w] + 1); });
+    if (/\d+%/.test(sentence)) score += 6;
+    else if (/\d+/.test(sentence)) score += 2;
+    const wc = words.length;
+    if (wc >= 15 && wc <= 50) score += 4;
+    return { sentence, score, index: idx };
+  });
+
+  const pct = Math.max(0.15, Math.min(0.8, (extensionSettings.summarizerLength || 35) / 100));
+  const keepCount = Math.max(2, Math.ceil(sentences.length * pct));
+  return scored.sort((a, b) => b.score - a.score).slice(0, keepCount).sort((a, b) => a.index - b.index).map(s => s.sentence).join(' ');
+}
+
+function showSummaryModal(summary) {
+  const overlay = document.createElement('div');
+  overlay.id = 'aitools-summary-overlay';
+  overlay.style.cssText = `position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10000;`;
+
+  const modal = document.createElement('div');
+  modal.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;border-radius:12px;max-width:600px;max-height:70vh;overflow-y:auto;z-index:10001;box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,sans-serif;`;
+
+  modal.innerHTML = `
+    <h3 style="margin-top:0;color:#333;">📋 Résumé de la page</h3>
+    <p style="line-height:1.8;color:#555;font-size:13px;">${summary.replace(/\n/g, '<br>')}</p>
+    <button id="aitools-close-summary" style="background:#667eea;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-top:16px;font-size:12px;display:block;width:100%;">Fermer</button>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  const closeBtn = modal.querySelector('#aitools-close-summary');
+  if (closeBtn) closeBtn.addEventListener('click', (e) => { e.stopPropagation(); overlay.remove(); });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+}
+
+// ============================================================================
+// AUTO TRANSLATOR
+// ============================================================================
+function detectLanguageOfText(text) {
+  if (!text || text.length < 5) return null;
+  const htmlLang = document.documentElement.lang;
+  if (htmlLang && htmlLang.length >= 2) {
+    const lc = htmlLang.substring(0, 2).toLowerCase();
+    if (['en', 'fr', 'es', 'de', 'it', 'pt', 'ja', 'zh'].includes(lc)) return lc;
+  }
+  const tc = text.substring(0, 5000);
+  if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g.test(text)) return 'ja';
+  if (/[\u4E00-\u9FFF\u3400-\u4DBF]/g.test(text)) return 'zh';
+  const scores = {
+    'fr': (/(ç|œ|é|è|ê|ë|à|ù|û)/i.test(tc) ? 3 : 0) + (/\b(le|la|les|de|des|et|est|sont|avec|pour)\b/i.test(tc) ? 2 : 0),
+    'es': (/(á|é|í|ó|ú|ñ|¡|¿)/i.test(tc) ? 3 : 0) + (/\b(el|la|los|que|una|está|son)\b/i.test(tc) ? 2 : 0),
+    'de': (/(ä|ö|ü|ß)/i.test(tc) ? 3 : 0) + (/\b(der|die|das|und|ist|sind|mit)\b/i.test(tc) ? 2 : 0),
+    'it': (/\b(il|lo|la|che|è|sono|una|per)\b/i.test(tc) ? 3 : 0),
+    'pt': (/(ã|õ|ç)/i.test(tc) ? 3 : 0) + (/\b(o|a|os|que|é|uma|com)\b/i.test(tc) ? 2 : 0)
+  };
+  const max = Math.max(...Object.values(scores));
+  if (max > 3) return Object.keys(scores).find(l => scores[l] === max);
+  return 'en';
+}
+
+function initAutoTranslator() {
+  if (buttonVisibility.translationButtons === false) return;
+  if (!extensionSettings.autoTranslatorEnabled) return;
+  if (window.location.hostname.includes('google.')) return;
+
+  setTimeout(() => {
+    const pageText = document.body.innerText;
+    if (pageText.length < 200) return;
+    const pageLang = detectLanguageOfText(pageText);
+    const targetLang = extensionSettings.translatorTargetLang || 'fr';
+    if (pageLang && pageLang !== targetLang) addTranslatorButton(pageLang, targetLang);
+  }, 1500);
+}
+
+function addTranslatorButton(sourceLang, targetLang) {
+  if (document.getElementById('aitools-translator-btn')) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'aitools-translator-btn';
+  btn.style.cssText = `position:fixed;top:60px;right:100px;background:linear-gradient(135deg,#4CAF50 0%,#45a049 100%);color:white;border:none;padding:10px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:grab;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;gap:8px;user-select:none;`;
+
+  const textSpan = document.createElement('span');
+  textSpan.textContent = '🌐 Traduire';
+  textSpan.style.pointerEvents = 'none';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'aitools-close-btn';
+  closeBtn.innerHTML = '✕';
+  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
+  closeBtn.addEventListener('click', (e) => { e.stopPropagation(); btn.style.display = 'none'; });
+
+  btn.appendChild(textSpan);
+  btn.appendChild(closeBtn);
+  btn.addEventListener('click', (e) => {
+    if (!e.target.closest('.aitools-close-btn')) {
+      translateAndShowModal(document.body.innerText, sourceLang, targetLang);
+    }
+  });
+
+  document.body.appendChild(btn);
+  if (window.layoutManager) {
+    window.layoutManager.registerElement('aitools-translator-btn', btn, { width: 130, height: 40, priority: 3, draggable: true });
+  }
+  makeDraggable(btn, 'aitools-translator-btn-pos');
+}
+
+function translateAndShowModal(text, sourceLang, targetLang) {
+  const btn = document.getElementById('aitools-translator-btn');
+  const spanEl = btn?.querySelector('span');
+  if (spanEl) spanEl.textContent = '⏳ Traduction...';
+  if (btn) btn.disabled = true;
+
+  const textToTranslate = text.substring(0, 500);
+  chrome.runtime.sendMessage(
+    { action: 'translateText', text: textToTranslate, sourceLang, targetLang },
+    (response) => {
+      if (spanEl) spanEl.textContent = '🌐 Traduire';
+      if (btn) btn.disabled = false;
+
+      if (response && response.success) {
+        showTranslationModal(textToTranslate, response.text, sourceLang, targetLang);
+      } else {
+        alert('❌ Erreur lors de la traduction.');
+      }
+    }
+  );
+}
+
+function showTranslationModal(original, translated, sourceLang, targetLang) {
+  const langNames = { fr: 'Français', en: 'Anglais', es: 'Espagnol', de: 'Allemand', it: 'Italien', pt: 'Portugais', ja: 'Japonais', zh: 'Chinois' };
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10000;`;
+
+  const modal = document.createElement('div');
+  modal.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;border-radius:12px;max-width:700px;max-height:80vh;overflow-y:auto;z-index:10001;box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,sans-serif;`;
+  modal.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="margin:0;color:#333;">🌐 Traduction</h3>
+      <button id="aitools-close-tr" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <p style="margin:0 0 8px;font-weight:600;font-size:11px;color:#666;">📄 ${langNames[sourceLang] || sourceLang}</p>
+        <div style="background:#f5f5f5;padding:12px;border-radius:8px;font-size:12px;line-height:1.6;color:#555;max-height:250px;overflow-y:auto;">${original.replace(/\n/g, '<br>')}</div>
+      </div>
+      <div>
+        <p style="margin:0 0 8px;font-weight:600;font-size:11px;color:#666;">✅ ${langNames[targetLang] || targetLang}</p>
+        <div style="background:#e8f5e9;padding:12px;border-radius:8px;font-size:12px;line-height:1.6;color:#333;max-height:250px;overflow-y:auto;">${translated.replace(/\n/g, '<br>')}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button id="aitools-copy-tr" style="flex:1;background:#667eea;color:white;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">📋 Copier</button>
+      <button id="aitools-close-tr2" style="flex:1;background:#ddd;color:#333;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">Fermer</button>
+    </div>
+  `;
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  modal.querySelector('#aitools-close-tr').addEventListener('click', () => overlay.remove());
+  modal.querySelector('#aitools-close-tr2').addEventListener('click', () => overlay.remove());
+  modal.querySelector('#aitools-copy-tr').addEventListener('click', () => {
+    navigator.clipboard.writeText(translated).then(() => alert('✅ Copié !'));
+  });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+}
+
+// ============================================================================
+// QUICK STATS
+// ============================================================================
+function initQuickStats() {
+  if (buttonVisibility.quickStatsWidget === false) return;
+  const hostname = window.location.hostname;
+  if (hostname.includes('google.') || hostname.includes('facebook.') || hostname.includes('twitter.') ||
+    hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) return;
+
+  setTimeout(() => {
+    const stats = {
+      images: document.querySelectorAll('img').length,
+      links: document.querySelectorAll('a').length,
+      paragraphs: document.querySelectorAll('p').length,
+      headings: document.querySelectorAll('h1,h2,h3,h4,h5,h6').length,
+      videos: document.querySelectorAll('iframe[src*="youtube"],iframe[src*="vimeo"]').length,
+      forms: document.querySelectorAll('form').length,
+      buttons: document.querySelectorAll('button').length,
+      tables: document.querySelectorAll('table').length,
+      codeBlocks: document.querySelectorAll('code,pre').length
+    };
+    if (stats.links + stats.forms + stats.buttons < 3) return;
+    createStatsWidget(stats);
+  }, 4000);
+}
+
+function createStatsWidget(stats) {
+  const widget = document.createElement('div');
+  widget.id = 'aitools-quick-stats';
+  widget.style.cssText = `position:fixed;bottom:20px;right:20px;background:rgba(255,255,255,0.95);border:1px solid #e0e0e0;border-radius:12px;padding:0;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:999998;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:280px;cursor:pointer;user-select:none;transition:all 0.3s ease;`;
+
+  const header = document.createElement('div');
+  header.style.cssText = `background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:10px 14px;border-radius:12px;font-weight:600;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;`;
+
+  const headerLabel = document.createElement('span');
+  headerLabel.textContent = '📊 Statistiques page';
+  headerLabel.style.pointerEvents = 'none';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'aitools-close-btn';
+  closeBtn.innerHTML = '✕';
+  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    widget.style.display = 'none';
+    buttonVisibility.quickStatsWidget = false;
+    chrome.storage.local.set({ buttonVisibility });
+  });
+
+  header.appendChild(headerLabel);
+  header.appendChild(closeBtn);
+
+  let isExpanded = false;
+  const content = document.createElement('div');
+  content.style.cssText = `padding:0 14px;max-height:0;overflow:hidden;transition:max-height 0.3s ease,padding 0.3s ease;`;
+
+  const rows = [
+    { label: '🔗 Liens', value: stats.links }, { label: '🖼️ Images', value: stats.images },
+    { label: '📝 Paragraphes', value: stats.paragraphs }, { label: '📰 Titres', value: stats.headings },
+    { label: '🎥 Vidéos', value: stats.videos }, { label: '📋 Formulaires', value: stats.forms },
+    { label: '🔘 Boutons', value: stats.buttons }, { label: '📊 Tableaux', value: stats.tables },
+    { label: '💻 Code', value: stats.codeBlocks }
+  ];
+
+  content.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 0;">' +
+    rows.filter(r => r.value > 0).map(r => `
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">
+        <span style="color:#666;">${r.label}</span>
+        <span style="color:#667eea;font-weight:600;">${r.value}</span>
+      </div>
+    `).join('') + '</div>';
+
+  header.addEventListener('click', (e) => {
+    if (e.target.closest('.aitools-close-btn')) return;
+    isExpanded = !isExpanded;
+    content.style.maxHeight = isExpanded ? '300px' : '0';
+    content.style.padding = isExpanded ? '0 14px' : '0 14px';
+  });
+
+  widget.appendChild(header);
+  widget.appendChild(content);
+  document.body.appendChild(widget);
+
+  if (window.layoutManager) {
+    window.layoutManager.registerElement('aitools-quick-stats', widget, { width: 280, height: 50, priority: 5, draggable: true });
+  }
+  makeDraggable(widget, 'aitools-quick-stats-pos');
+}
+
+// ============================================================================
+// READING TIME
+// ============================================================================
+function initReadingTime() {
+  if (buttonVisibility.readingTimeBadge === false) return;
+  const hostname = window.location.hostname;
+  if (hostname.includes('google.') || hostname.includes('facebook.') || hostname.includes('twitter.') ||
+    hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) return;
+  if (!extensionSettings.readingTimeEnabled) return;
+
+  setTimeout(() => {
+    const mainEl = document.querySelector('article') || document.querySelector('[role="main"]') || document.querySelector('main') || document.body;
+    const content = (mainEl?.innerText || '').slice(0, 50000);
+    const words = content.split(/\s+/).filter(w => w.length > 0).length;
+    const mins = Math.ceil(words / 225);
+    if (mins < 1 || words < 300) return;
+
+    const badge = document.createElement('div');
+    badge.id = 'aitools-reading-time';
+    badge.style.cssText = `position:fixed;top:20px;right:20px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:8px 14px;border-radius:20px;font-size:12px;font-weight:600;box-shadow:0 4px 12px rgba(102,126,234,0.4);z-index:999999;cursor:pointer;user-select:none;transition:all 0.3s ease;`;
+    badge.innerHTML = `📖 ${mins} min`;
+    badge.title = `${words.toLocaleString('fr-FR')} mots`;
+
+    document.body.appendChild(badge);
+    let hideTimer = setTimeout(() => { if (badge.isConnected) badge.style.opacity = '0.35'; }, 5000);
+    badge.addEventListener('mouseover', () => { clearTimeout(hideTimer); badge.style.opacity = '1'; });
+    badge.addEventListener('mouseout', () => { hideTimer = setTimeout(() => { badge.style.opacity = '0.35'; }, 5000); });
+    makeDraggable(badge, 'aitools-reading-time-pos');
+  }, 4000);
+}
+
+// ============================================================================
+// FOCUS MODE
+// ============================================================================
+function initFocusMode() {
+  // Keyboard shortcut always available
+  document.addEventListener('keydown', (e) => {
+    if (e.shiftKey && e.altKey && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      toggleFocusMode();
+    }
+  });
+
+  // Create button only if enabled in settings
+  if (buttonVisibility.focusModeBadge === false) return;
+
+  // Ensure body exists before appending
+  const createFocusBtn = () => {
+    if (!document.body) {
+      setTimeout(createFocusBtn, 100);
+      return;
+    }
+
+    if (document.getElementById('aitools-focus-mode-btn')) return;
+
+    const focusBtn = document.createElement('button');
+    focusBtn.id = 'aitools-focus-mode-btn';
+    focusBtn.innerHTML = '🎯';
+    focusBtn.title = 'Shift+Alt+F : Mode focus';
+    focusBtn.style.cssText = `position:fixed;top:80px;right:20px;width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);border:2px solid white;color:white;font-size:16px;cursor:pointer;box-shadow:0 4px 12px rgba(245,87,108,0.4);z-index:999998;user-select:none;transition:all 0.3s ease;display:flex;align-items:center;justify-content:center;`;
+
+    const closeX = document.createElement('div');
+    closeX.style.cssText = `position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;background:#ff4757;color:white;border:none;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:bold;`;
+    closeX.textContent = '✕';
+    closeX.addEventListener('click', (e) => {
+      e.stopPropagation();
+      disableFocusMode();
+      // Save that the button should be hidden
+      buttonVisibility.focusModeBadge = false;
+      chrome.storage.local.set({ buttonVisibility });
+      focusBtn.remove();
+    });
+
+    focusBtn.appendChild(closeX);
+    focusBtn.addEventListener('click', (e) => {
+      if (e.target === closeX) return;
+      toggleFocusMode();
+    });
+    focusBtn.addEventListener('mouseover', () => {
+      focusBtn.style.transform = 'scale(1.1)';
+    });
+    focusBtn.addEventListener('mouseout', () => {
+      focusBtn.style.transform = 'scale(1)';
+    });
+
+    document.body.appendChild(focusBtn);
+  };
+
+  // Use setTimeout to ensure DOM is ready
+  setTimeout(createFocusBtn, 0);
+}
+
+function toggleFocusMode() {
+  if (document.body.getAttribute('data-aitools-focus') === 'active') {
+    disableFocusMode();
+  } else {
+    enableFocusMode();
+  }
+}
+
+function enableFocusMode() {
+  document.body.setAttribute('data-aitools-focus', 'active');
+  if (!document.getElementById('aitools-focus-mode-styles')) {
+    const style = document.createElement('style');
+    style.id = 'aitools-focus-mode-styles';
+    style.textContent = `
+      [class*="ad"],[class*="advertisement"],[id*="ad"],[id*="advertisement"],
+      [class*="sidebar"],[id*="sidebar"],[class*="widget"],[id*="widget"],
+      [class*="footer"],[id*="footer"],[class*="nav"],[id*="nav"],
+      [role="complementary"],[role="navigation"],.header,#header,header,
+      .notification,.banner,.popup,.modal:not(#aitools-modal),
+      iframe[src*="ads"],iframe[src*="doubleclick"],[data-ad-format],[data-ad-slot]
+      { display:none !important; }
+      body,main,article,[role="main"],.content,.post,.article { margin:0!important;padding:20px!important;max-width:100%!important; }
+      body { background-color:#fafafa!important;line-height:1.8!important; }
+    `;
+    document.head.appendChild(style);
+  }
+  showFocusNotification('🎯 Mode focus activé ! Shift+Alt+F pour désactiver');
+  const btn = document.getElementById('aitools-focus-mode-btn');
+  if (btn) btn.style.background = 'linear-gradient(135deg,#43e97b 0%,#38f9d7 100%)';
+  extensionSettings.focusModeEnabled = true;
+  chrome.storage.local.set({ focusModeEnabled: true });
+}
+
+function disableFocusMode() {
+  document.body.removeAttribute('data-aitools-focus');
+  const style = document.getElementById('aitools-focus-mode-styles');
+  if (style) style.remove();
+  showFocusNotification('Mode focus désactivé');
+  const btn = document.getElementById('aitools-focus-mode-btn');
+  if (btn) btn.style.background = 'linear-gradient(135deg,#f093fb 0%,#f5576c 100%)';
+  extensionSettings.focusModeEnabled = false;
+  chrome.storage.local.set({ focusModeEnabled: false });
+}
+
+function showFocusNotification(message) {
+  const existing = document.getElementById('aitools-focus-notification');
+  if (existing) existing.remove();
+  const n = document.createElement('div');
+  n.id = 'aitools-focus-notification';
+  n.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(32,32,32,0.95);color:white;padding:14px 24px;border-radius:8px;font-size:14px;font-weight:500;z-index:1000000;animation:aitoolsFadeInOut 2s ease-in-out;pointer-events:none;`;
+  n.innerHTML = message;
+  if (!document.getElementById('aitools-focus-anim')) {
+    const s = document.createElement('style');
+    s.id = 'aitools-focus-anim';
+    s.textContent = `@keyframes aitoolsFadeInOut{0%{opacity:0;transform:translate(-50%,-50%) scale(0.8);}10%{opacity:1;transform:translate(-50%,-50%) scale(1);}90%{opacity:1;}100%{opacity:0;}}`;
+    document.head.appendChild(s);
+  }
+  document.body.appendChild(n);
+  setTimeout(() => n.remove(), 2000);
 }
 
 // ============================================================================
@@ -667,20 +1117,13 @@ function blockSponsoredResults() {
 chrome.storage.local.get(null, (data) => {
   extensionEnabled = data.extensionEnabled !== false;
   darkModeEnabled = data.darkModeEnabled === true;
-  
-  // Initialize Google buttons visibility if not set
+
+  // Initialize defaults for Google buttons if not set
   if (!data.googleButtonsVisibility) {
     chrome.storage.local.set({
-      googleButtonsVisibility: {
-        lucky: true,
-        filters: true,
-        maps: true,
-        chatgpt: true
-      }
+      googleButtonsVisibility: { lucky: true, filters: true, maps: true, chatgpt: true }
     });
   }
-  
-  // Initialize Google buttons customization if not set
   if (!data.googleButtonsConfig) {
     chrome.storage.local.set({
       googleButtonsConfig: {
@@ -691,1710 +1134,41 @@ chrome.storage.local.get(null, (data) => {
       }
     });
   }
-  
+
   if (!extensionEnabled) return;
-  
-  // Reading time estimator
-  if (data.readingTimeEnabled !== false && buttonVisibility.readingTimeBadge) {
-    const estimator = new ReadingTimeEstimator();
-    setTimeout(() => estimator.showBadge(), 1500);
+
+  if (darkModeEnabled) enableDarkMode();
+
+  if (data.buttonVisibility) {
+    buttonVisibility = { ...buttonVisibility, ...data.buttonVisibility };
   }
-  
-  // Dark mode
-  if (darkModeEnabled) {
-    enableDarkMode();
-  }
-  
-  // Highlighter
+
   setupHighlighter();
-  
-  // Google features
   setupGoogleEnhancements();
 
-  // Focus mode
-  if (data.focusModeEnabled) {
-    enableFocusMode();
-  }
+  if (data.focusModeEnabled) enableFocusMode();
+  if (data.blockSponsoredEnabled) setTimeout(blockSponsoredResults, 2000);
 
-  // Block sponsored
-  if (data.blockSponsoredEnabled) {
-    setTimeout(() => blockSponsoredResults(), 2000);
+  if (data.readingTimeEnabled !== false) {
+    extensionSettings.readingTimeEnabled = true;
+    initReadingTime();
   }
 });
 
-// COOKIE BLOCKER - Auto-close cookie consent popups
-// ============================================================================
-function initCookieBlocker() {
-  if (!extensionSettings.cookieBlockerEnabled) return;
-  
-  console.log('[AITools] Cookie blocker enabled');
-  
-  // Initial scan on page load
-  setTimeout(() => {
-    closeCookiePopups();
-    blockCookieConsent();
-  }, 1500);
-  
-  // Watch for new popups with debouncing (throttle to max once per second)
-  let debounceTimer = null;
-  const observer = new MutationObserver(() => {
-    if (debounceTimer) return;
-    debounceTimer = setTimeout(() => {
-      closeCookiePopups();
-      debounceTimer = null;
-    }, 300);
-  });
-  
-  // Only observe dynamic mutations instead of entire body
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['style', 'class', 'hidden', 'aria-hidden']
-  });
-}
-
-function closeCookiePopups() {
-  // Common popup identifiers (ID, class, role)
-  const popupSelectors = [
-    // General popups
-    '[id*="cookie"], [class*="cookie"], [id*="consent"], [class*="consent"]',
-    '[id*="gdpr"], [class*="gdpr"], [id*="notification"], [class*="notification"]',
-    '[id*="banner"], [class*="banner"], [id*="legal"], [class*="legal"]',
-    '[role="dialog"][aria-label*="cookie" i], [role="dialog"][aria-label*="consent" i]',
-    '[data-testid*="cookie"], [data-testid*="consent"]',
-    // Specific popular services
-    '[id*="onetrust"], [class*="onetrust"]',
-    '[id*="cookiepro"], [class*="cookiepro"]',
-    '[id*="crunchify"], [class*="crunchify"]',
-    '[id*="borlabs"], [class*="borlabs"]',
-    '[id*="termly"], [class*="termly"]'
-  ];
-  
-  // Try to close all detected popups
-  document.querySelectorAll(popupSelectors.join(', ')).forEach(popup => {
-    // Skip if already hidden
-    if (!isVisible(popup)) return;
-    
-    // Try to find and click accept button
-    tryClickAcceptButton(popup);
-  });
-  
-  // Remove backdrop/overlay
-  document.querySelectorAll('[class*="overlay"], [class*="backdrop"], [class*="dimmer"]').forEach(backdrop => {
-    if (backdrop.offsetHeight > 0 && !backdrop.textContent.trim()) {
-      backdrop.style.display = 'none';
-    }
-  });
-}
-
-function blockCookieConsent() {
-  // Try to block specific cookie consent scripts
-  const scripts = document.querySelectorAll('script');
-  scripts.forEach(script => {
-    const src = script.src || '';
-    if (src.includes('cookiebot') || src.includes('consent') || src.includes('gdpr')) {
-      // Already loaded, but we can try to disable notifications
-      if (window.CookieNotice) {
-        try {
-          window.CookieNotice.hide?.();
-          console.log('[AITools] Hid CookieNotice');
-        } catch (e) {}
-      }
-    }
-  });
-}
-
-function isVisible(element) {
-  if (!element) return false;
-  const style = window.getComputedStyle(element);
-  return style.display !== 'none' && 
-         style.visibility !== 'hidden' && 
-         style.opacity !== '0' &&
-         element.offsetHeight > 0;
-}
-
-function tryClickAcceptButton(popup) {
-  const acceptPatterns = [
-    'accept all',      // Accept All
-    'accepter tout',   // French: Accept All
-    'tout accepter',   // French: Accept All
-    'j\'accepte',      // French: I Accept
-    'agree',           // I Agree
-    'allow all',       // Allow All
-    'autoriser tout',  // French: Allow All
-    'confirm',         // Confirm
-    'continue',        // Continue
-    'ok',              // OK
-    'yes, i accept',   // Affirmative
-    'oui, j\'accepte', // French: Yes, I accept
-    'aceptar',         // Spanish: Accept
-    'alle akzeptieren',// German: Accept All
-    'accetta',         // Italian: Accept
-    'accept',          // Accept
-    'concordo',        // Italian: I agree
-  ];
-  
-  // Search for buttons with accept-like text
-  const buttons = popup.querySelectorAll('button, a[role="button"], [role="button"]');
-  
-  for (const btn of buttons) {
-    const btnText = btn.textContent.toLowerCase().trim();
-    const btnClass = btn.className.toLowerCase();
-    const btnId = btn.id.toLowerCase();
-    
-    // Check text content
-    for (const pattern of acceptPatterns) {
-      if (btnText.includes(pattern)) {
-        console.log('[AITools] Clicking accept button:', btnText);
-        btn.click();
-        return true;
-      }
-    }
-    
-    // Check class/id for common patterns
-    if (btnClass.includes('accept') || btnClass.includes('agree') || 
-        btnId.includes('accept') || btnId.includes('agree')) {
-      console.log('[AITools] Clicking button with class/id:', btn.className);
-      btn.click();
-      return true;
-    }
-  }
-  
-  // If no button found, hide the popup
-  popup.style.display = 'none';
-  popup.style.visibility = 'hidden';
-  popup.style.opacity = '0';
-  popup.setAttribute('hidden', 'true');
-  console.log('[AITools] Hidden popup (no accept button found)');
-  return false;
-}
-
-// ============================================================================
-// AI DETECTOR - Automatic highlighting
-// ============================================================================
-function initAIDetector() {
-  // Check if AI detector badge is enabled
-  if (!buttonVisibility.aiDetectorBadge) {
-    console.log('[AITools] AI detector badge disabled in settings');
-    return;
-  }
-  
-  if (!extensionSettings.aiDetectorEnabled) return;
-  
-  // Skip on Google, social media, and other non-article sites
-  const hostname = window.location.hostname;
-  if (hostname.includes('google.') || hostname.includes('facebook.') || hostname.includes('twitter.') || 
-      hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) {
-    return;
-  }
-  
-  setTimeout(() => {
-    const text = document.body.innerText;
-    if (text.length < 500) return; // Only on substantial content
-    
-    // Only analyze first 10000 characters for performance
-    const scoreText = text.substring(0, 10000);
-    const score = detectAIText(scoreText);
-    const threshold = extensionSettings.aiDetectorSensitivity || 60;
-    if (score > threshold) {
-      showAIBadge(score);
-    }
-  }, 3000); // Delayed to not interfere with page load
-}
-
-function detectAIText(text) {
-  let score = 0;
-  
-  // Pattern indicators
-  const patterns = {
-    passiveVoice: /(\bwas\b|\bwere\b|\bbeing\b|\bby\b)/gi,
-    repetitiveStructure: /(\.\s[A-Z][a-z]{3,})/g,
-    formalTone: /(\bthus\b|\btherefore\b|\bin conclusion\b|\bmoreover\b|^\b[A-Z]{2,})/gm,
-    genericOpenings: /^(this|it|the)[^.]{0,80}(is|was|are)/gim,
-  };
-  
-  // Score patterns
-  const passiveCount = (text.match(patterns.passiveVoice) || []).length;
-  const structureCount = (text.match(patterns.repetitiveStructure) || []).length;
-  const formalCount = (text.match(patterns.formalTone) || []).length;
-  const genericCount = (text.match(patterns.genericOpenings) || []).length;
-  
-  const wordCount = text.split(/\s+/).length;
-  
-  score += (passiveCount / wordCount * 100) * 0.3;
-  score += (structureCount / text.split('.').length * 100) * 0.4;
-  score += (formalCount / text.split('\n').length * 100) * 0.2;
-  score += (genericCount / text.split('\n').length * 100) * 0.1;
-  
-  return Math.min(100, Math.round(score));
-}
-
-function showAIBadge(score) {
-  if (!elementVisibility.aiBadge) return;
-  if (document.getElementById('aitools-ai-badge')) return;
-  
-  const badge = document.createElement('div');
-  badge.id = 'aitools-ai-badge';
-  badge.style.cssText = `
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-    color: white;
-    padding: 12px 16px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 600;
-    z-index: 9999;
-    box-shadow: 0 4px 16px rgba(255, 107, 107, 0.3);
-    cursor: grab;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    user-select: none;
-  `;
-  
-  const scoreColor = score > 75 ? '#ff4444' : score > 50 ? '#ff9800' : '#ffc107';
-  
-  const scoreSpan = document.createElement('span');
-  scoreSpan.textContent = `⚠️ IA: ${score}%`;
-  
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'aitools-close-btn';
-  closeBtn.innerHTML = '✕';
-  closeBtn.style.cssText = `
-    background: rgba(255, 255, 255, 0.3);
-    border: none;
-    color: white;
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-  `;
-  
-  closeBtn.addEventListener('mouseover', () => {
-    closeBtn.style.background = 'rgba(255, 255, 255, 0.5)';
-  });
-  closeBtn.addEventListener('mouseout', () => {
-    closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
-  });
-  closeBtn.addEventListener('click', () => {
-    elementVisibility.aiBadge = false;
-    chrome.storage.local.set({ 'aitools-visibility': elementVisibility });
-    badge.remove();
-  });
-  
-  badge.appendChild(scoreSpan);
-  badge.appendChild(closeBtn);
-  badge.style.background = scoreColor;
-  badge.title = `Probabilité de contenu généré par IA: ${score}% (Déplaçable)`;
-  
-  document.body.appendChild(badge);
-  
-  // Register with layout manager
-  if (window.layoutManager) {
-    window.layoutManager.registerElement('aitools-ai-badge', badge, {
-      width: 160,
-      height: 40,
-      priority: 2,
-      draggable: true
-    });
-  }
-  
-  // Make it draggable
-  makeDraggable(badge, 'aitools-ai-badge-pos');
-  
-  setTimeout(() => {
-    badge.style.opacity = '0.7';
-  }, 3000);
-}
-
-// ============================================================================
-// SUMMARIZER - Top button for page summarization
-// ============================================================================
-function initSummarizer() {
-  // Check if summarizer button is enabled
-  if (!buttonVisibility.summarizerButton) {
-    console.log('[AITools] Summarizer button disabled in settings');
-    return;
-  }
-  
-  // Don't show summarizer on Google Search results
-  if (window.location.hostname.includes('google.')) return;
-  if (!extensionSettings.summarizerEnabled) return;
-  
-  // Check for long text on page load
-  setTimeout(() => {
-    checkAndShowSummarizerButton();
-  }, 1500);
-  
-  // Also watch for content changes
-  const observer = new MutationObserver(() => {
-    setTimeout(checkAndShowSummarizerButton, 500);
-  });
-  
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-}
-
-function checkAndShowSummarizerButton() {
-  const pageText = document.body.innerText;
-  
-  // Only show if not already shown AND enough content
-  if (!document.getElementById('aitools-summarize-btn') && pageText.length > 800) {
-    addSummarizerButton();
-  } else if (document.getElementById('aitools-summarize-btn') && pageText.length < 300) {
-    // Remove button if content becomes too short
-    document.getElementById('aitools-summarize-btn')?.remove();
-  }
-}
-
-function addSummarizerButton() {
-  const btn = document.createElement('button');
-  btn.id = 'aitools-summarize-btn';
-  btn.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 100px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: grab;
-    z-index: 9999;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    user-select: none;
-  `;
-  
-  const textSpan = document.createElement('span');
-  textSpan.textContent = '✂️ Résumer';
-  textSpan.style.pointerEvents = 'none';
-  
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'aitools-close-btn';
-  closeBtn.innerHTML = '✕';
-  closeBtn.style.cssText = `
-    background: rgba(255, 255, 255, 0.3);
-    border: none;
-    color: white;
-    width: 18px;
-    height: 18px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 12px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-  `;
-  
-  closeBtn.addEventListener('mouseover', () => {
-    closeBtn.style.background = 'rgba(255, 255, 255, 0.5)';
-  });
-  closeBtn.addEventListener('mouseout', () => {
-    closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
-  });
-  closeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    elementVisibility.summarizerBtn = false;
-    chrome.storage.local.set({ 'aitools-visibility': elementVisibility });
-    btn.remove();
-  });
-  
-  btn.appendChild(textSpan);
-  btn.appendChild(closeBtn);
-  btn.title = 'Déplaçable - Cliquez pour résumer la page';
-  
-  btn.addEventListener('click', (e) => {
-    // Stop propagation to prevent modal from immediately reopening
-    e.stopPropagation();
-    
-    if (!e.target.closest('.aitools-close-btn')) {
-      const summary = summarizePage();
-      showSummaryModal(summary);
-    }
-  });
-  
-  document.body.appendChild(btn);
-  
-  // Register with layout manager
-  if (window.layoutManager) {
-    window.layoutManager.registerElement('aitools-summarizer-btn', btn, {
-      width: 140,
-      height: 40,
-      priority: 2,
-      draggable: true
-    });
-  }
-  
-  // Make it draggable
-  makeDraggable(btn, 'aitools-summarize-btn-pos');
-}
-
-function summarizePage() {
-  const paragraphs = Array.from(document.querySelectorAll('p, article, section, div[role="main"]'))
-    .map(el => el.innerText)
-    .filter(text => text.length > 100)
-    .slice(0, 20);
-  
-  const fullText = paragraphs.join('\n\n');
-  return betterSummarize(fullText);
-}
-
-function betterSummarize(text) {
-  if (!text || text.length < 100) return text;
-  
-  // Clean text - remove extra whitespace and newlines
-  let cleanText = text.replace(/\s+/g, ' ').trim();
-  
-  // Step 1: Split into sentences more carefully
-  // Avoid splitting on decimals (.5), abbreviations (M. Smith, U.S.A), URLs
-  let sentences = [];
-  let current = '';
-  
-  for (let i = 0; i < cleanText.length; i++) {
-    const char = cleanText[i];
-    current += char;
-    
-    // Check if we found end of sentence
-    if ((char === '.' || char === '!' || char === '?') && i < cleanText.length - 1) {
-      const nextChar = cleanText[i + 1];
-      const prevChar = cleanText[i - 1];
-      
-      // Skip if it's a decimal, abbreviation, or URL
-      const isDecimal = prevChar && /\d/.test(prevChar) && nextChar && /\d/.test(nextChar);
-      const isAbbrev = /[A-Z]$/.test(current.trim());
-      const isUrl = current.includes('http') || current.includes('www');
-      
-      if (!isDecimal && !isUrl && nextChar === ' ') {
-        sentences.push(current.trim());
-        current = '';
-      }
-    } else if ((char === '.' || char === '!' || char === '?') && i === cleanText.length - 1) {
-      sentences.push(current.trim());
-      current = '';
-    }
-  }
-  
-  if (current.length > 0) sentences.push(current.trim());
-  
-  // Filter sentences: too short or too long
-  sentences = sentences
-    .filter(s => s.length > 20 && s.length < 600)
-    .filter(s => s.split(/\s+/).length > 3);
-  
-  if (sentences.length === 0) return text.substring(0, 300) + '...';
-  if (sentences.length <= 2) return sentences.join(' ');
-  
-  // Build list of common words to ignore (stop words)
-  const stopWords = new Set([
-    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from',
-    'be', 'is', 'are', 'was', 'were', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
-    'le', 'la', 'les', 'de', 'du', 'des', 'et', 'ou', 'un', 'une', 'en', 'à', 'pour', 'par', 'qui', 'que',
-    'el', 'la', 'los', 'las', 'de', 'y', 'o', 'un', 'una', 'en', 'a', 'por', 'que'
-  ]);
-  
-  // Calculate TF-IDF-like scores
-  const allWords = cleanText.toLowerCase().split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w));
-  const wordFreq = {};
-  allWords.forEach(w => {
-    wordFreq[w] = (wordFreq[w] || 0) + 1;
-  });
-  
-  // Step 2: Score sentences with advanced algorithm
-  const keywords = {
-    // Importance
-    'important': 6, 'clé': 6, 'capital': 5, 'crucial': 6, 'essentiel': 5,
-    'key': 6, 'critical': 6, 'significant': 5,
-    // Results
-    'résultat': 5, 'conclusion': 5, 'résultats': 5, 'conclusions': 5,
-    'result': 5, 'conclusion': 5, 'results': 5, 'conclusions': 5,
-    'démonstration': 4, 'montre': 4, 'prouve': 4, 'révèle': 4, 'shows': 4, 'proves': 4, 'finds': 4,
-    // Discovery
-    'découvert': 5, 'découverte': 5, 'innovation': 4, 'novateur': 4, 'unique': 4,
-    'discovered': 5, 'discovery': 5, 'novel': 4, 'breakthrough': 5, 'finds': 4,
-    // Data
-    'étude': 4, 'recherche': 4, 'données': 5, 'statistiques': 5, 'analyse': 4, 'rapport': 4,
-    'study': 4, 'research': 4, 'data': 5, 'statistics': 5, 'analysis': 4, 'report': 4,
-    // Success
-    'succès': 4, 'réussi': 4, 'victoire': 4, 'gagné': 3,
-    'success': 4, 'successfully': 4, 'victory': 4, 'won': 3,
-    // Impact
-    'impact': 5, 'influence': 4, 'effet': 3, 'conséquence': 3,
-    'effect': 3, 'consequence': 3, 'impact': 5,
-    // Logic markers
-    'donc': 3, 'cependant': 2, 'mais': 2, 'pourtant': 2, 'c\'est pourquoi': 3,
-    'therefore': 3, 'however': 2, 'but': 2, 'thus': 3, 'so': 2
-  };
-  
-  const scoredSentences = sentences.map((sentence, idx) => {
-    let score = 1;
-    const lowerSent = sentence.toLowerCase();
-    const wordCount = sentence.split(/\s+/).length;
-    const words = lowerSent.split(/\s+/).filter(w => w.length > 3);
-    
-    // Keyword matching
-    for (const [keyword, weight] of Object.entries(keywords)) {
-      if (lowerSent.includes(keyword)) {
-        score += weight;
-      }
-    }
-    
-    // TF-IDF-like: score frequent words in this sentence
-    words.forEach(w => {
-      if (wordFreq[w] > 1 && !stopWords.has(w)) {
-        score += Math.log(wordFreq[w] + 1);
-      }
-    });
-    
-    // Position bonus (first, second, last important)
-    if (idx === 0) score += 5;      // First sentence very important
-    if (idx === 1) score += 3;      // Second
-    if (idx === sentences.length - 1) score += 4;  // Last sentence (conclusion)
-    if (idx === sentences.length - 2) score += 2;  // Pre-last
-    
-    // Optimal length: 15-50 words (better balance)
-    if (wordCount >= 15 && wordCount <= 50) {
-      score += 4;
-    } else if (wordCount >= 10 && wordCount < 15) {
-      score += 1;
-    } else if (wordCount > 50 && wordCount < 100) {
-      score += 1;
-    } else if (wordCount < 10 || wordCount > 100) {
-      score -= 2;  // Penalize very short or very long
-    }
-    
-    // Numbers/data/percentages - very important!
-    if (/\d+%/.test(sentence) || /\d+\s*(million|billion|thousand)/.test(sentence)) {
-      score += 6;
-    } else if (/\d+/.test(sentence)) {
-      score += 4;
-    }
-    
-    // Questions (usually summary-worthy)
-    if (sentence.includes('?')) score += 3;
-    
-    // Quoted text
-    if (sentence.includes('"') || sentence.includes("'")) score += 2;
-    
-    // Subject indicators (starts with capital, likely topic sentence)
-    if (/^[A-Z][a-z]+ (is|was|are|being|appears|seems)/.test(sentence)) {
-      score += 3;
-    }
-    
-    return { sentence, score, index: idx };
-  });
-  
-  // Sort by score and select top percentage
-  const percentage = Math.max(0.15, Math.min(0.8, (extensionSettings.summarizerLength || 35) / 100));
-  const keepCount = Math.max(2, Math.ceil(sentences.length * percentage));
-  
-  const selected = scoredSentences
-    .sort((a, b) => b.score - a.score)
-    .slice(0, keepCount)
-    .sort((a, b) => a.index - b.index)
-    .map(s => s.sentence);
-  
-  // Join and return without hard truncation
-  const summary = selected.join(' ');
-  
-  return summary;
-}
-
-function showSummaryModal(summary) {
-  const overlay = document.createElement('div');
-  overlay.id = 'aitools-summary-overlay';
-  overlay.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 10000;
-  `;
-  
-  const modal = document.createElement('div');
-  modal.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 24px;
-    border-radius: 12px;
-    max-width: 600px;
-    max-height: 70vh;
-    overflow-y: auto;
-    z-index: 10001;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  `;
-  
-  const targetLang = extensionSettings.summarizerLang || 'fr';
-  const pageLanguage = detectLanguageOfText(summary);
-  
-  // If language is different, translate the summary
-  if (pageLanguage && pageLanguage !== targetLang) {
-    // Limit summary to 500 chars for API compatibility
-    const summaryToTranslate = summary.substring(0, 500);
-    chrome.runtime.sendMessage(
-      { action: 'translateText', text: summaryToTranslate, sourceLang: pageLanguage, targetLang: targetLang },
-      (response) => {
-        if (response && response.success) {
-          const translatedSummary = response.text || summary;
-          modal.innerHTML = `
-            <h3 style="margin-top: 0; color: #333;">📋 Résumé de la page</h3>
-            <p style="line-height: 1.8; color: #555; font-size: 13px;">${translatedSummary.replace(/\n/g, '<br>')}</p>
-            <small style="color: #999; font-size: 10px;">Résumé traduit en ${getLanguageName(targetLang)}</small>
-            <button id="aitools-close-summary" style="
-              background: #667eea;
-              color: white;
-              border: none;
-              padding: 8px 16px;
-              border-radius: 6px;
-              cursor: pointer;
-              margin-top: 16px;
-              font-size: 12px;
-              display: block;
-              width: 100%;
-            ">Fermer</button>
-          `;
-        } else {
-          // Fallback: show untranslated summary
-          modal.innerHTML = `
-            <h3 style="margin-top: 0; color: #333;">📋 Résumé de la page</h3>
-            <p style="line-height: 1.8; color: #555; font-size: 13px;">${summary.replace(/\n/g, '<br>')}</p>
-            <button id="aitools-close-summary" style="
-              background: #667eea;
-              color: white;
-              border: none;
-              padding: 8px 16px;
-              border-radius: 6px;
-              cursor: pointer;
-              margin-top: 16px;
-              font-size: 12px;
-              display: block;
-              width: 100%;
-            ">Fermer</button>
-          `;
-        }
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-        setupCloseButton(overlay, modal);
-      }
-    );
-  } else {
-    // No translation needed
-    modal.innerHTML = `
-      <h3 style="margin-top: 0; color: #333;">📋 Résumé de la page</h3>
-      <p style="line-height: 1.8; color: #555; font-size: 13px;">${summary.replace(/\n/g, '<br>')}</p>
-      <button id="aitools-close-summary" style="
-        background: #667eea;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        cursor: pointer;
-        margin-top: 16px;
-        font-size: 12px;
-        display: block;
-        width: 100%;
-      ">Fermer</button>
-    `;
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-    setupCloseButton(overlay, modal);
-  }
-}
-
-function setupCloseButton(overlay, modal) {
-  const closeBtn = overlay.querySelector('#aitools-close-summary');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      overlay.remove();
-    });
-  }
-  
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) {
-      e.stopPropagation();
-      overlay.remove();
-    }
-  });
-}
-
-function getLanguageName(lang) {
-  const names = {
-    'fr': 'Français',
-    'en': 'Anglais',
-    'es': 'Espagnol',
-    'de': 'Allemand',
-    'it': 'Italien',
-    'pt': 'Portugais',
-    'ja': 'Japonais',
-    'zh': 'Chinois'
-  };
-  return names[lang] || lang.toUpperCase();
-}
-
-// ============================================================================
-// AUTO TRANSLATOR - Detect and translate foreign text
-// ============================================================================
-
-// Language detection patterns
-function detectLanguageOfText(text) {
-  if (!text || text.length < 5) {
-    console.log('[AITools] Text too short for language detection');
-    return null;
-  }
-  
-  // First, try HTML lang attribute
-  const htmlLang = document.documentElement.lang;
-  if (htmlLang && htmlLang.length >= 2) {
-    const langCode = htmlLang.substring(0, 2).toLowerCase();
-    if (['en', 'fr', 'es', 'de', 'it', 'pt', 'ja', 'zh'].includes(langCode)) {
-      console.log('[AITools] Language detected from HTML lang attribute:', langCode);
-      return langCode;
-    }
-  }
-  
-  const textLower = text.toLowerCase();
-  const textToCheck = text.substring(0, 5000); // Check first 5000 chars
-  
-  // French indicators - improved
-  const frenchScore = (
-    (/(le|la|les|de|des|et|un|une|est|sont|était|au|à|pour|que|qui)/i.test(textToCheck) ? 2 : 0) +
-    (/(ç|œ|é|è|ê|ë|à|ù|û|ô|ö)/i.test(textToCheck) ? 3 : 0) +
-    (/\b(bonjour|salut|merci|s'il|c'est|qu'est|quoi|comment|pourquoi|très|bien|avec|sans|plus|moins)\b/i.test(textToCheck) ? 3 : 0)
-  );
-  
-  // Spanish indicators - improved
-  const spanishScore = (
-    (/(el|la|los|las|de|para|que|es|está|son|están|una|un)/i.test(textToCheck) ? 2 : 0) +
-    (/(á|é|í|ó|ú|ñ|¡|¿)/i.test(textToCheck) ? 3 : 0) +
-    (/\b(hola|gracias|qué|cómo|por qué|señor|señora|muy|bien|también)\b/i.test(textToCheck) ? 3 : 0)
-  );
-  
-  // German indicators - improved
-  const germanScore = (
-    (/(der|die|das|und|in|mit|zu|von|ein|eine|ist|sind|war|waren)/i.test(textToCheck) ? 2 : 0) +
-    (/(ä|ö|ü|ß)/i.test(textToCheck) ? 3 : 0) +
-    (/\b(hallo|danke|ja|nein|wie|was|wo|wann|sehr|auch|nach|bitte)\b/i.test(textToCheck) ? 3 : 0)
-  );
-  
-  // Italian indicators - improved
-  const italianScore = (
-    (/(il|lo|la|i|gli|le|di|da|per|che|è|sono)/i.test(textToCheck) ? 2 : 0) +
-    (/(à|è|é|ì|ò|ù)/i.test(textToCheck) ? 3 : 0) +
-    (/\b(ciao|grazie|per favore|come|cosa|dove|buongiorno|arrivederci)\b/i.test(textToCheck) ? 3 : 0)
-  );
-  
-  // Portuguese indicators - improved
-  const portugueseScore = (
-    (/(o|a|os|as|de|para|que|é|são|um|uma|em|com)/i.test(textToCheck) ? 2 : 0) +
-    (/(ã|õ|ç|á|é|í|ó|ú|à)/i.test(textToCheck) ? 3 : 0) +
-    (/\b(olá|obrigado|por favor|como|qual|onde|muito|bem|com)\b/i.test(textToCheck) ? 3 : 0)
-  );
-  
-  // Japanese (Very basic - just check for Japanese characters)
-  if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g.test(text)) {
-    console.log('[AITools] Language detected: Japanese');
-    return 'ja';
-  }
-  
-  // Chinese (Simplified and Traditional)
-  if (/[\u4E00-\u9FFF\u3400-\u4DBF]/g.test(text)) {
-    console.log('[AITools] Language detected: Chinese');
-    return 'zh';
-  }
-  
-  // Find language with highest score
-  const scores = {
-    'fr': frenchScore,
-    'es': spanishScore,
-    'de': germanScore,
-    'it': italianScore,
-    'pt': portugueseScore
-  };
-  
-  const maxScore = Math.max(...Object.values(scores));
-  console.log('[AITools] Language scores:', scores, 'max:', maxScore);
-  
-  if (maxScore > 4) {
-    const detected = Object.keys(scores).find(lang => scores[lang] === maxScore);
-    console.log('[AITools] Language detected:', detected, 'with score:', maxScore);
-    return detected;
-  }
-  
-  console.log('[AITools] No clear language detected, defaulting to English');
-  return 'en'; // Default to English
-}
-
-// Translate using Background Script (avoids CSP issues)
-async function translateText(text, targetLang = 'fr') {
-  if (!text || text.length === 0) return null;
-  
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(
-      { action: 'translateText', text, targetLang },
-      (response) => {
-        if (response && response.success) {
-          resolve(response.text);
-        } else {
-          console.log('[AITools] Translation failed:', response?.error);
-          resolve(null);
-        }
-      }
-    );
-  });
-}
-
-// Add translation buttons to paragraphs
-function initAutoTranslator() {
-  // Check if translation buttons are enabled
-  if (!buttonVisibility.translationButtons) {
-    console.log('[AITools] Translation buttons disabled in settings');
-    return;
-  }
-  
-  if (!extensionSettings.autoTranslatorEnabled) {
-    console.log('[AITools] Auto-translator disabled');
-    return;
-  }
-  
-  // Don't show on Google Search
-  if (window.location.hostname.includes('google.')) {
-    console.log('[AITools] Skipping translator on Google');
-    return;
-  }
-  
-  setTimeout(() => {
-    // Detect if page needs translation
-    const pageText = document.body.innerText;
-    if (pageText.length < 200) {
-      console.log('[AITools] Page text too short for translation');
-      return;
-    }
-    
-    const pageLanguage = detectLanguageOfText(pageText);
-    const targetLang = extensionSettings.translatorTargetLang || 'fr';
-    
-    console.log('[AITools] Detected language:', pageLanguage, 'Target:', targetLang);
-    
-    // Only add button if page is in a different language
-    if (pageLanguage && pageLanguage !== targetLang) {
-      console.log('[AITools] Adding translator button for', pageLanguage, '->', targetLang);
-      addTranslatorButton(pageLanguage, targetLang);
-    } else {
-      console.log('[AITools] No translation needed or detection failed');
-    }
-  }, 1500);
-}
-
-function addTranslatorButton(sourceLang, targetLang) {
-  // Don't add if already exists
-  if (document.getElementById('aitools-translator-btn')) {
-    console.log('[AITools] Translator button already exists');
-    return;
-  }
-  
-  console.log('[AITools] Creating translator button:', sourceLang, '->', targetLang);
-  const btn = document.createElement('button');
-  btn.id = 'aitools-translator-btn';
-  btn.style.cssText = `
-    position: fixed;
-    top: 60px;
-    right: 100px;
-    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: grab;
-    z-index: 9999;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    user-select: none;
-  `;
-  
-  const textSpan = document.createElement('span');
-  textSpan.textContent = '🌐 Traduire';
-  textSpan.style.pointerEvents = 'none';
-  
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'aitools-close-btn';
-  closeBtn.innerHTML = '✕';
-  closeBtn.style.cssText = `
-    background: rgba(255, 255, 255, 0.3);
-    border: none;
-    color: white;
-    width: 18px;
-    height: 18px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 12px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-  `;
-  
-  closeBtn.addEventListener('mouseover', () => {
-    closeBtn.style.background = 'rgba(255, 255, 255, 0.5)';
-  });
-  closeBtn.addEventListener('mouseout', () => {
-    closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
-  });
-  closeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    btn.style.display = 'none';
-  });
-  
-  btn.appendChild(textSpan);
-  btn.appendChild(closeBtn);
-  btn.title = 'Déplaçable - Cliquez pour traduire la page';
-  
-  btn.addEventListener('click', (e) => {
-    if (!e.target.closest('.aitools-close-btn')) {
-      const pageText = document.body.innerText;
-      translateAndShowModal(pageText, sourceLang, targetLang);
-    }
-  });
-  
-  document.body.appendChild(btn);
-  
-  // Register with layout manager
-  if (window.layoutManager) {
-    window.layoutManager.registerElement('aitools-translator-btn', btn, {
-      width: 130,
-      height: 40,
-      priority: 3,
-      draggable: true
-    });
-  }
-  
-  // Make it draggable
-  makeDraggable(btn, 'aitools-translator-btn-pos');
-}
-
-function translateAndShowModal(text, sourceLang, targetLang) {
-  // Show loading state
-  const btn = document.getElementById('aitools-translator-btn');
-  const originalText = btn?.querySelector('span')?.textContent;
-  
-  if (btn) {
-    btn.querySelector('span').textContent = '⏳ Traduction...';
-    btn.disabled = true;
-  }
-  
-  console.log('[AITools] Translating from', sourceLang, 'to', targetLang);
-  
-  // Limit to 500 chars - both MyMemory and Reverso have this limit
-  const textToTranslate = text.substring(0, 500);
-  
-  // Use background script to translate
-  chrome.runtime.sendMessage(
-    { action: 'translateText', text: textToTranslate, sourceLang: sourceLang, targetLang: targetLang },
-    (response) => {
-      if (btn) {
-        btn.querySelector('span').textContent = originalText || '🌐 Traduire';
-        btn.disabled = false;
-      }
-      
-      if (response && response.success) {
-        console.log('[AITools] Translation successful');
-        showTranslationModal(text.substring(0, 500), response.text || text, sourceLang, targetLang);
-      } else {
-        console.error('[AITools] Translation failed:', response?.error || 'Unknown error');
-        alert('❌ Erreur lors de la traduction. Veuillez réessayer.');
-      }
-    }
-  );
-}
-
-// DEPRECATED: Old function - now using single translator button instead of multiple
-function addTranslationButton(element, text, sourceLang, targetLang) {
-  // This function is no longer used - replaced with single translator button
-  return;
-}
-
-function showTranslationModal(originalText, translatedText, sourceLang, targetLang) {
-  const langNames = {
-    'fr': 'Français',
-    'en': 'Anglais',
-    'es': 'Espagnol',
-    'de': 'Allemand',
-    'it': 'Italien',
-    'pt': 'Portugais',
-    'ja': 'Japonais',
-    'zh': 'Chinois'
-  };
-  
-  const overlay = document.createElement('div');
-  overlay.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 10000;
-  `;
-  
-  const modal = document.createElement('div');
-  modal.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 24px;
-    border-radius: 12px;
-    max-width: 700px;
-    max-height: 80vh;
-    overflow-y: auto;
-    z-index: 10001;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  `;
-  
-  const srcLangName = langNames[sourceLang] || 'Source';
-  const tgtLangName = langNames[targetLang] || 'Cible';
-  
-  modal.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h3 style="margin: 0; color: #333;">🌐 Traduction</h3>
-      <button id="aitools-close-translation" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #999;">✕</button>
-    </div>
-    
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-      <div>
-        <p style="margin: 0 0 8px 0; font-weight: 600; color: #666; font-size: 12px;">📄 ${srcLangName}</p>
-        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; line-height: 1.6; color: #555; font-size: 13px; max-height: 300px; overflow-y: auto;">
-          ${originalText.replace(/\n/g, '<br>')}
-        </div>
-      </div>
-      <div>
-        <p style="margin: 0 0 8px 0; font-weight: 600; color: #666; font-size: 12px;">✅ ${tgtLangName}</p>
-        <div style="background: #e8f5e9; padding: 12px; border-radius: 8px; line-height: 1.6; color: #333; font-size: 13px; max-height: 300px; overflow-y: auto;">
-          ${translatedText.replace(/\n/g, '<br>')}
-        </div>
-      </div>
-    </div>
-    
-    <div style="margin-top: 16px; display: flex; gap: 8px;">
-      <button id="aitools-copy-translation" style="
-        flex: 1;
-        background: #667eea;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 600;
-      ">📋 Copier traduction</button>
-      <button id="aitools-close-translation-btn" style="
-        flex: 1;
-        background: #ddd;
-        color: #333;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 600;
-      ">Fermer</button>
-    </div>
-  `;
-  
-  overlay.appendChild(modal);
-  document.body.appendChild(overlay);
-  
-  document.getElementById('aitools-close-translation').addEventListener('click', () => overlay.remove());
-  document.getElementById('aitools-close-translation-btn').addEventListener('click', () => overlay.remove());
-  
-  document.getElementById('aitools-copy-translation').addEventListener('click', () => {
-    navigator.clipboard.writeText(translatedText).then(() => {
-      alert('✅ Texte traduit copié !');
-    });
-  });
-  
-  overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) overlay.remove();
-  });
-}
-
-// ============================================================================
-// QUICK STATS - Display page statistics
-// ============================================================================
-function initQuickStats() {
-  // Check if quick stats widget is enabled
-  if (!buttonVisibility.quickStatsWidget) {
-    console.log('[AITools] Quick stats widget disabled in settings');
-    return;
-  }
-  
-  // Don't show stats on Google Search results or single-page apps
-  if (window.location.hostname.includes('google.')) return;
-  const hostname = window.location.hostname;
-  if (hostname.includes('facebook.') || hostname.includes('twitter.') || 
-      hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) {
-    return;
-  }
-  
-  // Delay to not impact page load
-  setTimeout(() => {
-    // Only calculate stats once page is stable
-    const stats = {
-      images: document.querySelectorAll('img').length,
-      links: document.querySelectorAll('a').length,
-      paragraphs: document.querySelectorAll('p').length,
-      headings: document.querySelectorAll('h1, h2, h3, h4, h5, h6').length,
-      videos: document.querySelectorAll('iframe[src*="youtube"], iframe[src*="vimeo"]').length,
-      forms: document.querySelectorAll('form').length,
-      inputs: document.querySelectorAll('input[type="text"], input[type="email"], input[type="password"]').length,
-      buttons: document.querySelectorAll('button').length,
-      tables: document.querySelectorAll('table').length,
-      codeBlocks: document.querySelectorAll('code, pre').length
-    };
-    
-    // Don't show if no meaningful data
-    const totalInteractiveElements = stats.links + stats.forms + stats.buttons;
-    if (totalInteractiveElements < 3) return;
-    
-    createStatsWidget(stats);
-  }, 4000); // Longer delay to ensure page is loaded
-}
-
-function createStatsWidget(stats) {
-  // Create stats widget
-  const widget = document.createElement('div');
-  widget.id = 'aitools-quick-stats';
-  widget.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #e0e0e0;
-    border-radius: 12px;
-    padding: 0;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-    z-index: 999998;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-    max-width: 280px;
-    cursor: pointer;
-    user-select: none;
-    transition: all 0.3s ease;
-  `;
-  
-  const header = document.createElement('div');
-  header.style.cssText = `
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 12px 16px;
-    border-radius: 12px 12px 0 0;
-    font-weight: 600;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    cursor: pointer;
-  `;
-  
-  const headerLabel = document.createElement('span');
-  headerLabel.textContent = '📊 Statistiques page';
-  headerLabel.style.pointerEvents = 'none';
-  
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'aitools-close-btn';
-  closeBtn.innerHTML = '✕';
-  closeBtn.style.cssText = `
-    background: rgba(255, 255, 255, 0.3);
-    border: none;
-    color: white;
-    width: 20px;
-    height: 20px;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-  `;
-  
-  closeBtn.addEventListener('mouseover', () => {
-    closeBtn.style.background = 'rgba(255, 255, 255, 0.5)';
-  });
-  closeBtn.addEventListener('mouseout', () => {
-    closeBtn.style.background = 'rgba(255, 255, 255, 0.3)';
-  });
-  closeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    widget.style.display = 'none';
-    // Update visibility in storage
-    if (!buttonVisibility) buttonVisibility = {};
-    buttonVisibility.quickStatsWidget = false;
-    chrome.storage.local.set({ buttonVisibility });
-    console.log('[AITools] Quick stats widget hidden');
-  });
-  
-  header.appendChild(headerLabel);
-  header.appendChild(closeBtn);
-  
-  let isExpanded = false;
-  
-  const content = document.createElement('div');
-  content.style.cssText = `
-    padding: 16px;
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease;
-    border-top: 1px solid #e0e0e0;
-  `;
-  
-  // Build stats rows
-  const statsRows = [
-    { label: '🔗 Liens', value: stats.links },
-    { label: '🖼️ Images', value: stats.images },
-    { label: '📝 Paragraphes', value: stats.paragraphs },
-    { label: '📰 Titres', value: stats.headings },
-    { label: '🎥 Vidéos', value: stats.videos },
-    { label: '📋 Formulaires', value: stats.forms },
-    { label: '🔘 Boutons', value: stats.buttons },
-    { label: '📊 Tableaux', value: stats.tables },
-    { label: '💻 Code', value: stats.codeBlocks }
-  ];
-  
-  let htmlContent = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">';
-  statsRows.forEach(row => {
-    if (row.value > 0) {
-      htmlContent += `
-        <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 12px;">
-          <span style="color: #666;">${row.label}</span>
-          <span style="color: #667eea; font-weight: 600;">${row.value}</span>
-        </div>
-      `;
-    }
-  });
-  htmlContent += '</div>';
-  
-  content.innerHTML = htmlContent;
-  
-  // Toggle expand/collapse
-  header.addEventListener('click', (e) => {
-    // Don't toggle if clicking on close button
-    if (e.target.closest('.aitools-close-btn')) return;
-    
-    isExpanded = !isExpanded;
-    if (isExpanded) {
-      content.style.maxHeight = '400px';
-      header.style.borderRadius = '12px 12px 0 0';
-    } else {
-      content.style.maxHeight = '0';
-      header.style.borderRadius = '12px';
-    }
-  });
-  
-  widget.appendChild(header);
-  widget.appendChild(content);
-  document.body.appendChild(widget);
-  
-  // Register with layout manager
-  if (window.layoutManager) {
-    window.layoutManager.registerElement('aitools-quick-stats', widget, {
-      width: 280,
-      height: 50,
-      priority: 5,
-      draggable: true
-    });
-  }
-  
-  // Hover effects
-  widget.addEventListener('mouseover', () => {
-    widget.style.transform = 'translateY(-4px)';
-    widget.style.boxShadow = '0 12px 32px rgba(0, 0, 0, 0.16)';
-  });
-  
-  widget.addEventListener('mouseout', () => {
-    widget.style.transform = 'translateY(0)';
-    widget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.12)';
-  });
-  
-  // Make draggable
-  makeDraggable(widget, 'aitools-quick-stats-pos');
-}
-function initReadingTime() {
-  // Don't show reading time on Google Search results or social media
-  if (window.location.hostname.includes('google.')) return;
-  const hostname = window.location.hostname;
-  if (hostname.includes('facebook.') || hostname.includes('twitter.') || 
-      hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) {
-    return;
-  }
-  if (!extensionSettings.readingTimeEnabled) return;
-  
-  // Delay to not impact page load
-  setTimeout(() => {
-    // Try to find main article content instead of entire page
-    const mainElement = document.querySelector('article') || 
-                       document.querySelector('[role="main"]') || 
-                       document.querySelector('main') ||
-                       document.body;
-    
-    const mainContent = (mainElement?.innerText || '').slice(0, 50000); // Limit text analysis
-    const words = mainContent.split(/\s+/).filter(w => w.length > 0).length;
-    
-    // Average reading speed: 200-250 words per minute
-    const readingTimeMinutes = Math.ceil(words / 225);
-    
-    if (readingTimeMinutes < 1 || words < 300) return; // Too short to display
-    
-    const timeDisplay = readingTimeMinutes === 1 
-      ? '1 min de lecture' 
-      : `${readingTimeMinutes} min de lecture`;
-    
-    // Create reading time badge
-    const badge = document.createElement('div');
-    badge.id = 'aitools-reading-time';
-    badge.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 10px 16px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 600;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-      z-index: 999999;
-      cursor: pointer;
-      user-select: none;
-      transition: all 0.3s ease;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    `;
-    
-    badge.innerHTML = `📖 ${timeDisplay}`;
-    
-    badge.addEventListener('mouseover', () => {
-      badge.style.transform = 'scale(1.05)';
-      badge.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.6)';
-    });
-    
-    badge.addEventListener('mouseout', () => {
-      badge.style.transform = 'scale(1)';
-      badge.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
-    });
-    
-    badge.title = `Temps estimé: ${words.toLocaleString('fr-FR')} mots`;
-    
-    document.body.appendChild(badge);
-    
-    // Auto-hide badge after 5 seconds if not hovered
-    let hideTimer = setTimeout(() => {
-      if (document.getElementById('aitools-reading-time')) {
-        badge.style.opacity = '0.3';
-      }
-    }, 5000);
-    
-    // Show on hover
-    badge.addEventListener('mouseover', () => {
-      clearTimeout(hideTimer);
-      badge.style.opacity = '1';
-    });
-    
-    badge.addEventListener('mouseout', () => {
-      hideTimer = setTimeout(() => {
-        badge.style.opacity = '0.3';
-      }, 5000);
-    });
-    
-    // Draggable
-    makeDraggable(badge, 'aitools-reading-time-pos');
-  }, 4000); // Delay 4 seconds to not impact page load
-}
-
-// ============================================================================
-// FOCUS MODE - Hide distractions for better reading
-// ============================================================================
-function initFocusMode() {
-  // Add a keyboard shortcut badge (visible on Shift+Alt+F)
-  document.addEventListener('keydown', (e) => {
-    if (e.shiftKey && e.altKey && (e.key === 'f' || e.key === 'F')) {
-      e.preventDefault();
-      toggleFocusMode();
-    }
-  });
-
-  if (extensionSettings.focusModeEnabled) return; // Don't add button if focus mode is enabled by default
-
-  // Also add a quick button near reading time badge
-  const focusBtn = document.createElement('button');
-  focusBtn.id = 'aitools-focus-mode-btn';
-  focusBtn.innerHTML = '🎯';
-  focusBtn.title = 'Shift+Alt+F: Mode focus';
-  focusBtn.style.cssText = `
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    border: 2px solid white;
-    color: white;
-    font-size: 18px;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
-    z-index: 999998;
-    user-select: none;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  `;
-
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'aitools-close-btn';
-  closeBtn.innerHTML = '✕';
-  closeBtn.style.cssText = `
-    position: absolute;
-    top: -10px;
-    right: -10px;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #ff4757;
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-size: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  `;
-  closeBtn.addEventListener('click', (e) => {
-  e.stopPropagation();  
-  disableFocusMode();
-
-  // Mettre à jour l'état dans le storage
-  chrome.storage.local.set({
-    focusModeEnabled: false
-  });
-
-  // Supprimer le bouton
-  focusBtn.remove();
-});
-
-  focusBtn.appendChild(closeBtn);
-  focusBtn.addEventListener('click', toggleFocusMode);
-  focusBtn.addEventListener('mouseover', () => {
-    focusBtn.style.transform = 'scale(1.1)';
-    focusBtn.style.boxShadow = '0 6px 16px rgba(245, 87, 108, 0.6)';
-  });
-  focusBtn.addEventListener('mouseout', () => {
-    focusBtn.style.transform = 'scale(1)';
-    focusBtn.style.boxShadow = '0 4px 12px rgba(245, 87, 108, 0.4)';
-  });
-  
-  // Safely append to body (check if body exists)
-  if (document.body) {
-    document.body.appendChild(focusBtn);
-  } else {
-    console.warn('[AITools] document.body is null, cannot append focus button');
-  }
-}
-
-function toggleFocusMode() {
-  const focusState = document.body.getAttribute('data-aitools-focus');
-  
-  if (focusState === 'active') {
-    // Disable focus mode
-    disableFocusMode();
-  } else {
-    // Enable focus mode
-    enableFocusMode();
-  }
-}
-
-function enableFocusMode() {
-  document.body.setAttribute('data-aitools-focus', 'active');
-  
-  // Create CSS to hide distractions
-  let styleId = 'aitools-focus-mode-styles';
-  if (!document.getElementById(styleId)) {
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
-      /* Hide common distraction elements */
-      [class*="ad"], [class*="advertisement"], [id*="ad"], [id*="advertisement"],
-      [class*="sidebar"], [id*="sidebar"], [class*="widget"], [id*="widget"],
-      [class*="footer"], [id*="footer"], [class*="nav"], [id*="nav"],
-      [role="complementary"], [role="navigation"],
-      .header, #header, header,
-      .notification, .banner, .popup, .modal:not(#aitools-modal),
-      iframe[src*="ads"], iframe[src*="doubleclick"],
-      [data-ad-format], [data-ad-slot]
-      {
-        display: none !important;
-      }
-      
-      /* Adjust main content to full width */
-      body, main, article, [role="main"], .content, .post, .article {
-        margin: 0 !important;
-        padding: 20px !important;
-        max-width: 100% !important;
-      }
-      
-      /* Better focus on text */
-      body {
-        background-color: #fafafa !important;
-        line-height: 1.8 !important;
-      }
-      
-      p, article, main {
-        color: #333 !important;
-      }
-      
-      /* Highlight current reading area */
-      p:focus-within, article:focus-within, main:focus-within {
-        background-color: #fff9e6 !important;
-        transition: background-color 0.3s ease;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-  
-  // Show toast notification
-  showFocusNotification('🎯 Mode focus activé! Appuyez sur Shift+Alt+F pour désactiver');
-  
-  // Update button style
-  const btn = document.getElementById('aitools-focus-mode-btn');
-  if (btn) {
-    btn.style.background = 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)';
-    btn.style.transform = 'scale(1.2)';
-  }
-}
-
-function disableFocusMode() {
-  document.body.removeAttribute('data-aitools-focus');
-
-  const style = document.getElementById('aitools-focus-mode-styles');
-  if (style) style.remove();
-
-  chrome.storage.local.set({
-    focusModeEnabled: false
-  });
-
-  showFocusNotification('Mode focus désactivé');
-
-  const btn = document.getElementById('aitools-focus-mode-btn');
-  if (btn) {
-    btn.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
-    btn.style.transform = 'scale(1)';
-  }
-}
-
-function showFocusNotification(message) {
-  // Remove existing notification
-  const existing = document.getElementById('aitools-focus-notification');
-  if (existing) existing.remove();
-  
-  const notification = document.createElement('div');
-  notification.id = 'aitools-focus-notification';
-  notification.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(32, 32, 32, 0.95);
-    color: white;
-    padding: 16px 24px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    z-index: 1000000;
-    animation: fadeInOut 2s ease-in-out;
-  `;
-  notification.innerHTML = message;
-  
-  // Add animation
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes fadeInOut {
-      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-      10% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-      90% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-      100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-    }
-  `;
-  document.head.appendChild(style);
-  
-  document.body.appendChild(notification);
-  setTimeout(() => notification.remove(), 2000);
-}
-
-// Initialize features
 chrome.storage.local.get(null, (data) => {
   if (data.aiDetectorEnabled !== undefined) extensionSettings.aiDetectorEnabled = data.aiDetectorEnabled;
   if (data.summarizerEnabled !== undefined) extensionSettings.summarizerEnabled = data.summarizerEnabled;
   if (data.autoTranslatorEnabled !== undefined) extensionSettings.autoTranslatorEnabled = data.autoTranslatorEnabled;
   if (data.translatorTargetLang) extensionSettings.translatorTargetLang = data.translatorTargetLang;
-  if (data.focusModeEnabled !== undefined) extensionSettings.focusModeEnabled = data.focusModeEnabled;
-  if (data.focusModeBadge !== undefined) extensionSettings.focusModeBadge = data.focusModeBadge;
   if (data.cookieBlockerEnabled !== undefined) extensionSettings.cookieBlockerEnabled = data.cookieBlockerEnabled;
-  if (data.readingTimeEnabled !== undefined) extensionSettings.readingTimeEnabled = data.readingTimeEnabled;
-  if (data.quickStatsEnabled !== undefined) extensionSettings.quickStatsEnabled = data.quickStatsEnabled;
   if (data.performanceModeEnabled !== undefined) extensionSettings.performanceModeEnabled = data.performanceModeEnabled;
-  
-  // Skip AI detector in performance mode (it's resource-intensive)
+
   if (!extensionSettings.performanceModeEnabled) {
     initAIDetector();
-  } else {
-    console.log('[AITools] AI Detector disabled due to performance mode');
   }
-  
   initSummarizer();
   initAutoTranslator();
   initCookieBlocker();
-  initReadingTime();
   initQuickStats();
   initFocusMode();
 });
@@ -2403,271 +1177,95 @@ chrome.storage.local.get(null, (data) => {
 // MESSAGE LISTENER
 // ============================================================================
 chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
-  if (req.action === 'resetPositions') {
-    // Remove all saved positions from storage
-    chrome.storage.local.remove(['aitools-ai-badge-pos', 'aitools-summarize-btn-pos']);
-    // Reload positions
-    location.reload();
-  } else if (req.action === 'updateButtonVisibility') {
-    // Handle button visibility updates from popup
-    console.log('[AITools] Button visibility updated:', req.buttonType, req.isVisible);
-    
-    const buttonType = req.buttonType;
-    const isVisible = req.isVisible;
-    
-    if (buttonType === 'googleButtons') {
-      const container = document.getElementById('aitools-google-buttons');
-      if (container) {
-        container.style.display = isVisible ? 'flex' : 'none';
-        console.log('[AITools] Google buttons toggled:', isVisible);
-      }
-    } else if (buttonType === 'summarizerButton') {
-      const btn = document.getElementById('aitools-summarize-btn');
-      if (btn) {
-        btn.style.display = isVisible ? 'flex' : 'none';
-        console.log('[AITools] Summarizer button toggled:', isVisible);
-      }
-    } else if (buttonType === 'aiDetectorBadge') {
-      const badge = document.getElementById('aitools-ai-badge');
-      if (badge) {
-        badge.style.display = isVisible ? 'block' : 'none';
-        console.log('[AITools] AI badge toggled:', isVisible);
-      }
-    } else if (buttonType === 'translationButtons') {
-      document.querySelectorAll('.aitools-translate-btn').forEach(btn => {
-        btn.style.display = isVisible ? 'inline-block' : 'none';
-      });
-      console.log('[AITools] Translation buttons toggled:', isVisible);
-    } else if (buttonType === 'quickStatsWidget') {
-      const widget = document.getElementById('aitools-quick-stats');
-      if (widget) {
-        widget.style.display = isVisible ? 'block' : 'none';
-        console.log('[AITools] Quick stats widget toggled:', isVisible);
-      }
-    } else if (buttonType === 'readingTimeBadge') {
-      const badge = document.getElementById('aitools-rte-badge');
-      if (badge) {
-        badge.style.display = isVisible ? 'block' : 'none';
-        console.log('[AITools] Reading time badge toggled:', isVisible);
-      }
-    }
-  } else if (req.action === 'resetButtonPositions') {
-    // Reset all button positions
-    console.log('[AITools] Resetting all button positions');
+  if (req.action === 'resetPositions' || req.action === 'resetButtonPositions') {
     chrome.storage.local.get(null, (data) => {
-      const positionKeys = Object.keys(data).filter(k => k.includes('-pos') && k.includes('aitools'));
-      if (positionKeys.length > 0) {
-        chrome.storage.local.remove(positionKeys, () => {
-          console.log('[AITools] Position keys removed:', positionKeys);
-          location.reload();
-        });
+      const keys = Object.keys(data).filter(k => k.includes('-pos') && k.includes('aitools'));
+      if (keys.length > 0) {
+        chrome.storage.local.remove(keys, () => location.reload());
+      } else {
+        location.reload();
       }
     });
+
+  } else if (req.action === 'updateButtonVisibility') {
+    const { buttonType, isVisible } = req;
+    buttonVisibility[buttonType] = isVisible;
+
+    if (buttonType === 'googleButtons') {
+      const c = document.getElementById('aitools-google-buttons');
+      if (c) c.style.display = isVisible ? 'flex' : 'none';
+    } else if (buttonType === 'summarizerButton') {
+      const b = document.getElementById('aitools-summarize-btn');
+      if (b) b.style.display = isVisible ? 'flex' : 'none';
+    } else if (buttonType === 'aiDetectorBadge') {
+      const b = document.getElementById('aitools-ai-badge');
+      if (b) b.style.display = isVisible ? 'flex' : 'none';
+    } else if (buttonType === 'translationButtons') {
+      const b = document.getElementById('aitools-translator-btn');
+      if (b) b.style.display = isVisible ? 'flex' : 'none';
+    } else if (buttonType === 'quickStatsWidget') {
+      const w = document.getElementById('aitools-quick-stats');
+      if (w) w.style.display = isVisible ? 'block' : 'none';
+    } else if (buttonType === 'readingTimeBadge') {
+      const b = document.getElementById('aitools-reading-time');
+      if (b) b.style.display = isVisible ? 'flex' : 'none';
+    } else if (buttonType === 'focusModeBadge') {
+      const b = document.getElementById('aitools-focus-mode-btn');
+      if (b) b.style.display = isVisible ? 'flex' : 'none';
+      buttonVisibility.focusModeBadge = isVisible;
+      chrome.storage.local.set({ buttonVisibility });
+    } else if (buttonType === 'notesHighlighter') {
+      highlighterEnabled = isVisible;
+      if (!isVisible) {
+        const menu = document.getElementById('aitools-highlight-menu');
+        if (menu) menu.remove();
+      }
+    }
+
   } else if (req.action === 'togglePerformanceMode') {
-    // Toggle performance mode
-    console.log('[AITools] Performance mode:', req.enabled ? 'ENABLED' : 'DISABLED');
-    
-    if (req.enabled) {
-      // Disable AI detector in performance mode
-      if (document.getElementById('aitools-ai-badge')) {
-        document.getElementById('aitools-ai-badge').style.display = 'none';
-      }
-    } else {
-      // Re-enable AI detector
-      if (document.getElementById('aitools-ai-badge')) {
-        document.getElementById('aitools-ai-badge').style.display = 'block';
-      }
-    }
+    const b = document.getElementById('aitools-ai-badge');
+    if (b) b.style.display = req.enabled ? 'none' : 'flex';
+
   } else if (req.action === 'updateGoogleButtons') {
-    // Update Google button visibility and/or config, then re-render
-    // Save visibility changes if provided
-    if (req.visibility) {
-      chrome.storage.local.set({ googleButtonsVisibility: req.visibility });
-    }
-    
-    // Save config changes if provided
-    if (req.config) {
-      chrome.storage.local.set({ googleButtonsConfig: req.config });
-    }
-    
-    // Remove existing container and re-inject buttons
-    const container = document.getElementById('aitools-google-buttons');
-    if (container) {
-      container.remove();
-    }
-    
-    // Re-inject buttons with new settings
-    const searchForm = document.querySelector('form[action*="/search"]') || 
-                       document.querySelector('form[role="search"]') ||
-                       document.querySelector('form');
-    
-    if (searchForm) {
-      // Re-run injection with updated storage values
-      const injectGoogleButtons = () => {
-        let newContainer = document.getElementById('aitools-google-buttons');
-        if (newContainer) return; // Already injected
-        
-        newContainer = document.createElement('div');
-        newContainer.id = 'aitools-google-buttons';
-        newContainer.style.cssText = `
-          display: flex;
-          gap: 8px;
-          margin-top: 12px;
-          flex-wrap: wrap;
-        `;
-        
-        // Load both visibility and config from storage
-        chrome.storage.local.get(['googleButtonsVisibility', 'googleButtonsConfig'], (result) => {
-          const visibility = result.googleButtonsVisibility || {};
-          const config = result.googleButtonsConfig || {};
-          
-          // Buttons config
-          const buttons = [
-            { key: 'lucky', label: '🍀 Chance', action: 'lucky' },
-            { key: 'filters', label: '🔍 Filtres', action: 'filters' },
-            { key: 'maps', label: '🗺️ Maps', action: 'maps' },
-            { key: 'chatgpt', label: '🤖 ChatGPT', action: 'chatgpt' }
-          ];
-          
-          buttons.forEach((cfg) => {
-            // Skip if disabled in settings
-            if (visibility[cfg.key] === false) return;
-            
-            // Get custom config or defaults
-            const customConfig = config[cfg.key] || {};
-            const label = customConfig.label || cfg.label;
-            const action = customConfig.action || cfg.action;
-            const color = customConfig.color || '#5f6368';
-            
-            const btn = document.createElement('button');
-            btn.className = 'aitools-gb';
-            btn.innerHTML = label;
-            btn.type = 'button';
-            btn.id = `aitools-gb-${cfg.key}`;
-            btn.style.color = color;
-            
-            btn.addEventListener('click', (e) => {
-              e.preventDefault();
-              const input = searchForm.querySelector('input[name="q"]');
-              const query = input?.value || '';
-              
-              if (!query.trim()) {
-                alert('⚠️ Entrez une recherche');
-                return;
-              }
-              
-              switch (action) {
-                case 'lucky':
-                  window.location.href = `https://www.google.com/search?q=${encodeURIComponent(query)}&btnI=1`;
-                  break;
-                case 'maps':
-                  window.open(`https://www.google.com/maps/search/${encodeURIComponent(query)}`);
-                  break;
-                case 'chatgpt':
-                  window.open(`https://chatgpt.com?q=${encodeURIComponent(query)}`);
-                  break;
-                case 'filters':
-                  alert('Les filtres avancés s\'ouvrent du menu de l\'extension');
-                  break;
-              }
-            });
-            
-            newContainer.appendChild(btn);
-          });
-          
-          // Only append container if has buttons
-          if (newContainer.children.length > 0) {
-            searchForm.appendChild(newContainer);
-            
-            // Make container draggable
-            makeDraggable(newContainer, 'aitools-google-buttons-pos');
-            
-            console.log('[AITools] Google buttons updated');
-          }
-        });
-        
-        injectGoogleButtons();
-      }
-    }
+    if (req.visibility) chrome.storage.local.set({ googleButtonsVisibility: req.visibility });
+    if (req.config) chrome.storage.local.set({ googleButtonsConfig: req.config });
+    const c = document.getElementById('aitools-google-buttons');
+    if (c) { c.remove(); }
+
   } else if (req.action === 'updateSettings') {
-    // Merge settings instead of replacing
     extensionSettings = { ...extensionSettings, ...req.settings };
-    
-    if (req.settings.aiDetectorEnabled) {
-      elementVisibility.aiBadge = true;
-      if (!document.getElementById('aitools-ai-badge')) {
-        initAIDetector();
+    if (req.settings.cookieBlockerEnabled !== undefined) {
+      if (req.settings.cookieBlockerEnabled && !cookieObserver) initCookieBlocker();
+      else if (!req.settings.cookieBlockerEnabled && cookieObserver) {
+        cookieObserver.disconnect();
+        cookieObserver = null;
       }
     }
-    
-    if (req.settings.summarizerEnabled) {
-      elementVisibility.summarizerBtn = true;
-      if (!document.getElementById('aitools-summarize-btn')) {
-        initSummarizer();
-      }
-    }
-    
-    // Save individual settings
-    if (req.settings.aiDetectorSensitivity !== undefined) {
-      chrome.storage.local.set({ aiDetectorSensitivity: req.settings.aiDetectorSensitivity });
-    }
-    
-    if (req.settings.summarizerLength !== undefined) {
-      chrome.storage.local.set({ summarizerLength: req.settings.summarizerLength });
-    }
-    
-    if (req.settings.summarizerLang !== undefined) {
-      extensionSettings.summarizerLang = req.settings.summarizerLang;
-      chrome.storage.local.set({ summarizerLang: req.settings.summarizerLang });
-    }
-    
-    if (req.settings.translatorTargetLang) {
-      chrome.storage.local.set({ translatorTargetLang: req.settings.translatorTargetLang });
-    }
-    
-    if (req.settings.autoTranslatorEnabled !== undefined) {
-      chrome.storage.local.set({ autoTranslatorEnabled: req.settings.autoTranslatorEnabled });
-    }
-    
-    chrome.storage.local.set({ 'aitools-visibility': elementVisibility });
+
   } else if (req.action === 'toggleDarkMode') {
-    if (req.enabled) {
-      enableDarkMode();
-    } else {
-      disableDarkMode();
-    }
+    req.enabled ? enableDarkMode() : disableDarkMode();
+
   } else if (req.action === 'toggleExtension') {
     extensionEnabled = req.enabled;
+
   } else if (req.action === 'blockSponsored') {
-    if (req.enabled) {
-      blockSponsoredResults();
-    }
+    if (req.enabled) blockSponsoredResults();
+
   } else if (req.action === 'extractText') {
-    // Extract visible text from page for summarization
     const text = document.body.innerText
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0 && line.length < 500)
-      .slice(0, 100)
-      .join(' ');
-    
+      .split('\n').map(l => l.trim()).filter(l => l.length > 0 && l.length < 500)
+      .slice(0, 100).join(' ');
     sendResponse({ text: text || null });
     return true;
+
   } else if (req.action === 'setLayout') {
-    // Change layout globally
-    if (window.layoutManager) {
-      window.layoutManager.setLayout(req.layout);
-      console.log('[AITools] Layout changed to:', req.layout);
-    }
+    if (window.layoutManager) window.layoutManager.setLayout(req.layout);
+
   } else if (req.action === 'resetLayout') {
-    // Reset layout to defaults
-    if (window.layoutManager) {
-      window.layoutManager.resetPositions();
-      console.log('[AITools] Layout reset to defaults');
-    }
+    if (window.layoutManager) window.layoutManager.resetPositions();
   }
-  
+
   sendResponse({ status: 'ok' });
 });
 
-console.log('[AITools] Content script v4.0 ready');
+if (DEBUG) console.log('[AITools] Content script v4.0 ready');

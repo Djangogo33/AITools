@@ -1,8 +1,7 @@
 // AITools Pro v4.0 - Popup Script
-// Optimized popup logic with all features integrated
 
 // ============================================================================
-// STATE MANAGEMENT
+// STATE
 // ============================================================================
 let state = {
   darkMode: false,
@@ -20,7 +19,6 @@ let state = {
   translatorTargetLang: 'fr',
   translatorEnabled: true,
   cookieBlockerEnabled: true,
-  readingTimeEnabled: true,
   quickStatsEnabled: true,
   youtubeEnabled: true,
   paletteEnabled: true,
@@ -32,21 +30,62 @@ let state = {
     aiDetectorBadge: true,
     translationButtons: true,
     quickStatsWidget: true,
-    readingTimeBadge: true
+    readingTimeBadge: true,
+    notesHighlighter: true
   }
 };
+
+// ============================================================================
+// TOAST
+// ============================================================================
+function showToast(message, type = 'default') {
+  const toast = document.getElementById('aitools-toaster');
+  if (!toast) return;
+  toast.textContent = message;
+  toast.className = 'show ' + type;
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {
+    toast.className = '';
+  }, 1800);
+}
+
+// ============================================================================
+// NOTIFY CONTENT SCRIPTS
+// ============================================================================
+function notifyContentScript(message) {
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      chrome.tabs.sendMessage(tab.id, message).catch(() => {});
+    });
+  });
+}
+
+function notifyActiveTab(message) {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs[0]) {
+      chrome.tabs.sendMessage(tabs[0].id, message).catch(() => {});
+    }
+  });
+}
 
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
 document.addEventListener('DOMContentLoaded', () => {
-  // Load state from storage first
+  // Load state from storage
   chrome.storage.local.get(null, (data) => {
     state = { ...state, ...data };
+    if (data.buttonVisibility) {
+      state.buttonVisibility = { ...state.buttonVisibility, ...data.buttonVisibility };
+    }
     updateUI();
+    updateHeaderStatus();
   });
-  
-  // Tab Navigation
+
+  // Header status (current site)
+  updateHeaderStatus();
+
+  // ---- TAB NAVIGATION ----
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -55,13 +94,13 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById(btn.dataset.tab).classList.add('active');
     });
   });
-  
-  // Header Buttons
+
+  // ---- HEADER BUTTONS ----
   document.getElementById('darkModeBtn').addEventListener('click', toggleDarkMode);
   document.getElementById('toggleExtension').addEventListener('click', toggleExtension);
   document.getElementById('disableAllBtn').addEventListener('click', disableAll);
-  
-  // Quick Buttons
+
+  // ---- QUICK TAB ----
   document.getElementById('whatsappBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://whatsapp.com/channel/0029VbCJCg06GcG7aLZPGu1f' });
   });
@@ -74,1174 +113,575 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('chatgptBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://chatgpt.com' });
   });
-  
-  // Category Buttons - Google Search
+
+  document.getElementById('darkModeToggle').addEventListener('change', toggleDarkMode);
+
+  document.getElementById('blockSponsored').addEventListener('change', (e) => {
+    state.blockSponsoredEnabled = e.target.checked;
+    chrome.storage.local.set({ blockSponsoredEnabled: e.target.checked });
+    notifyActiveTab({ action: 'blockSponsored', enabled: e.target.checked });
+    showToast(e.target.checked ? '✓ Pub bloquée' : '✗ Pub visible');
+  });
+
+  // Cookie blocker quick toggle (Quick tab)
+  document.getElementById('cookieBlockerQuickToggle').addEventListener('change', (e) => {
+    state.cookieBlockerEnabled = e.target.checked;
+    chrome.storage.local.set({ cookieBlockerEnabled: e.target.checked });
+    // Sync the settings tab toggle
+    const settingsToggle = document.getElementById('cookieBlockerEnabled');
+    if (settingsToggle) settingsToggle.checked = e.target.checked;
+    notifyContentScript({ action: 'updateSettings', settings: { cookieBlockerEnabled: e.target.checked } });
+    showToast(e.target.checked ? '✓ Cookies bloqués' : '✗ Cookies autorisés');
+  });
+
+  // ---- GOOGLE TAB ----
+  document.getElementById('googleSearchBtn').addEventListener('click', () => {
+    const query = document.getElementById('googleSearchInput').value.trim();
+    if (!query) { showToast('⚠️ Entrez une recherche', 'error'); return; }
+    chrome.tabs.create({ url: `https://www.google.com/search?q=${encodeURIComponent(query)}` });
+  });
+
+  document.getElementById('googleSearchInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const query = e.target.value.trim();
+      if (!query) return;
+      chrome.tabs.create({ url: `https://www.google.com/search?q=${encodeURIComponent(query)}` });
+    }
+  });
+
+  // Category Buttons
   document.querySelectorAll('.category-badge').forEach(btn => {
     btn.addEventListener('click', () => {
       const category = btn.dataset.category;
       const query = document.getElementById('googleSearchInput').value.trim();
-      
-      if (!query) {
-        alert('⚠️ Entrez une recherche d\'abord');
-        return;
-      }
-      
+      if (!query) { showToast('⚠️ Entrez une recherche', 'error'); return; }
+
       const categoryMap = {
         'orthographe': 'https://www.google.com/search?q=correcteur+' + encodeURIComponent(query),
         'wiki': 'https://fr.wikipedia.org/wiki/Special:Search?search=' + encodeURIComponent(query),
         'trends': 'https://trends.google.com/trends/explore?q=' + encodeURIComponent(query),
         'news': 'https://news.google.com/search?q=' + encodeURIComponent(query),
-        'images': 'https://images.google.com/search?q=' + encodeURIComponent(query),
+        'images': 'https://www.google.com/search?q=' + encodeURIComponent(query) + '&tbm=isch',
         'videos': 'https://www.google.com/search?q=' + encodeURIComponent(query) + '&tbm=vid'
       };
-      
-      const url = categoryMap[category];
-      chrome.tabs.create({ url });
-      btn.classList.add('active');
+
+      // Flash feedback
+      btn.classList.add('flash-success');
+      setTimeout(() => btn.classList.remove('flash-success'), 200);
+
+      chrome.tabs.create({ url: categoryMap[category] });
     });
   });
-  
-  // Filter Menu
-  document.getElementById('filterMenuBtn').addEventListener('click', () => {
-    document.getElementById('filterModal').classList.remove('hidden');
-  });
-  
-  document.getElementById('closeFilterBtn').addEventListener('click', () => {
-    document.getElementById('filterModal').classList.add('hidden');
-  });
-  
+
+  // Filter operators
   document.querySelectorAll('.filter-item').forEach(btn => {
     btn.addEventListener('click', () => {
       const operator = btn.dataset.operator;
       const input = document.getElementById('googleSearchInput');
-      
-      if (!input.value.trim()) {
-        alert('⚠️ Entrez une recherche d\'abord');
-        return;
-      }
-      
+
       let value = '';
-      if (operator === '"') {
-        value = prompt('Entrez le terme exact à chercher:');
-      } else if (operator === 'after:') {
-        value = prompt('Date (YYYY-MM-DD):');
-      } else if (operator === 'before:') {
-        value = prompt('Date (YYYY-MM-DD):');
+      const needsValue = ['intitle:', 'inurl:', 'site:', 'filetype:', 'after:', 'before:', 'related:', '"', '-', 'imagesize:'];
+      if (needsValue.includes(operator.trim())) {
+        if (operator === '"') {
+          value = prompt('Terme exact à chercher :');
+          if (value) input.value += ' "' + value + '"';
+        } else if (operator === 'after:' || operator === 'before:') {
+          value = prompt('Date (YYYY-MM-DD) :');
+          if (value) input.value += ' ' + operator + value;
+        } else if (operator === 'imagesize:') {
+          value = prompt('Taille (ex: 800x600) :');
+          if (value) input.value += ' ' + operator + value;
+        } else {
+          value = prompt('Valeur pour ' + operator + ' :');
+          if (value) input.value += ' ' + operator + value;
+        }
       } else {
-        value = prompt(`Entrez la valeur pour ${operator}:`);
+        // Operators that don't need a user-supplied value (image filters)
+        input.value += ' ' + operator.trim();
       }
-      
-      if (value) {
-        input.value += ' ' + operator + value;
-      }
-      
-      document.getElementById('filterModal').classList.add('hidden');
+
+      showToast('✓ Opérateur ajouté', 'success');
     });
   });
-  
-  // Dark Mode Toggle
-  document.getElementById('darkModeToggle').addEventListener('change', toggleDarkMode);
-  
-  // Block Sponsored Toggle
-  document.getElementById('blockSponsored').addEventListener('change', (e) => {
-    state.blockSponsoredEnabled = e.target.checked;
-    chrome.storage.local.set({ blockSponsoredEnabled: e.target.checked });
-    
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) {
-        chrome.tabs.sendMessage(tabs[0].id, {
-          action: 'blockSponsored',
-          enabled: e.target.checked
-        }).catch(() => {
-          console.log('[AITools] Cannot message this tab');
-        });
-      }
+
+  // Google buttons visibility
+  setupGoogleButtonToggle('googleButtonLucky', 'lucky');
+  setupGoogleButtonToggle('googleButtonFilters', 'filters');
+  setupGoogleButtonToggle('googleButtonMaps', 'maps');
+  setupGoogleButtonToggle('googleButtonChatGPT', 'chatgpt');
+
+  // Load initial visibility
+  chrome.storage.local.get('googleButtonsVisibility', (result) => {
+    const visibility = result.googleButtonsVisibility || { lucky: true, filters: true, maps: true, chatgpt: true };
+    const map = { lucky: 'googleButtonLucky', filters: 'googleButtonFilters', maps: 'googleButtonMaps', chatgpt: 'googleButtonChatGPT' };
+    Object.entries(map).forEach(([key, id]) => {
+      const el = document.getElementById(id);
+      if (el) el.checked = visibility[key] !== false;
     });
   });
-  
-  // Pomodoro Toggle
+
+  // Google button customization
+  setupGoogleButtonCustomizer();
+
+  // ---- TOOLS TAB ----
   document.getElementById('pomodoroToggle').addEventListener('change', (e) => {
-    if (e.target.checked) {
-      startPomodoro();
-    } else {
+    if (e.target.checked) startPomodoro();
+    else {
       state.pomodoroRunning = false;
       document.getElementById('pomodoroStatus').style.display = 'none';
+      showToast('✗ Pomodoro arrêté');
     }
   });
-  
-  // Tab Cleaner Toggle
+
   document.getElementById('tabCleanerToggle').addEventListener('change', (e) => {
-    if (e.target.checked) {
-      cleanupTabs();
-    }
+    if (e.target.checked) { cleanupTabs(); showToast('✓ Onglets organisés', 'success'); }
   });
-  
-  // Performance Mode Toggle
-  const perfModeToggle = document.getElementById('performanceModeEnabled');
-  if (perfModeToggle) {
-    perfModeToggle.addEventListener('change', (e) => {
-      state.performanceModeEnabled = e.target.checked;
-      chrome.storage.local.set({ performanceModeEnabled: e.target.checked });
-      
-      console.log('[AITools] Performance mode:', e.target.checked ? 'ENABLED' : 'DISABLED');
-      
-      // Notify content scripts about performance mode
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach(tab => {
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'togglePerformanceMode',
-            enabled: e.target.checked
-          }).catch(() => {});
-        });
-      });
-    });
-  }
-  
-  // Notes Button
+
   document.getElementById('notesViewBtn').addEventListener('click', showNotesModal);
   document.getElementById('closeNotesBtn').addEventListener('click', () => {
     document.getElementById('notesModal').classList.add('hidden');
   });
-  
+
   document.getElementById('clearNotesBtn').addEventListener('click', () => {
-    if (confirm('⚠️ Êtes-vous sûr de vouloir effacer toutes les notes?')) {
+    if (confirm('⚠️ Effacer toutes les notes ?')) {
       state.notes = [];
       chrome.storage.local.set({ notes: [] });
-      showNotesModal();
+      showToast('✓ Notes effacées', 'success');
     }
   });
 
-  // Summarize Text Button
   document.getElementById('summarizeBtn').addEventListener('click', () => {
-    // Get active tab
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) {
-        // Send message to content script to extract text
-        chrome.tabs.sendMessage(tabs[0].id, { action: 'extractText' }, (response) => {
-          if (response && response.text) {
-            const summary = summarizeText(response.text);
-            const modal = document.getElementById('notesModal');
-            const list = document.getElementById('notesList');
-            
-            list.innerHTML = `
-              <div style="padding: 12px; background: #f5f5f5; border-radius: 4px; font-size: 12px; line-height: 1.6;">
-                <strong>📋 Résumé de la page:</strong>
-                <p style="margin-top: 8px; color: #333;">${summary}</p>
-              </div>
-            `;
-            
-            modal.classList.remove('hidden');
-          } else {
-            alert('⚠️ Impossible d\'extraire le texte de cette page');
-          }
-        }).catch(() => {
-          alert('⚠️ Impossible d\'accéder au contenu de la page');
-        });
-      }
+      if (!tabs[0]) { showToast('⚠️ Aucun onglet actif', 'error'); return; }
+      chrome.tabs.sendMessage(tabs[0].id, { action: 'extractText' }, (response) => {
+        if (response && response.text) {
+          const summary = summarizeText(response.text);
+          const list = document.getElementById('notesList');
+          list.innerHTML = `<div style="padding:12px;background:#f5f5f5;border-radius:4px;font-size:12px;line-height:1.6;"><strong>📋 Résumé :</strong><p style="margin-top:8px;color:#333;">${summary}</p></div>`;
+          document.getElementById('notesModal').classList.remove('hidden');
+        } else {
+          showToast('⚠️ Impossible d\'extraire le texte', 'error');
+        }
+      }).catch(() => showToast('⚠️ Impossible d\'accéder à la page', 'error'));
     });
   });
-  
-  // Reading Time Toggle
-  document.getElementById('readingTimeToggle').addEventListener('change', (e) => {
-    state.readingTimeEnabled = e.target.checked;
-    chrome.storage.local.set({ readingTimeEnabled: e.target.checked });
+
+  document.getElementById('anonymizeBtn').addEventListener('click', () => {
+    document.getElementById('anonymizeInput').value = '';
+    document.getElementById('anonymizeOutput').value = '';
+    document.getElementById('anonymizeOutput').style.display = 'none';
+    document.getElementById('anonymizeSummary').style.display = 'none';
+    document.getElementById('anonymizeCopyBtn').style.display = 'none';
+    document.getElementById('anonymizeModal').classList.remove('hidden');
   });
-  
-  // Currency Converter Toggle
-  document.getElementById('currencyConverterToggle').addEventListener('change', (e) => {
-    state.currencyConverterEnabled = e.target.checked;
-    chrome.storage.local.set({ currencyConverterEnabled: e.target.checked });
+
+  document.getElementById('anonymizeRunBtn').addEventListener('click', runAnonymizer);
+  document.getElementById('anonymizeCopyBtn').addEventListener('click', () => {
+    const output = document.getElementById('anonymizeOutput').value;
+    navigator.clipboard.writeText(output).then(() => showToast('✓ Copié !', 'success'));
   });
-  
-  // Export Data
+  document.getElementById('anonymizeCloseBtn').addEventListener('click', () => {
+    document.getElementById('anonymizeModal').classList.add('hidden');
+  });
+
+  document.getElementById('pdfBtn').addEventListener('click', openPDFTools);
   document.getElementById('exportDataBtn').addEventListener('click', exportData);
-  
-  // Reset Button
-  document.getElementById('resetBtn').addEventListener('click', resetExtension);
 
-  // ============================================================================
-  // BUTTON MANAGEMENT - NEW SECTION
-  // ============================================================================
-  
-  // Button Toggles
-  document.querySelectorAll('.button-toggle').forEach(toggle => {
-    toggle.addEventListener('change', (e) => {
-      const buttonType = e.target.dataset.buttonType;
-      const isVisible = e.target.checked;
-      
-      // Update state
-      if (!state.buttonVisibility) state.buttonVisibility = {};
-      state.buttonVisibility[buttonType] = isVisible;
-      
-      // Save to storage
-      chrome.storage.local.set({ buttonVisibility: state.buttonVisibility });
-      
-      console.log('[AITools Popup] Button toggle:', buttonType, '=', isVisible);
-      
-      // Notify all tabs
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach(tab => {
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'updateButtonVisibility',
-            buttonType: buttonType,
-            isVisible: isVisible
-          }).catch(() => {
-            // Silent fail for tabs that don't have content script
-          });
-        });
-      });
-    });
-  });
-  
-  // Reset All Button Positions
-  document.getElementById('resetAllButtonPositionsBtn')?.addEventListener('click', () => {
-    if (!confirm('Êtes-vous sûr? Cela réinitialisera les positions ET visibilité de tous les boutons.')) return;
-    
-    // Get all storage data to find all position keys
-    chrome.storage.local.get(null, (data) => {
-      // Find all keys that contain position data
-      const keysToRemove = Object.keys(data).filter(k => 
-        k.includes('-pos') && k.includes('aitools')
-      );
-      
-      console.log('[AITools Popup] Removing position keys:', keysToRemove);
-      
-      if (keysToRemove.length > 0) {
-        chrome.storage.local.remove(keysToRemove);
-      }
-      
-      // Also restore default button visibility
-      const defaultButtonVisibility = {
-        googleButtons: true,
-        summarizerButton: true,
-        focusModeBadge: true,
-        aiDetectorBadge: true,
-        translationButtons: true,
-        quickStatsWidget: true,
-        readingTimeBadge: true
-      };
-      
-      chrome.storage.local.set({ buttonVisibility: defaultButtonVisibility });
-    });
-    
-    // Notify all tabs to refresh positions and visibility
-    chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id, {
-          action: 'resetButtonPositions'
-        }).catch(() => {
-          // Silent fail
-        });
-      });
-    });
-    
-    alert('✅ Positions et visibilité réinitialisées! Rechargez les pages pour voir les changements.');
-  });
-
-  // Layout Management
-  const layoutSelect = document.getElementById('layoutSelect');
-  const layoutSelect2 = document.getElementById('layoutSelect2');
-  
-  function setupLayoutControl(selectElement) {
-    if (!selectElement) return;
-    
-    // Load saved layout
-    chrome.storage.local.get('aitools-layout', (data) => {
-      if (data['aitools-layout']) {
-        selectElement.value = data['aitools-layout'];
-      }
-    });
-
-    // Handle layout change
-    selectElement.addEventListener('change', (e) => {
-      const layout = e.target.value;
-      chrome.storage.local.set({ 'aitools-layout': layout });
-      
-      // Sync both select elements
-      if (layoutSelect && layoutSelect !== selectElement) layoutSelect.value = layout;
-      if (layoutSelect2 && layoutSelect2 !== selectElement) layoutSelect2.value = layout;
-      
-      // Notify all tabs
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach(tab => {
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'setLayout',
-            layout: layout
-          }).catch(() => {
-            // Silent fail
-          });
-        });
-      });
-    });
-  }
-  
-  setupLayoutControl(layoutSelect);
-  setupLayoutControl(layoutSelect2);
-
-  // Reset Layout Button
-  function setupResetLayout(buttonElement) {
-    if (!buttonElement) return;
-    
-    buttonElement.addEventListener('click', () => {
-      chrome.storage.local.set({
-        'aitools-layout': 'adaptive',
-        'aitools-layout-custom': {}
-      });
-      
-      if (layoutSelect) layoutSelect.value = 'adaptive';
-      if (layoutSelect2) layoutSelect2.value = 'adaptive';
-      
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach(tab => {
-          chrome.tabs.sendMessage(tab.id, {
-            action: 'resetLayout'
-          }).catch(() => {
-            // Silent fail
-          });
-        });
-      });
-      
-      alert('✅ Layout réinitialisé par défaut!');
-    });
-  }
-  
-  setupResetLayout(document.getElementById('resetLayoutBtn'));
-  setupResetLayout(document.getElementById('resetPositionsBtn2'));
-
-  // AI Tools
+  // ---- AI TAB ----
   document.getElementById('aiDetectorBtn').addEventListener('click', detectAI);
   document.getElementById('translatorBtn').addEventListener('click', openTranslator);
   document.getElementById('paletteBtn').addEventListener('click', generatePalette);
   document.getElementById('youtubeBtn').addEventListener('click', openYouTubeEnhancer);
-  document.getElementById('pdfBtn').addEventListener('click', openPDFTools);
 
-  // Settings Toggles for AI Tools
   document.getElementById('aiDetectorEnabled').addEventListener('change', (e) => {
     state.aiDetectorEnabled = e.target.checked;
     chrome.storage.local.set({ aiDetectorEnabled: e.target.checked });
-    notifyContentScript({ action: 'updateSettings', settings: state });
+    notifyContentScript({ action: 'updateSettings', settings: { aiDetectorEnabled: e.target.checked } });
+    showToast(e.target.checked ? '✓ Détecteur IA activé' : '✗ Détecteur IA désactivé');
   });
 
   document.getElementById('summarizerEnabled').addEventListener('change', (e) => {
     state.summarizerEnabled = e.target.checked;
     chrome.storage.local.set({ summarizerEnabled: e.target.checked });
-    notifyContentScript({ action: 'updateSettings', settings: state });
+    notifyContentScript({ action: 'updateSettings', settings: { summarizerEnabled: e.target.checked } });
+    showToast(e.target.checked ? '✓ Résumeur activé' : '✗ Résumeur désactivé');
   });
-
-  document.getElementById('focusModeEnabled').addEventListener('change', (e) => {
-    state.focusModeEnabled = e.target.checked;
-    chrome.storage.local.set({ focusModeEnabled: e.target.checked });
-    notifyContentScript({ action: 'updateSettings', settings: state });
-  });
-
 
   document.getElementById('autoTranslatorEnabled').addEventListener('change', (e) => {
     state.autoTranslatorEnabled = e.target.checked;
     chrome.storage.local.set({ autoTranslatorEnabled: e.target.checked });
-    notifyContentScript({ action: 'updateSettings', settings: state });
+    notifyContentScript({ action: 'updateSettings', settings: { autoTranslatorEnabled: e.target.checked } });
+    showToast(e.target.checked ? '✓ Traducteur activé' : '✗ Traducteur désactivé');
   });
 
-  const targetLangSelect = document.getElementById('translatorTargetLang');
-  if (targetLangSelect) {
-    chrome.storage.local.get('translatorTargetLang', (data) => {
-      if (data.translatorTargetLang) targetLangSelect.value = data.translatorTargetLang;
-    });
-    targetLangSelect.addEventListener('change', (e) => {
-      const value = e.target.value;
-      chrome.storage.local.set({ translatorTargetLang: value });
-      notifyContentScript({ action: 'updateSettings', settings: { translatorTargetLang: value } });
+  setupSelectSync('translatorTargetLang', 'translatorTargetLang', (v) => {
+    notifyContentScript({ action: 'updateSettings', settings: { translatorTargetLang: v } });
+  });
+
+  setupSelectSync('summarizerLang', 'summarizerLang', (v) => {
+    notifyContentScript({ action: 'updateSettings', settings: { summarizerLang: v } });
+  });
+
+  // Sliders
+  setupSlider('aiDetectorSensitivity', 'aiSensValue', 'aiDetectorSensitivity');
+  setupSlider('summarizerLength', 'sumLenValue', 'summarizerLength');
+
+  // ---- SETTINGS TAB ----
+
+  // Layout selector
+  const layoutSelect = document.getElementById('layoutSelect');
+  chrome.storage.local.get('aitools-layout', (data) => {
+    if (data['aitools-layout'] && layoutSelect) layoutSelect.value = data['aitools-layout'];
+  });
+  if (layoutSelect) {
+    layoutSelect.addEventListener('change', (e) => {
+      const layout = e.target.value;
+      chrome.storage.local.set({ 'aitools-layout': layout });
+      notifyContentScript({ action: 'setLayout', layout });
+      showToast('✓ Layout mis à jour', 'success');
     });
   }
 
-  document.getElementById('translatorEnabled').addEventListener('change', (e) => {
-    state.translatorEnabled = e.target.checked;
-    chrome.storage.local.set({ translatorEnabled: e.target.checked });
+  document.getElementById('resetLayoutBtn').addEventListener('click', () => {
+    chrome.storage.local.set({ 'aitools-layout': 'adaptive', 'aitools-layout-custom': {} });
+    if (layoutSelect) layoutSelect.value = 'adaptive';
+    notifyContentScript({ action: 'resetLayout' });
+    showToast('✓ Layout réinitialisé', 'success');
   });
 
+  document.getElementById('resetPositionsBtn').addEventListener('click', () => {
+    chrome.storage.local.get(null, (data) => {
+      const keys = Object.keys(data).filter(k => k.includes('-pos') && k.includes('aitools'));
+      if (keys.length > 0) chrome.storage.local.remove(keys);
+    });
+    notifyContentScript({ action: 'resetButtonPositions' });
+    showToast('✓ Positions réinitialisées', 'success');
+  });
+
+  // Button visibility toggles
+  document.querySelectorAll('.button-toggle').forEach(toggle => {
+    toggle.addEventListener('change', (e) => {
+      const buttonType = e.target.dataset.buttonType;
+      const isVisible = e.target.checked;
+
+      if (!state.buttonVisibility) state.buttonVisibility = {};
+      state.buttonVisibility[buttonType] = isVisible;
+      chrome.storage.local.set({ buttonVisibility: state.buttonVisibility });
+
+      notifyContentScript({ action: 'updateButtonVisibility', buttonType, isVisible });
+      showToast(isVisible ? `✓ Affiché` : `✗ Masqué`);
+    });
+  });
+
+  // Cookie blocker (settings tab)
   document.getElementById('cookieBlockerEnabled').addEventListener('change', (e) => {
     state.cookieBlockerEnabled = e.target.checked;
     chrome.storage.local.set({ cookieBlockerEnabled: e.target.checked });
+    // Sync quick toggle
+    const quickToggle = document.getElementById('cookieBlockerQuickToggle');
+    if (quickToggle) quickToggle.checked = e.target.checked;
     notifyContentScript({ action: 'updateSettings', settings: { cookieBlockerEnabled: e.target.checked } });
+    showToast(e.target.checked ? '✓ Bloqueur cookies actif' : '✗ Bloqueur désactivé');
   });
 
-  document.getElementById('readingTimeEnabled').addEventListener('change', (e) => {
+  document.getElementById('readingTimeToggle').addEventListener('change', (e) => {
     state.readingTimeEnabled = e.target.checked;
     chrome.storage.local.set({ readingTimeEnabled: e.target.checked });
-    notifyContentScript({ action: 'updateSettings', settings: { readingTimeEnabled: e.target.checked } });
+    showToast(e.target.checked ? '✓ Temps de lecture actif' : '✗ Désactivé');
   });
 
-  document.getElementById('quickStatsEnabled').addEventListener('change', (e) => {
-    state.quickStatsEnabled = e.target.checked;
-    chrome.storage.local.set({ quickStatsEnabled: e.target.checked });
-    notifyContentScript({ action: 'updateSettings', settings: { quickStatsEnabled: e.target.checked } });
+  document.getElementById('currencyConverterToggle').addEventListener('change', (e) => {
+    state.currencyConverterEnabled = e.target.checked;
+    chrome.storage.local.set({ currencyConverterEnabled: e.target.checked });
+    showToast(e.target.checked ? '✓ Convertisseur actif' : '✗ Désactivé');
   });
 
-  document.getElementById('youtubeEnabled').addEventListener('change', (e) => {
-    state.youtubeEnabled = e.target.checked;
-    chrome.storage.local.set({ youtubeEnabled: e.target.checked });
+  document.getElementById('performanceModeEnabled').addEventListener('change', (e) => {
+    state.performanceModeEnabled = e.target.checked;
+    chrome.storage.local.set({ performanceModeEnabled: e.target.checked });
+    notifyContentScript({ action: 'togglePerformanceMode', enabled: e.target.checked });
+    showToast(e.target.checked ? '✓ Mode performance' : '✗ Mode standard');
   });
 
-  document.getElementById('paletteEnabled').addEventListener('change', (e) => {
-    state.paletteEnabled = e.target.checked;
-    chrome.storage.local.set({ paletteEnabled: e.target.checked });
-  });
-
-  // Google Search Buttons Visibility Controls
-  chrome.storage.local.get('googleButtonsVisibility', (result) => {
-    const visibility = result.googleButtonsVisibility || {
-      lucky: true,
-      filters: true,
-      maps: true,
-      chatgpt: true
-    };
-    
-    // Set initial checkbox states
-    if (document.getElementById('googleButtonLucky')) {
-      document.getElementById('googleButtonLucky').checked = visibility.lucky !== false;
-    }
-    if (document.getElementById('googleButtonFilters')) {
-      document.getElementById('googleButtonFilters').checked = visibility.filters !== false;
-    }
-    if (document.getElementById('googleButtonMaps')) {
-      document.getElementById('googleButtonMaps').checked = visibility.maps !== false;
-    }
-    if (document.getElementById('googleButtonChatGPT')) {
-      document.getElementById('googleButtonChatGPT').checked = visibility.chatgpt !== false;
-    }
-  });
-
-  // Google Button: Chance (Lucky)
-  const googleButtonLucky = document.getElementById('googleButtonLucky');
-  if (googleButtonLucky) {
-    googleButtonLucky.addEventListener('change', (e) => {
-      chrome.storage.local.get('googleButtonsVisibility', (result) => {
-        const visibility = result.googleButtonsVisibility || {
-          lucky: true,
-          filters: true,
-          maps: true,
-          chatgpt: true
-        };
-        visibility.lucky = e.target.checked;
-        chrome.storage.local.set({ googleButtonsVisibility: visibility });
-        notifyContentScript({ action: 'updateGoogleButtons', visibility: visibility });
-      });
-    });
-  }
-
-  // Google Button: Filters
-  const googleButtonFilters = document.getElementById('googleButtonFilters');
-  if (googleButtonFilters) {
-    googleButtonFilters.addEventListener('change', (e) => {
-      chrome.storage.local.get('googleButtonsVisibility', (result) => {
-        const visibility = result.googleButtonsVisibility || {
-          lucky: true,
-          filters: true,
-          maps: true,
-          chatgpt: true
-        };
-        visibility.filters = e.target.checked;
-        chrome.storage.local.set({ googleButtonsVisibility: visibility });
-        notifyContentScript({ action: 'updateGoogleButtons', visibility: visibility });
-      });
-    });
-  }
-
-  // Google Button: Maps
-  const googleButtonMaps = document.getElementById('googleButtonMaps');
-  if (googleButtonMaps) {
-    googleButtonMaps.addEventListener('change', (e) => {
-      chrome.storage.local.get('googleButtonsVisibility', (result) => {
-        const visibility = result.googleButtonsVisibility || {
-          lucky: true,
-          filters: true,
-          maps: true,
-          chatgpt: true
-        };
-        visibility.maps = e.target.checked;
-        chrome.storage.local.set({ googleButtonsVisibility: visibility });
-        notifyContentScript({ action: 'updateGoogleButtons', visibility: visibility });
-      });
-    });
-  }
-
-  // Google Button: ChatGPT
-  const googleButtonChatGPT = document.getElementById('googleButtonChatGPT');
-  if (googleButtonChatGPT) {
-    googleButtonChatGPT.addEventListener('change', (e) => {
-      chrome.storage.local.get('googleButtonsVisibility', (result) => {
-        const visibility = result.googleButtonsVisibility || {
-          lucky: true,
-          filters: true,
-          maps: true,
-          chatgpt: true
-        };
-        visibility.chatgpt = e.target.checked;
-        chrome.storage.local.set({ googleButtonsVisibility: visibility });
-        notifyContentScript({ action: 'updateGoogleButtons', visibility: visibility });
-      });
-    });
-  }
-
-  // Google Buttons Customization
-  const defaults = {
-    lucky: { label: '🍀 Chance', action: 'lucky', color: '#5f6368' },
-    filters: { label: '🔍 Filtres', action: 'filters', color: '#5f6368' },
-    maps: { label: '🗺️ Maps', action: 'maps', color: '#5f6368' },
-    chatgpt: { label: '🤖 ChatGPT', action: 'chatgpt', color: '#5f6368' }
-  };
-
-  const customizeSelect = document.getElementById('googleButtonCustomizeSelect');
-  const customizeView = document.getElementById('googleButtonCustomizeView');
-  const customizeLabel = document.getElementById('googleButtonCustomizeLabel');
-  const customizeColor = document.getElementById('googleButtonCustomizeColor');
-  const customizeAction = document.getElementById('googleButtonCustomizeAction');
-  const customizeReset = document.getElementById('googleButtonCustomizeReset');
-
-  if (customizeSelect) {
-    // Load current config when selecting a button
-    customizeSelect.addEventListener('change', (e) => {
-      const buttonKey = e.target.value;
-      
-      if (!buttonKey) {
-        customizeView.style.display = 'none';
-        return;
-      }
-      
-      // Load current custom config or defaults
-      chrome.storage.local.get('googleButtonsConfig', (result) => {
-        const config = result.googleButtonsConfig || {};
-        const buttonConfig = config[buttonKey] || defaults[buttonKey];
-        
-        customizeLabel.value = buttonConfig.label || defaults[buttonKey].label;
-        customizeColor.value = buttonConfig.color || defaults[buttonKey].color;
-        customizeAction.value = buttonConfig.action || defaults[buttonKey].action;
-        
-        customizeView.style.display = 'block';
-      });
-    });
-
-    // Save label changes
-    if (customizeLabel) {
-      customizeLabel.addEventListener('blur', (e) => {
-        const buttonKey = customizeSelect.value;
-        if (buttonKey) {
-          chrome.storage.local.get('googleButtonsConfig', (result) => {
-            const config = result.googleButtonsConfig || {};
-            if (!config[buttonKey]) config[buttonKey] = defaults[buttonKey];
-            config[buttonKey].label = e.target.value || defaults[buttonKey].label;
-            chrome.storage.local.set({ googleButtonsConfig: config });
-            notifyContentScript({ action: 'updateGoogleButtons', config: config });
-          });
-        }
-      });
-    }
-
-    // Save color changes
-    if (customizeColor) {
-      customizeColor.addEventListener('change', (e) => {
-        const buttonKey = customizeSelect.value;
-        if (buttonKey) {
-          chrome.storage.local.get('googleButtonsConfig', (result) => {
-            const config = result.googleButtonsConfig || {};
-            if (!config[buttonKey]) config[buttonKey] = defaults[buttonKey];
-            config[buttonKey].color = e.target.value;
-            chrome.storage.local.set({ googleButtonsConfig: config });
-            notifyContentScript({ action: 'updateGoogleButtons', config: config });
-          });
-        }
-      });
-    }
-
-    // Save action changes
-    if (customizeAction) {
-      customizeAction.addEventListener('change', (e) => {
-        const buttonKey = customizeSelect.value;
-        if (buttonKey) {
-          chrome.storage.local.get('googleButtonsConfig', (result) => {
-            const config = result.googleButtonsConfig || {};
-            if (!config[buttonKey]) config[buttonKey] = defaults[buttonKey];
-            config[buttonKey].action = e.target.value;
-            chrome.storage.local.set({ googleButtonsConfig: config });
-            notifyContentScript({ action: 'updateGoogleButtons', config: config });
-          });
-        }
-      });
-    }
-
-    // Reset to defaults
-    if (customizeReset) {
-      customizeReset.addEventListener('click', () => {
-        const buttonKey = customizeSelect.value;
-        if (buttonKey) {
-          chrome.storage.local.get('googleButtonsConfig', (result) => {
-            const config = result.googleButtonsConfig || {};
-            config[buttonKey] = defaults[buttonKey];
-            chrome.storage.local.set({ googleButtonsConfig: config });
-            
-            // Update UI
-            customizeLabel.value = defaults[buttonKey].label;
-            customizeColor.value = defaults[buttonKey].color;
-            customizeAction.value = defaults[buttonKey].action;
-            
-            notifyContentScript({ action: 'updateGoogleButtons', config: config });
-          });
-        }
-      });
-    }
-  }
-
-  // Slider controls for AI Detector sensitivity
-  const aiSensSlider = document.getElementById('aiDetectorSensitivity');
-  if (aiSensSlider) {
-    chrome.storage.local.get('aiDetectorSensitivity', (data) => {
-      if (data.aiDetectorSensitivity) aiSensSlider.value = data.aiDetectorSensitivity;
-      document.getElementById('aiSensValue').textContent = aiSensSlider.value;
-    });
-    aiSensSlider.addEventListener('input', (e) => {
-      const value = e.target.value;
-      document.getElementById('aiSensValue').textContent = value;
-      chrome.storage.local.set({ aiDetectorSensitivity: value });
-      notifyContentScript({ action: 'updateSettings', settings: { aiDetectorSensitivity: value } });
-    });
-  }
-
-  // Slider control for Summarizer length
-  const sumLenSlider = document.getElementById('summarizerLength');
-  if (sumLenSlider) {
-    chrome.storage.local.get('summarizerLength', (data) => {
-      if (data.summarizerLength) sumLenSlider.value = data.summarizerLength;
-      document.getElementById('sumLenValue').textContent = sumLenSlider.value;
-    });
-    sumLenSlider.addEventListener('input', (e) => {
-      const value = e.target.value;
-      document.getElementById('sumLenValue').textContent = value;
-      chrome.storage.local.set({ summarizerLength: value });
-      notifyContentScript({ action: 'updateSettings', settings: { summarizerLength: value } });
-    });
-  }
-
-  // Summarizer Language selector
-  const summarizerLangSelect = document.getElementById('summarizerLang');
-  if (summarizerLangSelect) {
-    chrome.storage.local.get('summarizerLang', (data) => {
-      if (data.summarizerLang) summarizerLangSelect.value = data.summarizerLang;
-    });
-    summarizerLangSelect.addEventListener('change', (e) => {
-      const value = e.target.value;
-      chrome.storage.local.set({ summarizerLang: value });
-      notifyContentScript({ action: 'updateSettings', settings: { summarizerLang: value } });
-    });
-  }
-
-  // Newtab URL selector
+  // Newtab URL
   const newtabPreset = document.getElementById('newtabUrlPreset');
   const newtabCustom = document.getElementById('newtabUrlCustom');
-  if (newtabPreset && newtabCustom) {
+  if (newtabPreset) {
     chrome.storage.local.get(['newtabUrlPreset', 'newtabUrlCustom'], (data) => {
       const preset = data.newtabUrlPreset || 'google';
       newtabPreset.value = preset;
-      if (preset === 'custom') {
+      if (preset === 'custom' && newtabCustom) {
         newtabCustom.style.display = 'block';
         if (data.newtabUrlCustom) newtabCustom.value = data.newtabUrlCustom;
       }
     });
     newtabPreset.addEventListener('change', (e) => {
-      const preset = e.target.value;
-      chrome.storage.local.set({ newtabUrlPreset: preset });
-      if (preset === 'custom') {
-        newtabCustom.style.display = 'block';
-      } else {
-        newtabCustom.style.display = 'none';
-      }
+      chrome.storage.local.set({ newtabUrlPreset: e.target.value });
+      if (newtabCustom) newtabCustom.style.display = e.target.value === 'custom' ? 'block' : 'none';
     });
-    newtabCustom.addEventListener('input', (e) => {
-      const url = e.target.value;
-      chrome.storage.local.set({ newtabUrlCustom: url });
-    });
+    if (newtabCustom) {
+      newtabCustom.addEventListener('input', (e) => {
+        chrome.storage.local.set({ newtabUrlCustom: e.target.value });
+      });
+    }
   }
 
-  // Reset positions button
-  document.getElementById('resetPositionsBtn').addEventListener('click', () => {
-    if (confirm('Êtes-vous sûr de vouloir réinitialiser les positions de tous les boutons ?')) {
-      chrome.storage.local.remove(['aitools-ai-badge-pos', 'aitools-summarize-btn-pos']);
-      notifyContentScript({ action: 'resetPositions' });
-      alert('✅ Positions réinitialisées !');
+  document.getElementById('resetBtn').addEventListener('click', resetExtension);
+
+  // Load notes
+  chrome.storage.local.get('notes', (data) => {
+    if (data.notes) state.notes = data.notes;
+  });
+
+  // Storage change listener
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.darkMode) state.darkMode = changes.darkMode.newValue;
+    if (changes.notes) {
+      state.notes = changes.notes.newValue || [];
+      const modal = document.getElementById('notesModal');
+      if (modal && !modal.classList.contains('hidden')) showNotesModal();
     }
+    updateUI();
   });
 });
 
 // ============================================================================
-// FUNCTIONS
+// HELPER: Setup slider
 // ============================================================================
+function setupSlider(sliderId, valueId, storageKey) {
+  const slider = document.getElementById(sliderId);
+  const valueEl = document.getElementById(valueId);
+  if (!slider) return;
 
-function detectAI() {
-  const text = prompt('🤖 Collez le texte à analyser:');
-  if (!text || text.trim().length < 50) {
-    alert('⚠️ Le texte doit faire au moins 50 caractères');
-    return;
-  }
-
-  // Simple AI detection heuristic
-  const indicators = {
-    passivUndefinedoice: (text.match(/(\bwas\b|\bwere\b|\bbeing\b|\bby\b)/gi) || []).length,
-    repetitiveStructure: (text.match(/(\.\s[A-Z][a-z]{3,})/g) || []).length,
-    formalTone: (text.match(/(\bthus\b|\btherefore\b|\bmoreover\b|\bfurthermore\b)/gi) || []).length,
-    unusualPunctuation: (text.match(/[""'']/g) || []).length,
-  };
-
-  const score = (indicators.repetitiveStructure * 0.4 + indicators.formalTone * 0.3) / text.split(' ').length * 100;
-  
-  let result = `📊 Analyse IA:\n\n`;
-  result += `Score de probabilité IA: ${Math.min(100, Math.round(score))}%\n\n`;
-  
-  if (score > 50) {
-    result += `❌ Forte probabilité de contenu généré par IA\n(Langage formel, structure répétitive)`;
-  } else if (score > 25) {
-    result += `🟡 Probabilité modérée\n(Certaines caractéristiques IA détectées)`;
-  } else {
-    result += `✅ Semble être du contenu humain\n(Langage naturel détecté)`;
-  }
-  
-  alert(result);
-}
-
-function openTranslator() {
-  const text = prompt('🌐 Texte à traduire:');
-  if (!text || !text.trim()) return;
-  
-  // Open Google Translate with the text
-  chrome.tabs.create({
-    url: `https://translate.google.com/?text=${encodeURIComponent(text.substring(0, 500))}&op=translate`
-  });
-}
-
-function generatePalette() {
-  const colors = [];
-  for (let i = 0; i < 5; i++) {
-    const hue = Math.random() * 360;
-    const saturation = 60 + Math.random() * 30;
-    const lightness = 50 + Math.random() * 30;
-    const hex = hslToHex(hue, saturation, lightness);
-    colors.push(hex);
-  }
-  
-  const modal = document.getElementById('notesModal');
-  const list = document.getElementById('notesList');
-  
-  let html = '<div style="font-size: 11px;"><strong>🎨 Palette générée:</strong><br><br>';
-  colors.forEach(color => {
-    html += `
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 6px; background: #f5f5f5; border-radius: 4px;">
-        <div style="width: 40px; height: 40px; background: ${color}; border-radius: 4px; border: 1px solid #ddd;"></div>
-        <code style="font-size: 10px; cursor: pointer;" onclick="navigator.clipboard.writeText('${color}')">${color}</code>
-      </div>
-    `;
-  });
-  html += '</div>';
-  
-  list.innerHTML = html;
-  modal.classList.remove('hidden');
-}
-
-function openYouTubeEnhancer() {
-  const modal = document.getElementById('notesModal');
-  const list = document.getElementById('notesList');
-  
-  list.innerHTML = `
-    <div style="font-size: 11px; line-height: 1.6;">
-      <strong>▶️ YouTube Enhancer</strong><br><br>
-      <p><strong>✨ Features disponibles:</strong></p>
-      <ul style="margin: 8px 0; padding-left: 16px;">
-        <li>⏩ Lecture contrôlée (0.5x - 2x)</li>
-        <li>🎯 Mode Picture-in-Picture</li>
-        <li>📊 Statistiques vidéo avancées</li>
-        <li>🎨 Thème personnalisé</li>
-      </ul>
-      <p style="color: #666; font-size: 10px; margin-top: 12px;">Rendez-vous sur YouTube pour accéder aux features!</p>
-      <button onclick="chrome.tabs.create({url: 'https://www.youtube.com'})" style="
-        background: #ff0000;
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 11px;
-        margin-top: 8px;
-      ">Aller sur YouTube</button>
-    </div>
-  `;
-  
-  modal.classList.remove('hidden');
-}
-
-function openPDFTools() {
-  const modal = document.getElementById('notesModal');
-  const list = document.getElementById('notesList');
-  
-  list.innerHTML = `
-    <div style="font-size: 11px; line-height: 1.6;">
-      <strong>📄 PDF Tools</strong><br><br>
-      <p><strong>🔧 Capacités:</strong></p>
-      <ul style="margin: 8px 0; padding-left: 16px;">
-        <li>✂️ Extraire texte des PDF</li>
-        <li>🔍 Chercher dans les PDFs</li>
-        <li>📋 Copier du contenu</li>
-      </ul>
-      <p style="color: #666; font-size: 10px; margin-top: 12px;">Ouvrez un PDF dans votre navigateur pour utiliser ces features!</p>
-      <input type="file" id="pdfInput" accept=".pdf" style="font-size: 11px; margin-top: 8px;">
-      <button id="extractPdfBtn" style="
-        background: #4CAF50;
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 11px;
-        margin-top: 8px;
-      ">Extraire texte</button>
-    </div>
-  `;
-  
-  modal.classList.remove('hidden');
-  
-  document.getElementById('extractPdfBtn').addEventListener('click', () => {
-    const file = document.getElementById('pdfInput').files[0];
-    if (file) {
-      alert('📄 Extraction PDF en cours...\n\nNote: Une version complète nécessiterait une API PDF.');
+  chrome.storage.local.get(storageKey, (data) => {
+    if (data[storageKey]) {
+      slider.value = data[storageKey];
+      if (valueEl) valueEl.textContent = data[storageKey];
     }
   });
-}
 
-function hslToHex(h, s, l) {
-  s /= 100;
-  l /= 100;
-  const k = n => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
-  return "#" + [f(0), f(8), f(4)].map(x => {
-    const hex = Math.round(255 * x).toString(16);
-    return hex.length === 1 ? '0' + hex : hex;
-  }).join('').toUpperCase();
-}
-
-function summarizeText(text) {
-  if (!text || text.length < 100) return text;
-  
-  // Smart sentence extraction
-  let sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-  sentences = sentences.map(s => s.trim()).filter(s => s.length > 20);
-  
-  if (sentences.length <= 2) return text;
-  
-  // Enhanced keyword scoring
-  const keywords = {
-    'important': 4, 'clé': 4, 'principal': 3, 'essentiel': 4,
-    'crucial': 4, 'résultat': 4, 'conclusion': 4, 'découvert': 4,
-    'innovation': 3, 'unique': 3, 'étude': 3, 'analyse': 2,
-    'impact': 4, 'succès': 3, 'donc': 2, 'cependant': 2,
-    'par conséquent': 2, 'finalement': 2
-  };
-
-  const scoredSentences = sentences.map((sentence, index) => {
-    const words = sentence.toLowerCase().split(/\s+/);
-    let score = 1;
-    
-    // Position scoring
-    if (index === 0) score += 5;
-    if (index === sentences.length - 1) score += 4;
-    if (index === sentences.length - 2) score += 2;
-    
-    // Length optimization (8-30 words ideal)
-    const wordCount = words.length;
-    if (wordCount >= 8 && wordCount <= 30) score += 3;
-    else if (wordCount >= 5 && wordCount < 8) score += 1;
-    else if (wordCount < 5) score -= 2;
-    
-    // Keyword matching
-    for (const [keyword, weight] of Object.entries(keywords)) {
-      if (sentence.toLowerCase().includes(keyword)) score += weight;
-    }
-    
-    // Named entities (numbers, capitals)
-    if (/\d+/.test(sentence)) score += 1;
-    const capitals = (sentence.match(/[A-Z]/g) || []).length;
-    if (capitals > 3) score += 1;
-    
-    return { sentence: sentence.trim(), score, index };
+  slider.addEventListener('input', (e) => {
+    if (valueEl) valueEl.textContent = e.target.value;
+    chrome.storage.local.set({ [storageKey]: parseInt(e.target.value) });
+    notifyContentScript({ action: 'updateSettings', settings: { [storageKey]: parseInt(e.target.value) } });
   });
-  
-  // Select and restore order
-  const keepCount = Math.max(2, Math.ceil(sentences.length * 0.35));
-  const summary = scoredSentences
-    .sort((a, b) => b.score - a.score)
-    .slice(0, keepCount)
-    .sort((a, b) => a.index - b.index)
-    .map(s => s.sentence)
-    .join(' ');
-  
-  return summary.length > 500 ? summary.substring(0, 497) + '...' : summary;
 }
 
-function updateUI() {
-  document.getElementById('darkModeToggle').checked = state.darkMode;
-  document.getElementById('blockSponsored').checked = state.blockSponsoredEnabled;
-  document.getElementById('pomodoroToggle').checked = state.pomodoroRunning;
-  document.getElementById('readingTimeToggle').checked = state.readingTimeEnabled;
-  document.getElementById('currencyConverterToggle').checked = state.currencyConverterEnabled;
-  
-  // AI Tools toggles
-  document.getElementById('aiDetectorEnabled').checked = state.aiDetectorEnabled;
-  document.getElementById('summarizerEnabled').checked = state.summarizerEnabled;
-  document.getElementById('focusModeEnabled').checked = state.focusModeEnabled;
-  document.getElementById('autoTranslatorEnabled').checked = state.autoTranslatorEnabled;
-  document.getElementById('translatorEnabled').checked = state.translatorEnabled;
-  document.getElementById('cookieBlockerEnabled').checked = state.cookieBlockerEnabled;
-  document.getElementById('youtubeEnabled').checked = state.youtubeEnabled;
-  document.getElementById('paletteEnabled').checked = state.paletteEnabled;
-  
-  // Performance mode toggle
-  const perfModeToggle = document.getElementById('performanceModeEnabled');
-  if (perfModeToggle) {
-    perfModeToggle.checked = state.performanceModeEnabled;
-  }
-  
-  // Button visibility toggles
-  if (document.getElementById('googleButtonsVisible')) {
-    document.getElementById('googleButtonsVisible').checked = state.buttonVisibility?.googleButtons !== false;
-  }
-  if (document.getElementById('summarizerButtonVisible')) {
-    document.getElementById('summarizerButtonVisible').checked = state.buttonVisibility?.summarizerButton !== false;
-  }
-  if (document.getElementById('focusModeBadgeVisible')) {
-    document.getElementById('focusModeBadgeVisible').checked = state.buttonVisibility?.focusModeBadge !== false;
-  }
-
-  if (document.getElementById('aiDetectorBadgeVisible')) {
-    document.getElementById('aiDetectorBadgeVisible').checked = state.buttonVisibility?.aiDetectorBadge !== false;
-  }
-  if (document.getElementById('translationButtonsVisible')) {
-    document.getElementById('translationButtonsVisible').checked = state.buttonVisibility?.translationButtons !== false;
-  }
-  if (document.getElementById('quickStatsWidgetVisible')) {
-    document.getElementById('quickStatsWidgetVisible').checked = state.buttonVisibility?.quickStatsWidget !== false;
-  }
-  if (document.getElementById('readingTimeBadgeVisible')) {
-    document.getElementById('readingTimeBadgeVisible').checked = state.buttonVisibility?.readingTimeBadge !== false;
-  }
-  
-  if (state.darkMode) {
-    document.body.classList.add('dark-mode');
-  } else {
-    document.body.classList.remove('dark-mode');
-  }
-  
-  if (!state.extensionEnabled) {
-    document.getElementById('toggleExtension').style.opacity = '0.5';
-  }
+// ============================================================================
+// HELPER: Setup select with storage sync
+// ============================================================================
+function setupSelectSync(elementId, storageKey, callback) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  chrome.storage.local.get(storageKey, (data) => {
+    if (data[storageKey]) el.value = data[storageKey];
+  });
+  el.addEventListener('change', (e) => {
+    chrome.storage.local.set({ [storageKey]: e.target.value });
+    if (callback) callback(e.target.value);
+  });
 }
 
-function notifyContentScript(message) {
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      chrome.tabs.sendMessage(tab.id, message).catch(() => {});
+// ============================================================================
+// HELPER: Setup Google button visibility toggle
+// ============================================================================
+function setupGoogleButtonToggle(elementId, key) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  el.addEventListener('change', (e) => {
+    chrome.storage.local.get('googleButtonsVisibility', (result) => {
+      const visibility = result.googleButtonsVisibility || { lucky: true, filters: true, maps: true, chatgpt: true };
+      visibility[key] = e.target.checked;
+      chrome.storage.local.set({ googleButtonsVisibility: visibility });
+      notifyContentScript({ action: 'updateGoogleButtons', visibility });
+      showToast(e.target.checked ? `✓ Bouton ${key} visible` : `✗ Bouton ${key} masqué`);
     });
   });
 }
 
+// ============================================================================
+// HEADER STATUS
+// ============================================================================
+function updateHeaderStatus() {
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const statusEl = document.getElementById('headerSiteStatus');
+    if (!statusEl) return;
+    if (tabs[0] && tabs[0].url) {
+      try {
+        const url = new URL(tabs[0].url);
+        statusEl.textContent = url.hostname || 'Prêt';
+      } catch {
+        statusEl.textContent = 'Prêt';
+      }
+    } else {
+      statusEl.textContent = 'Prêt';
+    }
+  });
+}
+
+// ============================================================================
+// UPDATE UI
+// ============================================================================
+function updateUI() {
+  safeCheck('darkModeToggle', state.darkMode);
+  safeCheck('blockSponsored', state.blockSponsoredEnabled);
+  safeCheck('pomodoroToggle', state.pomodoroRunning);
+  safeCheck('readingTimeToggle', state.readingTimeEnabled);
+  safeCheck('currencyConverterToggle', state.currencyConverterEnabled);
+  safeCheck('aiDetectorEnabled', state.aiDetectorEnabled);
+  safeCheck('summarizerEnabled', state.summarizerEnabled);
+  safeCheck('autoTranslatorEnabled', state.autoTranslatorEnabled);
+  safeCheck('performanceModeEnabled', state.performanceModeEnabled);
+  safeCheck('cookieBlockerEnabled', state.cookieBlockerEnabled);
+  safeCheck('cookieBlockerQuickToggle', state.cookieBlockerEnabled);
+
+  // Button visibility
+  const bv = state.buttonVisibility || {};
+  safeCheck('googleButtonsVisible', bv.googleButtons !== false);
+  safeCheck('summarizerButtonVisible', bv.summarizerButton !== false);
+  safeCheck('aiDetectorBadgeVisible', bv.aiDetectorBadge !== false);
+  safeCheck('translationButtonsVisible', bv.translationButtons !== false);
+  safeCheck('quickStatsWidgetVisible', bv.quickStatsWidget !== false);
+  safeCheck('focusModeBadgeVisible', bv.focusModeBadge !== false);
+  safeCheck('readingTimeBadgeVisible', bv.readingTimeBadge !== false);
+  safeCheck('notesHighlighterVisible', bv.notesHighlighter !== false);
+
+  // Dark mode on body
+  document.body.classList.toggle('dark-mode', !!state.darkMode);
+
+  // Extension disabled state
+  document.body.classList.toggle('extension-disabled', !state.extensionEnabled);
+}
+
+function safeCheck(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.checked = !!value;
+}
+
+// ============================================================================
+// TOGGLE DARK MODE
+// ============================================================================
 function toggleDarkMode() {
   state.darkMode = !state.darkMode;
   chrome.storage.local.set({ darkMode: state.darkMode });
-  
-  document.body.classList.toggle('dark-mode');
-  document.getElementById('darkModeToggle').checked = state.darkMode;
-  
-  // Notify content scripts
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      chrome.tabs.sendMessage(tab.id, {
-        action: 'toggleDarkMode',
-        enabled: state.darkMode
-      }).catch(() => {});
-    });
-  });
+  document.body.classList.toggle('dark-mode', state.darkMode);
+  safeCheck('darkModeToggle', state.darkMode);
+  notifyContentScript({ action: 'toggleDarkMode', enabled: state.darkMode });
+  showToast(state.darkMode ? '🌙 Mode sombre' : '☀️ Mode clair');
 }
 
+// ============================================================================
+// TOGGLE EXTENSION
+// ============================================================================
 function toggleExtension() {
   state.extensionEnabled = !state.extensionEnabled;
   chrome.storage.local.set({ extensionEnabled: state.extensionEnabled });
-  
-  document.getElementById('toggleExtension').style.opacity = state.extensionEnabled ? '1' : '0.5';
-  
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      chrome.tabs.sendMessage(tab.id, {
-        action: 'toggleExtension',
-        enabled: state.extensionEnabled
-      }).catch(() => {});
-    });
-  });
+  const btn = document.getElementById('toggleExtension');
+  if (btn) {
+    btn.style.opacity = state.extensionEnabled ? '1' : '0.5';
+    btn.textContent = state.extensionEnabled ? '✓' : '✗';
+  }
+  document.body.classList.toggle('extension-disabled', !state.extensionEnabled);
+  notifyContentScript({ action: 'toggleExtension', enabled: state.extensionEnabled });
+  showToast(state.extensionEnabled ? '✓ Extension activée' : '✗ Extension désactivée');
 }
 
+// ============================================================================
+// DISABLE ALL
+// ============================================================================
 function disableAll() {
-  // Disable all features
   const allSettings = {
     aiDetectorEnabled: false,
     summarizerEnabled: false,
     autoTranslatorEnabled: false,
-    translatorEnabled: false,
     readingTimeEnabled: false,
-    quickStatsEnabled: false,
     blockSponsoredEnabled: false,
-    focusModeEnabled: false,
-    paletteEnabled: false,
-    youtubeEnabled: false,
     cookieBlockerEnabled: false,
     googleButtonsVisibility: { lucky: false, filters: false, maps: false, chatgpt: false }
   };
-  
-  // Save to storage
   chrome.storage.local.set(allSettings);
-  
-  // Update UI checkboxes
-  const checkboxesToUncheck = [
-    'aiDetectorEnabled',
-    'summarizerEnabled',
-    'focusModeEnabled',
-    'autoTranslatorEnabled',
-    'translatorEnabled',
-    'readingTimeEnabled',
-    'quickStatsEnabled',
-    'blockSponsored',
-    'paletteEnabled',
-    'youtubeEnabled',
-    'cookieBlockerEnabled',
-    'darkModeToggle',
-    'pomodoroToggle',
-    'tabCleanerToggle',
-    'readingTimeToggle',
-    'currencyConverterToggle'
-  ];
-  
-  checkboxesToUncheck.forEach(id => {
-    const elem = document.getElementById(id);
-    if (elem) elem.checked = false;
-  });
-  
-  // Update Google buttons
-  const googleButtons = ['googleButtonLucky', 'googleButtonFilters', 'googleButtonMaps', 'googleButtonChatGPT'];
-  googleButtons.forEach(id => {
-    const elem = document.getElementById(id);
-    if (elem) elem.checked = false;
-  });
-  
-  // Notify content scripts
-  chrome.tabs.query({}, (tabs) => {
-    tabs.forEach(tab => {
-      chrome.tabs.sendMessage(tab.id, {
-        action: 'updateSettings',
-        settings: allSettings
-      }).catch(() => {});
-    });
-  });
-  
-  console.log('[AITools] All features disabled');
+  state = { ...state, ...allSettings };
+  updateUI();
+  notifyContentScript({ action: 'updateSettings', settings: allSettings });
+  showToast('⊘ Tout désactivé');
 }
 
+// ============================================================================
+// POMODORO
+// ============================================================================
 function startPomodoro() {
   state.pomodoroRunning = true;
   const startTime = Date.now();
   const duration = 25 * 60 * 1000;
-  
   const status = document.getElementById('pomodoroStatus');
-  status.style.display = 'block';
-  
-  let timerRef;
+  if (status) status.style.display = 'block';
+
   const updateTimer = () => {
-    const elapsed = Date.now() - startTime;
-    const remaining = Math.max(0, Math.floor((duration - elapsed) / 1000));
+    const remaining = Math.max(0, Math.floor((duration - (Date.now() - startTime)) / 1000));
     const mins = Math.floor(remaining / 60);
     const secs = remaining % 60;
-    
-    status.innerHTML = `⏱️ ${mins}:${secs.toString().padStart(2, '0')}`;
-    
+    if (status) status.innerHTML = `⏱️ ${mins}:${secs.toString().padStart(2, '0')}`;
+
     if (remaining > 0) {
-      timerRef = setTimeout(updateTimer, 1000);
+      setTimeout(updateTimer, 1000);
     } else {
-      status.innerHTML = '✅ Pomodoro Terminé!';
-      document.getElementById('pomodoroToggle').checked = false;
+      if (status) status.innerHTML = '✅ Terminé !';
+      safeCheck('pomodoroToggle', false);
       state.pomodoroRunning = false;
       try {
         chrome.notifications.create({
           type: 'basic',
           iconUrl: 'icons/logo aitools sans fond sans texte.png',
           title: '⏱️ Pomodoro',
-          message: 'C\'est l\'heure de prendre une pause!'
+          message: 'C\'est l\'heure de la pause !'
         });
-      } catch(e) {}
+      } catch (e) {}
     }
   };
-  
   updateTimer();
+  showToast('⏱️ Pomodoro démarré', 'success');
 }
 
+// ============================================================================
+// TAB CLEANER
+// ============================================================================
 function cleanupTabs() {
   chrome.tabs.query({}, (tabs) => {
     const grouped = {};
-    
     tabs.forEach(tab => {
-      const domain = new URL(tab.url).hostname || 'unknown';
-      if (!grouped[domain]) grouped[domain] = [];
-      grouped[domain].push(tab);
+      try {
+        const domain = new URL(tab.url).hostname || 'unknown';
+        if (!grouped[domain]) grouped[domain] = [];
+        grouped[domain].push(tab);
+      } catch {}
     });
-    
     Object.values(grouped).forEach(group => {
       if (group.length > 1) {
         try {
-          chrome.tabGroups.group(
-            { tabIds: group.slice(1).map(t => t.id) },
-            { title: group[0].title?.substring(0, 20) }
-          );
-        } catch (e) {
-          console.log('Tab grouping not available');
-        }
+          chrome.tabGroups.group({ tabIds: group.slice(1).map(t => t.id) });
+        } catch {}
       }
     });
   });
 }
 
+// ============================================================================
+// NOTES
+// ============================================================================
 function showNotesModal() {
   const modal = document.getElementById('notesModal');
   const list = document.getElementById('notesList');
-  
   if (state.notes.length === 0) {
-    list.innerHTML = '<p style="color: #999; font-size: 12px;">Pas de notes encore. Surlignez un texte sur une page!</p>';
+    list.innerHTML = '<p style="color:#999;font-size:12px;">Pas de notes. Surlignez un texte sur une page !</p>';
   } else {
-    list.innerHTML = state.notes
-      .map((note, i) => `
-        <div style="
-          padding: 8px;
-          background: #f5f5f5;
-          border-radius: 4px;
-          margin-bottom: 6px;
-          font-size: 11px;
-          word-break: break-word;
-        ">
-          <strong>${note.title || 'Note'}</strong>
-          <p style="margin-top: 4px; color: #666;">"${note.text}"</p>
-          <button onclick="deleteNote(${i})" style="
-            background: #ef4444;
-            color: white;
-            border: none;
-            padding: 4px 8px;
-            border-radius: 3px;
-            font-size: 10px;
-            cursor: pointer;
-            margin-top: 4px;
-          ">Supprimer</button>
-        </div>
-      `).join('');
+    list.innerHTML = state.notes.map((note, i) => `
+      <div style="padding:8px;background:#f5f5f5;border-radius:4px;margin-bottom:6px;font-size:11px;word-break:break-word;">
+        <strong>${note.title || 'Note'}</strong>
+        <p style="margin-top:4px;color:#666;">"${note.text}"</p>
+        <button onclick="deleteNote(${i})" style="background:#ef4444;color:white;border:none;padding:3px 8px;border-radius:3px;font-size:10px;cursor:pointer;margin-top:4px;">Supprimer</button>
+      </div>
+    `).join('');
   }
-  
   modal.classList.remove('hidden');
 }
 
@@ -1250,71 +690,301 @@ function deleteNote(index) {
   chrome.storage.local.set({ notes: state.notes });
   showNotesModal();
 }
-
 window.deleteNote = deleteNote;
 
-function exportData() {
-  const data = {
-    notes: state.notes,
-    timestamp: new Date().toISOString(),
-    version: '4.0'
+// ============================================================================
+// ANONYMIZER
+// ============================================================================
+function runAnonymizer() {
+  const input = document.getElementById('anonymizeInput').value;
+  if (!input.trim()) { showToast('⚠️ Collez du texte', 'error'); return; }
+
+  const counts = {};
+  let result = input;
+
+  const rules = [
+    { key: 'URL', pattern: /https?:\/\/[^\s]+/g, label: '[URL]' },
+    { key: 'Email', pattern: /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g, label: '[EMAIL]' },
+    { key: 'IBAN', pattern: /\b[A-Z]{2}\d{2}[\sA-Z0-9]{11,30}\b/g, label: '[IBAN]' },
+    { key: 'NSS', pattern: /\b[12]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{3}\s?\d{3}\s?\d{2}\b/g, label: '[NSS]' },
+    { key: 'IP', pattern: /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, label: '[IP]' },
+    { key: 'Téléphone', pattern: /(?:\+33|0033|0)\s?[1-9](?:[\s.\-]?\d{2}){4}/g, label: '[TÉLÉPHONE]' },
+    { key: 'Date', pattern: /\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/g, label: '[DATE]' },
+    { key: 'Code postal', pattern: /\b(?:0[1-9]|[1-8]\d|9[0-5])\d{3}\b/g, label: '[CODE POSTAL]' },
+  ];
+
+  rules.forEach(({ key, pattern, label }) => {
+    const matches = result.match(pattern) || [];
+    if (matches.length > 0) {
+      counts[key] = matches.length;
+      result = result.replace(pattern, label);
+    }
+  });
+
+  // Noms propres : mots avec majuscule non en début de phrase
+  // On remplace les mots avec majuscule qui ne suivent pas un point/début de ligne
+  const nomPattern = /(?<=[a-zàâéèêëîïôùûüç,;:!?\s])\b([A-ZÀÂÉÈÊËÎÏÔÙÛÜÇ][a-zàâéèêëîïôùûüç]{2,})\b/g;
+  const nomMatches = result.match(nomPattern) || [];
+  if (nomMatches.length > 0) {
+    counts['Nom'] = nomMatches.length;
+    result = result.replace(nomPattern, '[NOM]');
+  }
+
+  const totalCount = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  const summaryEl = document.getElementById('anonymizeSummary');
+  const outputEl = document.getElementById('anonymizeOutput');
+  const copyBtn = document.getElementById('anonymizeCopyBtn');
+
+  summaryEl.style.display = 'block';
+  if (totalCount === 0) {
+    summaryEl.innerHTML = 'ℹ️ Aucune donnée personnelle détectée.';
+    summaryEl.style.background = '#fef9e7';
+    summaryEl.style.borderColor = '#f9e79f';
+    summaryEl.style.color = '#856404';
+  } else {
+    const details = Object.entries(counts).map(([k, v]) => `<strong>${k}</strong>: ${v}`).join(' · ');
+    summaryEl.innerHTML = `✅ <strong>${totalCount} élément(s) anonymisé(s)</strong><br><span style="opacity:0.8;">${details}</span>`;
+    summaryEl.style.background = '#f0fdf4';
+    summaryEl.style.borderColor = '#bbf7d0';
+    summaryEl.style.color = '#166534';
+  }
+
+  outputEl.value = result;
+  outputEl.style.display = 'block';
+  copyBtn.style.display = totalCount > 0 ? 'block' : 'none';
+  showToast(`✓ ${totalCount} élément(s) anonymisé(s)`, 'success');
+}
+
+// ============================================================================
+// GOOGLE BUTTON CUSTOMIZER
+// ============================================================================
+const defaultButtonConfigs = {
+  lucky: { label: '🍀 Chance', action: 'lucky', color: '#5f6368' },
+  filters: { label: '🔍 Filtres', action: 'filters', color: '#5f6368' },
+  maps: { label: '🗺️ Maps', action: 'maps', color: '#5f6368' },
+  chatgpt: { label: '🤖 ChatGPT', action: 'chatgpt', color: '#5f6368' }
+};
+
+function setupGoogleButtonCustomizer() {
+  const sel = document.getElementById('googleButtonCustomizeSelect');
+  const view = document.getElementById('googleButtonCustomizeView');
+  const labelInput = document.getElementById('googleButtonCustomizeLabel');
+  const colorInput = document.getElementById('googleButtonCustomizeColor');
+  const actionInput = document.getElementById('googleButtonCustomizeAction');
+  const resetBtn = document.getElementById('googleButtonCustomizeReset');
+  if (!sel) return;
+
+  sel.addEventListener('change', (e) => {
+    const key = e.target.value;
+    if (!key) { view.style.display = 'none'; return; }
+    chrome.storage.local.get('googleButtonsConfig', (result) => {
+      const config = result.googleButtonsConfig || {};
+      const btnCfg = config[key] || defaultButtonConfigs[key];
+      if (labelInput) labelInput.value = btnCfg.label;
+      if (colorInput) colorInput.value = btnCfg.color;
+      if (actionInput) actionInput.value = btnCfg.action;
+      view.style.display = 'block';
+    });
+  });
+
+  const saveConfig = () => {
+    const key = sel.value;
+    if (!key) return;
+    chrome.storage.local.get('googleButtonsConfig', (result) => {
+      const config = result.googleButtonsConfig || {};
+      config[key] = {
+        label: labelInput?.value || defaultButtonConfigs[key].label,
+        color: colorInput?.value || defaultButtonConfigs[key].color,
+        action: actionInput?.value || defaultButtonConfigs[key].action
+      };
+      chrome.storage.local.set({ googleButtonsConfig: config });
+      notifyContentScript({ action: 'updateGoogleButtons', config });
+      showToast('✓ Bouton mis à jour', 'success');
+    });
   };
-  
+
+  if (labelInput) labelInput.addEventListener('blur', saveConfig);
+  if (colorInput) colorInput.addEventListener('change', saveConfig);
+  if (actionInput) actionInput.addEventListener('change', saveConfig);
+
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      const key = sel.value;
+      if (!key) return;
+      chrome.storage.local.get('googleButtonsConfig', (result) => {
+        const config = result.googleButtonsConfig || {};
+        config[key] = { ...defaultButtonConfigs[key] };
+        chrome.storage.local.set({ googleButtonsConfig: config });
+        if (labelInput) labelInput.value = defaultButtonConfigs[key].label;
+        if (colorInput) colorInput.value = defaultButtonConfigs[key].color;
+        if (actionInput) actionInput.value = defaultButtonConfigs[key].action;
+        notifyContentScript({ action: 'updateGoogleButtons', config });
+        showToast('↺ Bouton réinitialisé');
+      });
+    });
+  }
+}
+
+// ============================================================================
+// AI DETECTOR
+// ============================================================================
+function detectAI() {
+  const text = prompt('🤖 Collez le texte à analyser :');
+  if (!text || text.trim().length < 50) { showToast('⚠️ Texte trop court (min 50 car.)', 'error'); return; }
+
+  const passiveVoice = (text.match(/(\bwas\b|\bwere\b|\bbeing\b|\bby\b)/gi) || []).length;
+  const repetitiveStructure = (text.match(/(\.\s[A-Z][a-z]{3,})/g) || []).length;
+  const formalTone = (text.match(/(\bthus\b|\btherefore\b|\bmoreover\b|\bfurthermore\b)/gi) || []).length;
+
+  const wordCount = text.split(/\s+/).length;
+  const score = Math.min(100, Math.round(
+    (repetitiveStructure / Math.max(1, text.split('.').length) * 100) * 0.4 +
+    (formalTone / Math.max(1, wordCount) * 1000) * 0.3 +
+    (passiveVoice / Math.max(1, wordCount) * 100) * 0.3
+  ));
+
+  let result = `📊 Analyse IA :\n\nScore : ${score}%\n\n`;
+  if (score > 60) result += '❌ Forte probabilité de contenu IA\n(Langage formel, structure répétitive)';
+  else if (score > 30) result += '🟡 Probabilité modérée\n(Quelques caractéristiques IA)';
+  else result += '✅ Probablement du contenu humain\n(Langage naturel détecté)';
+
+  alert(result);
+}
+
+// ============================================================================
+// TRANSLATOR
+// ============================================================================
+function openTranslator() {
+  const text = prompt('🌐 Texte à traduire :');
+  if (!text?.trim()) return;
+  chrome.tabs.create({ url: `https://translate.google.com/?text=${encodeURIComponent(text.substring(0, 500))}&op=translate` });
+}
+
+// ============================================================================
+// PALETTE GENERATOR
+// ============================================================================
+function generatePalette() {
+  const colors = Array.from({ length: 5 }, () => {
+    const h = Math.random() * 360;
+    const s = 60 + Math.random() * 30;
+    const l = 45 + Math.random() * 30;
+    return hslToHex(h, s, l);
+  });
+
+  const list = document.getElementById('notesList');
+  list.innerHTML = '<div style="font-size:11px;"><strong>🎨 Palette générée :</strong><br><br>' +
+    colors.map(c => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px;background:#f5f5f5;border-radius:4px;">
+        <div style="width:40px;height:40px;background:${c};border-radius:4px;border:1px solid #ddd;flex-shrink:0;"></div>
+        <code style="font-size:11px;cursor:pointer;" onclick="navigator.clipboard.writeText('${c}').then(()=>{})">${c}</code>
+        <small style="color:#999;font-size:10px;">cliquer pour copier</small>
+      </div>
+    `).join('') + '</div>';
+  document.getElementById('notesModal').classList.remove('hidden');
+}
+
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return '#' + [f(0), f(8), f(4)].map(x => Math.round(255 * x).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+// ============================================================================
+// YOUTUBE ENHANCER
+// ============================================================================
+function openYouTubeEnhancer() {
+  const list = document.getElementById('notesList');
+  list.innerHTML = `
+    <div style="font-size:11px;line-height:1.6;">
+      <strong>▶️ YouTube Enhancer</strong><br><br>
+      <p><strong>✨ Features :</strong></p>
+      <ul style="margin:8px 0;padding-left:16px;">
+        <li>⏩ Contrôle vitesse (0.5x – 2x)</li>
+        <li>🎯 Picture-in-Picture</li>
+        <li>📊 Stats vidéo avancées</li>
+      </ul>
+      <p style="color:#666;font-size:10px;margin-top:12px;">Rendez-vous sur YouTube pour accéder aux features !</p>
+      <button onclick="chrome.tabs.create({url:'https://www.youtube.com'})" style="background:#ff0000;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:11px;margin-top:8px;">Aller sur YouTube</button>
+    </div>
+  `;
+  document.getElementById('notesModal').classList.remove('hidden');
+}
+
+// ============================================================================
+// PDF TOOLS
+// ============================================================================
+function openPDFTools() {
+  const list = document.getElementById('notesList');
+  list.innerHTML = `
+    <div style="font-size:11px;line-height:1.6;">
+      <strong>📄 PDF Tools</strong><br><br>
+      <p><strong>🔧 Capacités :</strong></p>
+      <ul style="margin:8px 0;padding-left:16px;">
+        <li>✂️ Extraire texte des PDF</li>
+        <li>🔍 Chercher dans les PDFs</li>
+        <li>📋 Copier du contenu</li>
+      </ul>
+      <p style="color:#666;font-size:10px;margin-top:12px;">Ouvrez un PDF dans votre navigateur !</p>
+      <input type="file" id="pdfInput" accept=".pdf" style="font-size:11px;margin-top:8px;">
+      <button id="extractPdfBtn" style="background:#4CAF50;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:11px;margin-top:8px;display:block;">Extraire texte</button>
+    </div>
+  `;
+  document.getElementById('notesModal').classList.remove('hidden');
+  const extractBtn = document.getElementById('extractPdfBtn');
+  if (extractBtn) {
+    extractBtn.addEventListener('click', () => {
+      showToast('📄 Fonctionnalité en développement', 'default');
+    });
+  }
+}
+
+// ============================================================================
+// EXPORT & RESET
+// ============================================================================
+function exportData() {
+  const data = { notes: state.notes, timestamp: new Date().toISOString(), version: '4.0' };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = `aitools-export-${Date.now()}.json`;
   a.click();
+  showToast('✓ Export réalisé', 'success');
 }
 
 function resetExtension() {
-  if (confirm('⚠️ Réinitialiser toutes les données? Cette action est irréversible.')) {
-    chrome.storage.local.clear(() => {
-      state = {
-        darkMode: false,
-        extensionEnabled: true,
-        pomodoroRunning: false,
-        tabCleanerEnabled: false,
-        readingTimeEnabled: true,
-        currencyConverterEnabled: false,
-        blockSponsoredEnabled: false,
-        notes: []
-      };
-      updateUI();
-      alert('✅ Extension réinitialisée');
-    });
-  }
+  if (!confirm('⚠️ Réinitialiser toutes les données ?')) return;
+  chrome.storage.local.clear(() => {
+    state = { darkMode: false, extensionEnabled: true, pomodoroRunning: false, readingTimeEnabled: true, currencyConverterEnabled: false, blockSponsoredEnabled: false, notes: [], buttonVisibility: {} };
+    updateUI();
+    showToast('✓ Extension réinitialisée', 'success');
+  });
 }
 
-// Load notes on startup
-chrome.storage.local.get('notes', (data) => {
-  if (data.notes) {
-    state.notes = data.notes;
-  }
-});
+// ============================================================================
+// SUMMARIZE
+// ============================================================================
+function summarizeText(text) {
+  if (!text || text.length < 100) return text;
+  let sentences = (text.match(/[^.!?]+[.!?]+/g) || [text]).map(s => s.trim()).filter(s => s.length > 20);
+  if (sentences.length <= 2) return text;
 
+  const keywords = { 'important': 4, 'clé': 4, 'essentiel': 4, 'résultat': 4, 'conclusion': 4, 'découvert': 4, 'impact': 4, 'key': 4, 'result': 4, 'found': 3, 'shows': 3 };
 
-// Listen for storage changes from other tabs and content script
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local') {
-    if (changes.darkMode) state.darkMode = changes.darkMode.newValue;
-    if (changes.notes) {
-      state.notes = changes.notes.newValue || [];
-      const modal = document.getElementById('notesModal');
-      if (modal && !modal.classList.contains('hidden')) {
-        showNotesModal();
-      }
-    }
-    if (changes.blockSponsoredEnabled) state.blockSponsoredEnabled = changes.blockSponsoredEnabled.newValue;
-    if (changes.readingTimeEnabled) state.readingTimeEnabled = changes.readingTimeEnabled.newValue;
-    if (changes.currencyConverterEnabled) state.currencyConverterEnabled = changes.currencyConverterEnabled.newValue;
-    if (changes.aiDetectorEnabled) state.aiDetectorEnabled = changes.aiDetectorEnabled.newValue;
-    if (changes.summarizerEnabled) state.summarizerEnabled = changes.summarizerEnabled.newValue;
-    if (changes.focusModeEnabled) state.focusModeEnabled = changes.focusModeEnabled.newValue;
-    if (changes.translatorEnabled) state.translatorEnabled = changes.translatorEnabled.newValue;
-    if (changes.youtubeEnabled) state.youtubeEnabled = changes.youtubeEnabled.newValue;
-    if (changes.paletteEnabled) state.paletteEnabled = changes.paletteEnabled.newValue;
-    updateUI();
-  }
-});
+  const scored = sentences.map((s, i) => {
+    let score = 1;
+    if (i === 0) score += 5;
+    if (i === sentences.length - 1) score += 4;
+    const words = s.split(/\s+/).length;
+    if (words >= 8 && words <= 30) score += 3;
+    Object.entries(keywords).forEach(([kw, w]) => { if (s.toLowerCase().includes(kw)) score += w; });
+    if (/\d+/.test(s)) score += 2;
+    return { s, score, i };
+  });
+
+  const keepCount = Math.max(2, Math.ceil(sentences.length * 0.35));
+  return scored.sort((a, b) => b.score - a.score).slice(0, keepCount).sort((a, b) => a.i - b.i).map(x => x.s).join(' ');
+}

@@ -1,183 +1,137 @@
 # 🚀 AITools Pro v4.0 - Suite Complète d'Outils Intelligents pour Chrome
 
-**AITools Pro** est une extension Chrome tout-en-un conçue pour transformer votre navigation. Améliorez vos recherches Google, boostez votre productivité et profitez d'un confort visuel optimal avec un ensemble d'outils puissants et intuitifs.
+**AITools Pro** est une extension Chrome tout-en-un conçue pour transformer votre navigation. Boostez vos recherches Google, améliorez votre productivité et profitez d'une interface repensée, intuitive et personnalisable.
 
-## ✨ Fonctionnalités
+---
 
-### 🔍 Recherche Google Améliorée
-- **4 boutons rapides** : "Je suis chanceux", Filtres avancés, Google Maps, ChatGPT
-- **6 catégories de recherche** : Orthographe, Wikipédia, Tendances, Actualités, Images, Vidéos
-- **Filtres évolués** : Accédez aux opérateurs de recherche Google sans effort
-- **Blocage des annonces** : Supprimez les résultats sponsorisés de vos recherches
+## ✨ Nouveautés v4.0
 
-### ⚡ Accès Rapide
-- **Ouvrez vos services préférés en 1 clic** : WhatsApp, ChatGPT, Discord ou Optitools
-- **Bouton "Je suis chanceux"** pour des découvertes surprenantes
-- **Popup compacte et efficace** : Tous vos outils au portée
+| Fonctionnalité | Description |
+|---|---|
+| 🎨 **Interface redessinée** | Navigation par onglets avec icônes + labels, switches CSS, cartes visuelles |
+| 🔒 **Anonymiseur de données** | Remplace automatiquement les données personnelles avant envoi à une IA |
+| 🎵 **Bouton YouTube Music** | Apparaît automatiquement sur les recherches musicales |
+| 🍪 **Anti-cookies amélioré** | Détection par mots-clés, moins de faux positifs, toggle rapide |
+| 📍 **Boutons Google corrigés** | S'affichent uniquement après une recherche (pas sur la page d'accueil) |
+| ✅ **Toaster de feedback** | Confirmation visuelle à chaque action |
+| 🎯 **Focus Mode corrigé** | Fonctionne dès le premier chargement, désactivable proprement |
+| 📝 **Menu notes corrigé** | Disparaît instantanément quand la sélection est relâchée |
 
-### ⏰ Outils de Productivité
-- **Temps de lecture estimé** : Badge automatique sur chaque article
-- **Technique Pomodoro** : Minuteur 25 min pour une concentration optimale
-- **Gestionnaire d'onglets Zen** : Organisez automatiquement par domaine
-- **Surlignage & Notes** : Capturez et sauvegardez vos passages clés
+---
 
-### 🎨 Interface Élégante
-- **Mode sombre universel** : Appliquez le mode sombre à tous les sites
-- **Design minimaliste** : Interface optimisée pour une utilisation fluide
-- **Esthétique moderne** : Dégradé violet-bleu, icônes épurées et intuitivess
+## 🔍 Fonctionnalités principales
 
-### 🛠️ Outils Avancés
-- **Convertisseur de devises** : Cliquez droit sur un montant pour convertir
-- **Sauvegarde & Restauration** : Exportez vos notes en JSON ou restaurez vos données
-- **Réinitialisation complète** : Repartez à zéro en un clic si nécessaire
+### Onglet ⚡ Accès
+- Liens rapides : WhatsApp, Discord, Site Internet, ChatGPT
+- Réglages rapides avec switches : Mode sombre, Sans pub, Bloqueur cookies
 
-## 🎯 Guide de Démarrage
+### Onglet 🔍 Google
+- Champ de recherche intégré avec bouton de lancement
+- 6 catégories : Ortho, Wiki, Tendances, Actualités, Images, Vidéos
+- Boutons de recherche contextuels (Chance, Filtres, Maps, ChatGPT, 🎵 YT Music si recherche musicale)
+- **20+ opérateurs de recherche avancés** : généraux + image (taille, orientation, couleur, type)
+- Personnalisation complète de chaque bouton (label, couleur, action)
 
-### Nouvelle Page d'Accueil
-- Ouvrez un nouvel onglet → Redirection automatique vers Google
+### Onglet 🛠️ Outils
+- **Pomodoro** (25 min) avec minuteur en temps réel
+- **Mes notes** : textes surlignés sauvegardés
+- **Résumer la page** : résumé intelligent du contenu
+- **🔒 Anonymiser données** : remplace noms, emails, téléphones, dates, IP, IBAN, NSS, codes postaux, URLs
+- **PDF Tools**, export de données, nettoyage d'onglets
 
-### Popup Principal (4 Sections)
-1. **⚡ Quick** : Accès direct aux services populaires
-2. **🔍 Google** : Recherche avancée et filtres
-3. **🛠️ Tools** : Outils de productivité (Notes, Pomodoro)
-4. **⚙️ Settings** : Préférences et personnalisation
+### Onglet 🧠 IA
+- Détecteur de contenu généré par IA (sensibilité réglable)
+- Résumeur automatique (longueur et langue configurables)
+- Traducteur automatique (8 langues, avec détection de la langue source)
+- Générateur de palettes de couleurs
+- YouTube Enhancer
 
-### Exemple : Recherche Contextuelle
-```
-Recherche "Paris" → Cliquez "🗺️ Maps"
-✨ Résultat : Google Maps s'ouvre directement pour Paris
-   (sans navigation supplémentaire)
-```
+### Onglet ⚙️ Config
+- **Positionnement** : 4 modes (Adaptative, Compacte, Minimale, Personnalisée)
+- **Boutons visibles** : toggle individuel pour chaque élément injecté sur les pages
+- **Anti-cookies** : activation/désactivation
+- **Système** : page nouvelle fenêtre, mode performance, réinitialisation
 
-## 🧪 Dépannage et Tests
+---
 
-**Avant de signaler un bug, essayez ceci :**
+## 🔒 Anonymiseur de données
 
-1. **Rechargez l'extension**
-   - Accédez à `chrome://extensions/` → Cliquez le bouton actualiser
-   - Ou désactivez/réactivez l'extension
+L'anonymiseur remplace automatiquement :
 
-2. **Videz le cache navigateur**
-   - Appuyez sur Ctrl+Shift+Delete → Cochez "Images et fichiers en cache"
-   - Redémarrez Chrome
+| Donnée | Exemple | Remplacement |
+|---|---|---|
+| Nom propre | Paul Dupont | `[NOM]` |
+| Email | contact@exemple.fr | `[EMAIL]` |
+| Téléphone | 06 12 34 56 78 | `[TÉLÉPHONE]` |
+| Date | 12/03/2024 | `[DATE]` |
+| Adresse IP | 192.168.1.1 | `[IP]` |
+| NSS | 1 80 12 75 123 456 78 | `[NSS]` |
+| IBAN | FR76 3000... | `[IBAN]` |
+| Code postal | 75008 | `[CODE POSTAL]` |
+| URL | https://exemple.com | `[URL]` |
 
-3. **Consultez le protocole de test**
-   - Voir `TESTING_GUIDE_V4.2.md` pour une checklist complète
+Un résumé du nombre d'éléments anonymisés par catégorie est affiché. Le résultat est copiable en un clic.
 
-4. **Activez les outils de développement**
-   - Chrome : `chrome://extensions/` → AITools → "Erreurs"
-   - Page : Appuyez sur F12 → Onglet "Console"
-   - Recherchez les messages d'erreur en rouge
+---
 
-## 🔧 Structure du Projet
+## 🍪 Bloqueur de cookies amélioré
+
+Le bloqueur ne s'active désormais que si le popup contient des mots-clés reconnus (`cookie`, `consent`, `gdpr`, `accepter`, etc.) **et** fait plus de 50px de hauteur. Après avoir agi, il se met en pause 5 secondes pour éviter les boucles.
+
+Toggle rapide disponible dans l'onglet **Accès** et dans **Config**.
+
+---
+
+## 🏗️ Structure du projet
 
 ```
 AITools/
-├── manifest.json                # Configuration (v4.0, Manifest V3)
-├── popup-new.html              # Interface principale (420px optimisée)
-├── popup-new.js                # Logique du popup
-├── styles-new.css              # Design moderne et minimaliste
-├── content-v4.js               # Script injecté dans les pages
-├── background-v4.js            # Service worker (Manifest V3)
-├── aitools-logo-*.png          # Icônes multiples résolutions
-├── newtab.html                 # Page d'accueil personnalisée
-├── newtab.js                   # Redirection automatique
-└── TESTING_GUIDE_V4.2.md       # Guide complet de test
+├── manifest.json          # Configuration MV3
+├── popup-new.html         # Interface (420px, 640px max-height)
+├── popup-new.js           # Logique popup
+├── styles-new.css         # Design avec switches CSS
+├── content-v4.js          # Script injecté dans les pages
+├── background-v4.js       # Service worker
+├── layout-manager.js      # Gestionnaire de positions
+├── newtab.html/js         # Page nouvel onglet
+└── icons/                 # Logos
 ```
 
-## 🐛 Carte de Dépannage
+---
 
-### ❌ Le popup n'ouvre pas
-✅ **Solutions :**
-- Rechargez l'extension : `chrome://extensions` → Bouton actualiser
-- Videz le cache : Ctrl+Shift+Delete → Sélectionnez "Images et fichiers en cache"
-- Vérifiez que les fichiers existent : `popup-new.html`, `popup-new.js`
+## 🐛 Dépannage
 
-### ❌ Les boutons de recherche Google manquent
-✅ **Solutions :**
-- Visitez google.com et appuyez sur Ctrl+R (rechargement complet)
-- Attendez quelques secondes pour l'injection du contenu
-- Testez avec une recherche simple (ex : "test")
+### Les boutons Google n'apparaissent pas
+Ils ne s'affichent qu'**après avoir effectué une recherche** (URL avec `?q=...`). C'est voulu.
 
-### ❌ Le mode sombre ne fonctionne pas
-✅ **Solutions :**
-- Cliquez sur 🌙 dans l'en-tête du popup
-- Rechargez la page (Ctrl+R)
-- Note : Certains sites CSS propriétaire peuvent bloquer l'effet
+### Les boutons Google ne fonctionnent pas au premier lancement
+Réinstaller l'extension ou aller dans `chrome://extensions` → Actualiser.
 
-### ❌ Les notes ne se sauvegardent pas
-✅ **Solutions :**
-- Surlignez du texte → Un menu contextuel doit apparaître
-- Cliquez sur "📝 Ajouter une note"
-- Consultez vos notes via Popup → 🛠️ Tools → "Mes notes"
+### Le focus mode n'apparaît pas
+Rechargez la page. Si le problème persiste, allez dans **Config → Boutons visibles** et activez "Bouton Focus Mode".
 
-### ❌ Le minuteur Pomodoro ne démarre pas
-✅ **Solutions :**
-- Vérifiez que Chrome permet les notifications : Paramètres → Confidentialité → Notifications
-- Autorisez AITools Pro pour les notifications
-- Redémarrez Chrome
+### Anti-cookies trop agressif
+Désactivez-le temporairement depuis l'onglet **Accès** (toggle "Bloqueur cookies").
 
-## 📊 Architecture technique
+---
 
-### Manifest v3 (MV3)
-- ✅ CSP-compliant (pas de script inline)
-- ✅ Service workers (pas de background pages)
-- ✅ Content scripts sécurisés
-- ✅ Stockage local persistant
+## 🔐 Confidentialité
 
-### Storage
-```javascript
-chrome.storage.local.get(null, (data) => {
-  // Notes, état dark mode, paramètres, etc
-  // Persistent across sessions
-});
-```
+- ✅ Tout fonctionne **en local** — aucun serveur externe (sauf les APIs de traduction)
+- ✅ Pas de tracking, pas de données vendues
+- ✅ Les données anonymisées ne quittent jamais l'extension
 
-### Messaging
-```javascript
-// Popup → Content script
-chrome.tabs.sendMessage(tabId, {
-  action: 'blockSponsored',
-  enabled: true
-});
+---
 
-// Communication : Content → Popup/Background
-chrome.runtime.sendMessage({
-  action: 'addNote',
-  data: { text, url, title }
-});
-```
+## 📞 Support
 
-## � Feuille de Route Future
-
-- [ ] **Thèmes personnalisés** : Créez vos propres palettes de couleurs
-- [ ] **Synchronisation cloud** : Vos données sur tous vos appareils
-- [ ] **Support Firefox** : Extension compatible Firefox
-- [ ] **Barre flottante** : Accès instant sans popup
-- [ ] **Intégration Notion** : Synchronisez vos notes directement
-- [ ] **Marketplace** : Ajoutez vos propres catégories de recherche
-- [ ] **Plan Premium** : Synchronisation cloud et fonctionnalités avancées
-
-## 💬 Feedback et Support
-
-**Découvert un bug ? Voulez-vous une nouvelle fonctionnalité ?**
-
-- **Signalez l'erreur** : Ouvrez la console (F12) et copiez les messages
-- **Décrivez le contexte** : Sur quelle page ? Quel bouton avez-vous cliqué ?
-- **Joignez une capture d'écran** : Montrez visuellement le problème
-- **Envoyez tout** : Sur le discord d'AITools : https://discord.gg/J2ssa2Wkjr
-
-## 📄 Licence
-
-**AITools Pro v4.0** - Utilisation personnelle et éducative
+Discord : https://discord.gg/J2ssa2Wkjr
 
 ---
 
 | Information | Détail |
 |---|---|
 | **Version** | 4.0.0 |
-| **Date de sortie** | 1er mars 2026 |
+| **Date** | Mars 2026 |
+| **Manifest** | V3 |
 | **Statut** | ✅ Production |
-| **Tests** | ✅ Tous réussis |
-
-**Merci d'utiliser AITools Pro ! 🚀**
