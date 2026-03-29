@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.tabs.create({ url: 'https://discord.gg/J2ssa2Wkjr' });
   });
   document.getElementById('siteBtn').addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://optitools.odoo.com' });
+    chrome.tabs.create({ url: 'https://djangogo33.github.io/about-me' });
   });
   document.getElementById('chatgptBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://chatgpt.com' });
