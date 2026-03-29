@@ -113,6 +113,10 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('chatgptBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://chatgpt.com' });
   });
+  document.getElementById('tutofacileBtn').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://https://djangogo33.github.io/optitools/' });
+  });
+
 
   document.getElementById('darkModeToggle').addEventListener('change', toggleDarkMode);
 
