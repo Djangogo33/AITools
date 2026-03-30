@@ -44,13 +44,11 @@ function showToast(message, type = 'default') {
   toast.textContent = message;
   toast.className = 'show ' + type;
   clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => {
-    toast.className = '';
-  }, 1800);
+  toast._timer = setTimeout(() => { toast.className = ''; }, 1800);
 }
 
 // ============================================================================
-// NOTIFY CONTENT SCRIPTS
+// NOTIFY HELPERS
 // ============================================================================
 function notifyContentScript(message) {
   chrome.tabs.query({}, (tabs) => {
@@ -62,9 +60,7 @@ function notifyContentScript(message) {
 
 function notifyActiveTab(message) {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (tabs[0]) {
-      chrome.tabs.sendMessage(tabs[0].id, message).catch(() => {});
-    }
+    if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, message).catch(() => {});
   });
 }
 
@@ -80,9 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     updateUI();
     updateHeaderStatus();
+    checkPomodoroResume(); // Improvement H: resume timer if running
   });
 
-  // Header status (current site)
+  // Header status
   updateHeaderStatus();
 
   // ---- TAB NAVIGATION ----
@@ -108,15 +105,11 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.tabs.create({ url: 'https://discord.gg/J2ssa2Wkjr' });
   });
   document.getElementById('siteBtn').addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://djangogo33.github.io/about-me' });
+    chrome.tabs.create({ url: 'https://optitools.odoo.com' });
   });
   document.getElementById('chatgptBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://chatgpt.com' });
   });
-  document.getElementById('tutofacileBtn').addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://https://djangogo33.github.io/optitools/' });
-  });
-
 
   document.getElementById('darkModeToggle').addEventListener('change', toggleDarkMode);
 
@@ -127,15 +120,13 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast(e.target.checked ? '✓ Pub bloquée' : '✗ Pub visible');
   });
 
-  // Cookie blocker quick toggle (Quick tab)
+  // Cookie blocker quick toggle
   document.getElementById('cookieBlockerQuickToggle').addEventListener('change', (e) => {
     state.cookieBlockerEnabled = e.target.checked;
     chrome.storage.local.set({ cookieBlockerEnabled: e.target.checked });
-    // Sync the settings tab toggle
-    const settingsToggle = document.getElementById('cookieBlockerEnabled');
-    if (settingsToggle) settingsToggle.checked = e.target.checked;
+    safeCheck('cookieBlockerEnabled', e.target.checked);
     notifyContentScript({ action: 'updateSettings', settings: { cookieBlockerEnabled: e.target.checked } });
-    showToast(e.target.checked ? '✓ Cookies bloqués' : '✗ Cookies autorisés');
+    showToast(e.target.checked ? '✓ Cookies bloqués' : '✗ Bloqueur désactivé');
   });
 
   // ---- GOOGLE TAB ----
@@ -169,10 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
         'videos': 'https://www.google.com/search?q=' + encodeURIComponent(query) + '&tbm=vid'
       };
 
-      // Flash feedback
       btn.classList.add('flash-success');
       setTimeout(() => btn.classList.remove('flash-success'), 200);
-
       chrome.tabs.create({ url: categoryMap[category] });
     });
   });
@@ -182,10 +171,10 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       const operator = btn.dataset.operator;
       const input = document.getElementById('googleSearchInput');
-
-      let value = '';
       const needsValue = ['intitle:', 'inurl:', 'site:', 'filetype:', 'after:', 'before:', 'related:', '"', '-', 'imagesize:'];
+
       if (needsValue.includes(operator.trim())) {
+        let value = '';
         if (operator === '"') {
           value = prompt('Terme exact à chercher :');
           if (value) input.value += ' "' + value + '"';
@@ -200,10 +189,8 @@ document.addEventListener('DOMContentLoaded', () => {
           if (value) input.value += ' ' + operator + value;
         }
       } else {
-        // Operators that don't need a user-supplied value (image filters)
         input.value += ' ' + operator.trim();
       }
-
       showToast('✓ Opérateur ajouté', 'success');
     });
   });
@@ -214,25 +201,22 @@ document.addEventListener('DOMContentLoaded', () => {
   setupGoogleButtonToggle('googleButtonMaps', 'maps');
   setupGoogleButtonToggle('googleButtonChatGPT', 'chatgpt');
 
-  // Load initial visibility
   chrome.storage.local.get('googleButtonsVisibility', (result) => {
-    const visibility = result.googleButtonsVisibility || { lucky: true, filters: true, maps: true, chatgpt: true };
-    const map = { lucky: 'googleButtonLucky', filters: 'googleButtonFilters', maps: 'googleButtonMaps', chatgpt: 'googleButtonChatGPT' };
-    Object.entries(map).forEach(([key, id]) => {
-      const el = document.getElementById(id);
-      if (el) el.checked = visibility[key] !== false;
-    });
+    const v = result.googleButtonsVisibility || { lucky: true, filters: true, maps: true, chatgpt: true };
+    safeCheck('googleButtonLucky', v.lucky !== false);
+    safeCheck('googleButtonFilters', v.filters !== false);
+    safeCheck('googleButtonMaps', v.maps !== false);
+    safeCheck('googleButtonChatGPT', v.chatgpt !== false);
   });
 
-  // Google button customization
   setupGoogleButtonCustomizer();
 
   // ---- TOOLS TAB ----
   document.getElementById('pomodoroToggle').addEventListener('change', (e) => {
-    if (e.target.checked) startPomodoro();
-    else {
-      state.pomodoroRunning = false;
-      document.getElementById('pomodoroStatus').style.display = 'none';
+    if (e.target.checked) {
+      startPomodoro();
+    } else {
+      stopPomodoro();
       showToast('✗ Pomodoro arrêté');
     }
   });
@@ -261,8 +245,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (response && response.text) {
           const summary = summarizeText(response.text);
           const list = document.getElementById('notesList');
-          list.innerHTML = `<div style="padding:12px;background:#f5f5f5;border-radius:4px;font-size:12px;line-height:1.6;"><strong>📋 Résumé :</strong><p style="margin-top:8px;color:#333;">${summary}</p></div>`;
+          list.innerHTML = `
+            <div style="padding:12px;background:#f5f5f5;border-radius:4px;font-size:12px;line-height:1.6;">
+              <strong>📋 Résumé :</strong>
+              <p style="margin-top:8px;color:#333;">${summary}</p>
+              <button id="popupCopySummary" style="margin-top:8px;background:#10b981;color:white;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:11px;">📋 Copier</button>
+            </div>
+          `;
           document.getElementById('notesModal').classList.remove('hidden');
+          document.getElementById('popupCopySummary')?.addEventListener('click', () => {
+            navigator.clipboard.writeText(summary).then(() => showToast('✓ Copié !', 'success'));
+          });
         } else {
           showToast('⚠️ Impossible d\'extraire le texte', 'error');
         }
@@ -271,25 +264,46 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('anonymizeBtn').addEventListener('click', () => {
-    document.getElementById('anonymizeInput').value = '';
-    document.getElementById('anonymizeOutput').value = '';
-    document.getElementById('anonymizeOutput').style.display = 'none';
-    document.getElementById('anonymizeSummary').style.display = 'none';
-    document.getElementById('anonymizeCopyBtn').style.display = 'none';
+    const input = document.getElementById('anonymizeInput');
+    const output = document.getElementById('anonymizeOutput');
+    const summary = document.getElementById('anonymizeSummary');
+    const copyBtn = document.getElementById('anonymizeCopyBtn');
+    if (input) input.value = '';
+    if (output) { output.value = ''; output.style.display = 'none'; }
+    if (summary) summary.style.display = 'none';
+    if (copyBtn) copyBtn.style.display = 'none';
     document.getElementById('anonymizeModal').classList.remove('hidden');
   });
 
   document.getElementById('anonymizeRunBtn').addEventListener('click', runAnonymizer);
   document.getElementById('anonymizeCopyBtn').addEventListener('click', () => {
-    const output = document.getElementById('anonymizeOutput').value;
-    navigator.clipboard.writeText(output).then(() => showToast('✓ Copié !', 'success'));
+    const output = document.getElementById('anonymizeOutput');
+    if (output) navigator.clipboard.writeText(output.value).then(() => showToast('✓ Copié !', 'success'));
   });
   document.getElementById('anonymizeCloseBtn').addEventListener('click', () => {
     document.getElementById('anonymizeModal').classList.add('hidden');
   });
 
+  // Improvement F: file import for anonymizer
+  const anonymizeFileInput = document.getElementById('anonymizeFileInput');
+  if (anonymizeFileInput) {
+    anonymizeFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const input = document.getElementById('anonymizeInput');
+        if (input) { input.value = ev.target.result; showToast('✓ Fichier chargé', 'success'); }
+      };
+      reader.readAsText(file, 'utf-8');
+    });
+  }
+
   document.getElementById('pdfBtn').addEventListener('click', openPDFTools);
   document.getElementById('exportDataBtn').addEventListener('click', exportData);
+  // Improvement G: markdown export
+  const exportMdBtn = document.getElementById('exportDataMdBtn');
+  if (exportMdBtn) exportMdBtn.addEventListener('click', exportDataMarkdown);
 
   // ---- AI TAB ----
   document.getElementById('aiDetectorBtn').addEventListener('click', detectAI);
@@ -326,13 +340,10 @@ document.addEventListener('DOMContentLoaded', () => {
     notifyContentScript({ action: 'updateSettings', settings: { summarizerLang: v } });
   });
 
-  // Sliders
   setupSlider('aiDetectorSensitivity', 'aiSensValue', 'aiDetectorSensitivity');
   setupSlider('summarizerLength', 'sumLenValue', 'summarizerLength');
 
   // ---- SETTINGS TAB ----
-
-  // Layout selector
   const layoutSelect = document.getElementById('layoutSelect');
   chrome.storage.local.get('aitools-layout', (data) => {
     if (data['aitools-layout'] && layoutSelect) layoutSelect.value = data['aitools-layout'];
@@ -367,23 +378,19 @@ document.addEventListener('DOMContentLoaded', () => {
     toggle.addEventListener('change', (e) => {
       const buttonType = e.target.dataset.buttonType;
       const isVisible = e.target.checked;
-
       if (!state.buttonVisibility) state.buttonVisibility = {};
       state.buttonVisibility[buttonType] = isVisible;
       chrome.storage.local.set({ buttonVisibility: state.buttonVisibility });
-
       notifyContentScript({ action: 'updateButtonVisibility', buttonType, isVisible });
-      showToast(isVisible ? `✓ Affiché` : `✗ Masqué`);
+      showToast(isVisible ? '✓ Affiché' : '✗ Masqué');
     });
   });
 
-  // Cookie blocker (settings tab)
+  // Cookie blocker settings tab
   document.getElementById('cookieBlockerEnabled').addEventListener('change', (e) => {
     state.cookieBlockerEnabled = e.target.checked;
     chrome.storage.local.set({ cookieBlockerEnabled: e.target.checked });
-    // Sync quick toggle
-    const quickToggle = document.getElementById('cookieBlockerQuickToggle');
-    if (quickToggle) quickToggle.checked = e.target.checked;
+    safeCheck('cookieBlockerQuickToggle', e.target.checked);
     notifyContentScript({ action: 'updateSettings', settings: { cookieBlockerEnabled: e.target.checked } });
     showToast(e.target.checked ? '✓ Bloqueur cookies actif' : '✗ Bloqueur désactivé');
   });
@@ -397,7 +404,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('currencyConverterToggle').addEventListener('change', (e) => {
     state.currencyConverterEnabled = e.target.checked;
     chrome.storage.local.set({ currencyConverterEnabled: e.target.checked });
-    showToast(e.target.checked ? '✓ Convertisseur actif' : '✗ Désactivé');
   });
 
   document.getElementById('performanceModeEnabled').addEventListener('change', (e) => {
@@ -450,20 +456,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================================
-// HELPER: Setup slider
+// HELPERS
 // ============================================================================
 function setupSlider(sliderId, valueId, storageKey) {
   const slider = document.getElementById(sliderId);
   const valueEl = document.getElementById(valueId);
   if (!slider) return;
-
   chrome.storage.local.get(storageKey, (data) => {
-    if (data[storageKey]) {
+    if (data[storageKey] !== undefined) {
       slider.value = data[storageKey];
       if (valueEl) valueEl.textContent = data[storageKey];
     }
   });
-
   slider.addEventListener('input', (e) => {
     if (valueEl) valueEl.textContent = e.target.value;
     chrome.storage.local.set({ [storageKey]: parseInt(e.target.value) });
@@ -471,9 +475,6 @@ function setupSlider(sliderId, valueId, storageKey) {
   });
 }
 
-// ============================================================================
-// HELPER: Setup select with storage sync
-// ============================================================================
 function setupSelectSync(elementId, storageKey, callback) {
   const el = document.getElementById(elementId);
   if (!el) return;
@@ -486,26 +487,20 @@ function setupSelectSync(elementId, storageKey, callback) {
   });
 }
 
-// ============================================================================
-// HELPER: Setup Google button visibility toggle
-// ============================================================================
 function setupGoogleButtonToggle(elementId, key) {
   const el = document.getElementById(elementId);
   if (!el) return;
   el.addEventListener('change', (e) => {
     chrome.storage.local.get('googleButtonsVisibility', (result) => {
-      const visibility = result.googleButtonsVisibility || { lucky: true, filters: true, maps: true, chatgpt: true };
-      visibility[key] = e.target.checked;
-      chrome.storage.local.set({ googleButtonsVisibility: visibility });
-      notifyContentScript({ action: 'updateGoogleButtons', visibility });
+      const v = result.googleButtonsVisibility || { lucky: true, filters: true, maps: true, chatgpt: true };
+      v[key] = e.target.checked;
+      chrome.storage.local.set({ googleButtonsVisibility: v });
+      notifyContentScript({ action: 'updateGoogleButtons', visibility: v });
       showToast(e.target.checked ? `✓ Bouton ${key} visible` : `✗ Bouton ${key} masqué`);
     });
   });
 }
 
-// ============================================================================
-// HEADER STATUS
-// ============================================================================
 function updateHeaderStatus() {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const statusEl = document.getElementById('headerSiteStatus');
@@ -514,18 +509,11 @@ function updateHeaderStatus() {
       try {
         const url = new URL(tabs[0].url);
         statusEl.textContent = url.hostname || 'Prêt';
-      } catch {
-        statusEl.textContent = 'Prêt';
-      }
-    } else {
-      statusEl.textContent = 'Prêt';
-    }
+      } catch { statusEl.textContent = 'Prêt'; }
+    } else { statusEl.textContent = 'Prêt'; }
   });
 }
 
-// ============================================================================
-// UPDATE UI
-// ============================================================================
 function updateUI() {
   safeCheck('darkModeToggle', state.darkMode);
   safeCheck('blockSponsored', state.blockSponsoredEnabled);
@@ -539,7 +527,6 @@ function updateUI() {
   safeCheck('cookieBlockerEnabled', state.cookieBlockerEnabled);
   safeCheck('cookieBlockerQuickToggle', state.cookieBlockerEnabled);
 
-  // Button visibility
   const bv = state.buttonVisibility || {};
   safeCheck('googleButtonsVisible', bv.googleButtons !== false);
   safeCheck('summarizerButtonVisible', bv.summarizerButton !== false);
@@ -550,10 +537,7 @@ function updateUI() {
   safeCheck('readingTimeBadgeVisible', bv.readingTimeBadge !== false);
   safeCheck('notesHighlighterVisible', bv.notesHighlighter !== false);
 
-  // Dark mode on body
   document.body.classList.toggle('dark-mode', !!state.darkMode);
-
-  // Extension disabled state
   document.body.classList.toggle('extension-disabled', !state.extensionEnabled);
 }
 
@@ -563,7 +547,7 @@ function safeCheck(id, value) {
 }
 
 // ============================================================================
-// TOGGLE DARK MODE
+// DARK MODE
 // ============================================================================
 function toggleDarkMode() {
   state.darkMode = !state.darkMode;
@@ -575,7 +559,7 @@ function toggleDarkMode() {
 }
 
 // ============================================================================
-// TOGGLE EXTENSION
+// EXTENSION TOGGLE
 // ============================================================================
 function toggleExtension() {
   state.extensionEnabled = !state.extensionEnabled;
@@ -595,12 +579,8 @@ function toggleExtension() {
 // ============================================================================
 function disableAll() {
   const allSettings = {
-    aiDetectorEnabled: false,
-    summarizerEnabled: false,
-    autoTranslatorEnabled: false,
-    readingTimeEnabled: false,
-    blockSponsoredEnabled: false,
-    cookieBlockerEnabled: false,
+    aiDetectorEnabled: false, summarizerEnabled: false, autoTranslatorEnabled: false,
+    readingTimeEnabled: false, blockSponsoredEnabled: false, cookieBlockerEnabled: false,
     googleButtonsVisibility: { lucky: false, filters: false, maps: false, chatgpt: false }
   };
   chrome.storage.local.set(allSettings);
@@ -611,39 +591,73 @@ function disableAll() {
 }
 
 // ============================================================================
-// POMODORO
+// POMODORO — Improvement H: persist state via chrome.storage.session
 // ============================================================================
+let pomodoroTimer = null;
+
+function checkPomodoroResume() {
+  if (!chrome.storage.session) return;
+  chrome.storage.session.get(['pomodoroStartTime', 'pomodoroDuration'], (data) => {
+    if (data.pomodoroStartTime) {
+      const elapsed = Date.now() - data.pomodoroStartTime;
+      if (elapsed < data.pomodoroDuration) {
+        safeCheck('pomodoroToggle', true);
+        state.pomodoroRunning = true;
+        runPomodoroTimer(data.pomodoroStartTime, data.pomodoroDuration);
+      } else {
+        if (chrome.storage.session) chrome.storage.session.remove(['pomodoroStartTime', 'pomodoroDuration']);
+      }
+    }
+  });
+}
+
 function startPomodoro() {
-  state.pomodoroRunning = true;
   const startTime = Date.now();
   const duration = 25 * 60 * 1000;
+  state.pomodoroRunning = true;
+  if (chrome.storage.session) {
+    chrome.storage.session.set({ pomodoroStartTime: startTime, pomodoroDuration: duration });
+  }
+  runPomodoroTimer(startTime, duration);
+  showToast('⏱️ Pomodoro démarré', 'success');
+}
+
+function stopPomodoro() {
+  state.pomodoroRunning = false;
+  if (pomodoroTimer) { clearTimeout(pomodoroTimer); pomodoroTimer = null; }
+  if (chrome.storage.session) chrome.storage.session.remove(['pomodoroStartTime', 'pomodoroDuration']);
+  const status = document.getElementById('pomodoroStatus');
+  if (status) status.style.display = 'none';
+}
+
+function runPomodoroTimer(startTime, duration) {
   const status = document.getElementById('pomodoroStatus');
   if (status) status.style.display = 'block';
 
-  const updateTimer = () => {
+  const tick = () => {
     const remaining = Math.max(0, Math.floor((duration - (Date.now() - startTime)) / 1000));
     const mins = Math.floor(remaining / 60);
     const secs = remaining % 60;
     if (status) status.innerHTML = `⏱️ ${mins}:${secs.toString().padStart(2, '0')}`;
 
     if (remaining > 0) {
-      setTimeout(updateTimer, 1000);
+      pomodoroTimer = setTimeout(tick, 1000);
     } else {
       if (status) status.innerHTML = '✅ Terminé !';
       safeCheck('pomodoroToggle', false);
       state.pomodoroRunning = false;
+      if (chrome.storage.session) chrome.storage.session.remove(['pomodoroStartTime', 'pomodoroDuration']);
       try {
         chrome.notifications.create({
           type: 'basic',
           iconUrl: 'icons/logo aitools sans fond sans texte.png',
           title: '⏱️ Pomodoro',
-          message: 'C\'est l\'heure de la pause !'
+          message: "C'est l'heure de la pause !"
         });
-      } catch (e) {}
+      } catch {}
     }
   };
-  updateTimer();
-  showToast('⏱️ Pomodoro démarré', 'success');
+  tick();
 }
 
 // ============================================================================
@@ -661,9 +675,7 @@ function cleanupTabs() {
     });
     Object.values(grouped).forEach(group => {
       if (group.length > 1) {
-        try {
-          chrome.tabGroups.group({ tabIds: group.slice(1).map(t => t.id) });
-        } catch {}
+        try { chrome.tabGroups.group({ tabIds: group.slice(1).map(t => t.id) }); } catch {}
       }
     });
   });
@@ -697,10 +709,11 @@ function deleteNote(index) {
 window.deleteNote = deleteNote;
 
 // ============================================================================
-// ANONYMIZER
+// ANONYMIZER — Bug #5 fix: no lookbehind, safer name detection
 // ============================================================================
 function runAnonymizer() {
-  const input = document.getElementById('anonymizeInput').value;
+  const inputEl = document.getElementById('anonymizeInput');
+  const input = inputEl?.value || '';
   if (!input.trim()) { showToast('⚠️ Collez du texte', 'error'); return; }
 
   const counts = {};
@@ -719,19 +732,24 @@ function runAnonymizer() {
 
   rules.forEach(({ key, pattern, label }) => {
     const matches = result.match(pattern) || [];
-    if (matches.length > 0) {
-      counts[key] = matches.length;
-      result = result.replace(pattern, label);
-    }
+    if (matches.length > 0) { counts[key] = matches.length; result = result.replace(pattern, label); }
   });
 
-  // Noms propres : mots avec majuscule non en début de phrase
-  // On remplace les mots avec majuscule qui ne suivent pas un point/début de ligne
-  const nomPattern = /(?<=[a-zàâéèêëîïôùûüç,;:!?\s])\b([A-ZÀÂÉÈÊËÎÏÔÙÛÜÇ][a-zàâéèêëîïôùûüç]{2,})\b/g;
-  const nomMatches = result.match(nomPattern) || [];
-  if (nomMatches.length > 0) {
-    counts['Nom'] = nomMatches.length;
-    result = result.replace(nomPattern, '[NOM]');
+  // Bug #5 fix: replace unsafe lookbehind with title-based + consecutive-capitals approach
+  // Step 1: title + name (M. Paul Dupont, Dr Marie Martin...)
+  const titlePattern = /\b(M\.|Mme\.?|Dr\.?|Pr\.?|Prof\.?|Monsieur|Madame|Ma[îi]tre|Docteur)\s+([A-ZÀÂÉÈÊËÎÏÔÙÛÜÇ][a-zàâéèêëîïôùûüç\-]{1,}(?:\s+[A-ZÀÂÉÈÊËÎÏÔÙÛÜÇ][a-zàâéèêëîïôùûüç\-]{1,})*)/g;
+  const titleMatches = result.match(titlePattern) || [];
+  if (titleMatches.length > 0) {
+    counts['Nom'] = (counts['Nom'] || 0) + titleMatches.length;
+    result = result.replace(titlePattern, '[NOM]');
+  }
+
+  // Step 2: two consecutive capitalized words (Prénom Nom pattern)
+  const namePattern = /\b([A-ZÀÂÉÈÊËÎÏÔÙÛÜÇ][a-zàâéèêëîïôùûüç\-]{2,})\s+([A-ZÀÂÉÈÊËÎÏÔÙÛÜÇ][a-zàâéèêëîïôùûüç\-]{2,})\b/g;
+  const nameMatches = result.match(namePattern) || [];
+  if (nameMatches.length > 0) {
+    counts['Nom'] = (counts['Nom'] || 0) + nameMatches.length;
+    result = result.replace(namePattern, '[NOM]');
   }
 
   const totalCount = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -740,23 +758,20 @@ function runAnonymizer() {
   const outputEl = document.getElementById('anonymizeOutput');
   const copyBtn = document.getElementById('anonymizeCopyBtn');
 
-  summaryEl.style.display = 'block';
-  if (totalCount === 0) {
-    summaryEl.innerHTML = 'ℹ️ Aucune donnée personnelle détectée.';
-    summaryEl.style.background = '#fef9e7';
-    summaryEl.style.borderColor = '#f9e79f';
-    summaryEl.style.color = '#856404';
-  } else {
-    const details = Object.entries(counts).map(([k, v]) => `<strong>${k}</strong>: ${v}`).join(' · ');
-    summaryEl.innerHTML = `✅ <strong>${totalCount} élément(s) anonymisé(s)</strong><br><span style="opacity:0.8;">${details}</span>`;
-    summaryEl.style.background = '#f0fdf4';
-    summaryEl.style.borderColor = '#bbf7d0';
-    summaryEl.style.color = '#166534';
+  if (summaryEl) {
+    summaryEl.style.display = 'block';
+    if (totalCount === 0) {
+      summaryEl.innerHTML = 'ℹ️ Aucune donnée personnelle détectée.';
+      summaryEl.style.cssText = summaryEl.style.cssText + ';background:#fef9e7;border-color:#f9e79f;color:#856404;';
+    } else {
+      const details = Object.entries(counts).map(([k, v]) => `<strong>${k}</strong>: ${v}`).join(' · ');
+      summaryEl.innerHTML = `✅ <strong>${totalCount} élément(s) anonymisé(s)</strong><br><span style="opacity:0.8;">${details}</span>`;
+      summaryEl.style.cssText = summaryEl.style.cssText + ';background:#f0fdf4;border-color:#bbf7d0;color:#166534;';
+    }
   }
 
-  outputEl.value = result;
-  outputEl.style.display = 'block';
-  copyBtn.style.display = totalCount > 0 ? 'block' : 'none';
+  if (outputEl) { outputEl.value = result; outputEl.style.display = 'block'; }
+  if (copyBtn) copyBtn.style.display = totalCount > 0 ? 'block' : 'none';
   showToast(`✓ ${totalCount} élément(s) anonymisé(s)`, 'success');
 }
 
@@ -781,14 +796,14 @@ function setupGoogleButtonCustomizer() {
 
   sel.addEventListener('change', (e) => {
     const key = e.target.value;
-    if (!key) { view.style.display = 'none'; return; }
+    if (!key) { if (view) view.style.display = 'none'; return; }
     chrome.storage.local.get('googleButtonsConfig', (result) => {
       const config = result.googleButtonsConfig || {};
       const btnCfg = config[key] || defaultButtonConfigs[key];
       if (labelInput) labelInput.value = btnCfg.label;
       if (colorInput) colorInput.value = btnCfg.color;
       if (actionInput) actionInput.value = btnCfg.action;
-      view.style.display = 'block';
+      if (view) view.style.display = 'block';
     });
   });
 
@@ -831,33 +846,33 @@ function setupGoogleButtonCustomizer() {
 }
 
 // ============================================================================
-// AI DETECTOR
+// AI DETECTOR (popup version — manual text input)
 // ============================================================================
 function detectAI() {
   const text = prompt('🤖 Collez le texte à analyser :');
   if (!text || text.trim().length < 50) { showToast('⚠️ Texte trop court (min 50 car.)', 'error'); return; }
 
-  const passiveVoice = (text.match(/(\bwas\b|\bwere\b|\bbeing\b|\bby\b)/gi) || []).length;
-  const repetitiveStructure = (text.match(/(\.\s[A-Z][a-z]{3,})/g) || []).length;
-  const formalTone = (text.match(/(\bthus\b|\btherefore\b|\bmoreover\b|\bfurthermore\b)/gi) || []).length;
+  const passiveCount = (text.match(/(\bwas\b|\bwere\b|\bbeing\b)/gi) || []).length;
+  const formalCount = (text.match(/(\bthus\b|\btherefore\b|\bmoreover\b|\bfurthermore\b)/gi) || []).length;
+  const structureCount = (text.match(/(\.\s[A-Z][a-z]{3,})/g) || []).length;
+  const wordCount = Math.max(1, text.split(/\s+/).length);
 
-  const wordCount = text.split(/\s+/).length;
   const score = Math.min(100, Math.round(
-    (repetitiveStructure / Math.max(1, text.split('.').length) * 100) * 0.4 +
-    (formalTone / Math.max(1, wordCount) * 1000) * 0.3 +
-    (passiveVoice / Math.max(1, wordCount) * 100) * 0.3
+    (passiveCount / wordCount * 100) * 0.3 +
+    (structureCount / Math.max(1, text.split('.').length) * 100) * 0.4 +
+    (formalCount / Math.max(1, wordCount) * 1000) * 0.3
   ));
 
-  let result = `📊 Analyse IA :\n\nScore : ${score}%\n\n`;
-  if (score > 60) result += '❌ Forte probabilité de contenu IA\n(Langage formel, structure répétitive)';
-  else if (score > 30) result += '🟡 Probabilité modérée\n(Quelques caractéristiques IA)';
-  else result += '✅ Probablement du contenu humain\n(Langage naturel détecté)';
-
+  let result = `📊 Analyse IA :\n\nScore : ${score}%\n`;
+  result += `\n• Tournures passives : ${passiveCount}`;
+  result += `\n• Connecteurs formels : ${formalCount}`;
+  result += `\n• Structure répétitive : ${structureCount}`;
+  result += `\n\n${score > 60 ? '❌ Forte probabilité de contenu IA' : score > 30 ? '🟡 Probabilité modérée' : '✅ Probablement humain'}`;
   alert(result);
 }
 
 // ============================================================================
-// TRANSLATOR
+// TRANSLATOR (popup version)
 // ============================================================================
 function openTranslator() {
   const text = prompt('🌐 Texte à traduire :');
@@ -880,9 +895,9 @@ function generatePalette() {
   list.innerHTML = '<div style="font-size:11px;"><strong>🎨 Palette générée :</strong><br><br>' +
     colors.map(c => `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px;background:#f5f5f5;border-radius:4px;">
-        <div style="width:40px;height:40px;background:${c};border-radius:4px;border:1px solid #ddd;flex-shrink:0;"></div>
-        <code style="font-size:11px;cursor:pointer;" onclick="navigator.clipboard.writeText('${c}').then(()=>{})">${c}</code>
-        <small style="color:#999;font-size:10px;">cliquer pour copier</small>
+        <div style="width:36px;height:36px;background:${c};border-radius:4px;border:1px solid #ddd;flex-shrink:0;"></div>
+        <code style="font-size:11px;">${c}</code>
+        <button onclick="navigator.clipboard.writeText('${c}')" style="font-size:10px;padding:2px 6px;border:1px solid #ddd;border-radius:3px;cursor:pointer;background:white;">Copier</button>
       </div>
     `).join('') + '</div>';
   document.getElementById('notesModal').classList.remove('hidden');
@@ -904,14 +919,15 @@ function openYouTubeEnhancer() {
   list.innerHTML = `
     <div style="font-size:11px;line-height:1.6;">
       <strong>▶️ YouTube Enhancer</strong><br><br>
-      <p><strong>✨ Features :</strong></p>
       <ul style="margin:8px 0;padding-left:16px;">
         <li>⏩ Contrôle vitesse (0.5x – 2x)</li>
         <li>🎯 Picture-in-Picture</li>
         <li>📊 Stats vidéo avancées</li>
       </ul>
-      <p style="color:#666;font-size:10px;margin-top:12px;">Rendez-vous sur YouTube pour accéder aux features !</p>
-      <button onclick="chrome.tabs.create({url:'https://www.youtube.com'})" style="background:#ff0000;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:11px;margin-top:8px;">Aller sur YouTube</button>
+      <button onclick="chrome.tabs.create({url:'https://www.youtube.com'})"
+        style="background:#ff0000;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:11px;margin-top:8px;">
+        Aller sur YouTube
+      </button>
     </div>
   `;
   document.getElementById('notesModal').classList.remove('hidden');
@@ -925,70 +941,88 @@ function openPDFTools() {
   list.innerHTML = `
     <div style="font-size:11px;line-height:1.6;">
       <strong>📄 PDF Tools</strong><br><br>
-      <p><strong>🔧 Capacités :</strong></p>
       <ul style="margin:8px 0;padding-left:16px;">
         <li>✂️ Extraire texte des PDF</li>
         <li>🔍 Chercher dans les PDFs</li>
-        <li>📋 Copier du contenu</li>
       </ul>
-      <p style="color:#666;font-size:10px;margin-top:12px;">Ouvrez un PDF dans votre navigateur !</p>
+      <p style="color:#999;font-size:10px;">Ouvrez un PDF dans votre navigateur !</p>
       <input type="file" id="pdfInput" accept=".pdf" style="font-size:11px;margin-top:8px;">
-      <button id="extractPdfBtn" style="background:#4CAF50;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:11px;margin-top:8px;display:block;">Extraire texte</button>
+      <button id="extractPdfBtn" style="background:#4CAF50;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:11px;margin-top:6px;display:block;">Extraire texte</button>
     </div>
   `;
   document.getElementById('notesModal').classList.remove('hidden');
-  const extractBtn = document.getElementById('extractPdfBtn');
-  if (extractBtn) {
-    extractBtn.addEventListener('click', () => {
-      showToast('📄 Fonctionnalité en développement', 'default');
-    });
-  }
+  document.getElementById('extractPdfBtn')?.addEventListener('click', () => {
+    showToast('📄 Fonctionnalité en développement');
+  });
 }
 
 // ============================================================================
-// EXPORT & RESET
+// EXPORT DATA — JSON + Improvement G: Markdown
 // ============================================================================
 function exportData() {
   const data = { notes: state.notes, timestamp: new Date().toISOString(), version: '4.0' };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = `aitools-export-${Date.now()}.json`;
-  a.click();
-  showToast('✓ Export réalisé', 'success');
+  a.href = url; a.download = `aitools-export-${Date.now()}.json`; a.click();
+  showToast('✓ Export JSON réalisé', 'success');
 }
 
+function exportDataMarkdown() {
+  if (!state.notes.length) { showToast('⚠️ Pas de notes à exporter', 'error'); return; }
+  const lines = state.notes.map(n => {
+    const date = n.timestamp ? new Date(n.timestamp).toLocaleDateString('fr-FR') : '';
+    return `## ${n.title || 'Note'}\n\n> ${n.text}\n\n*Source : ${n.url}*  \n*${date}*`;
+  });
+  const md = `# Mes notes AITools\n\n${lines.join('\n\n---\n\n')}`;
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `aitools-notes-${Date.now()}.md`; a.click();
+  showToast('✓ Export Markdown réalisé', 'success');
+}
+
+// ============================================================================
+// RESET
+// ============================================================================
 function resetExtension() {
   if (!confirm('⚠️ Réinitialiser toutes les données ?')) return;
   chrome.storage.local.clear(() => {
-    state = { darkMode: false, extensionEnabled: true, pomodoroRunning: false, readingTimeEnabled: true, currencyConverterEnabled: false, blockSponsoredEnabled: false, notes: [], buttonVisibility: {} };
+    state = {
+      darkMode: false, extensionEnabled: true, pomodoroRunning: false,
+      readingTimeEnabled: true, currencyConverterEnabled: false,
+      blockSponsoredEnabled: false, notes: [], buttonVisibility: {}
+    };
     updateUI();
     showToast('✓ Extension réinitialisée', 'success');
   });
 }
 
 // ============================================================================
-// SUMMARIZE
+// SUMMARIZE (popup version)
 // ============================================================================
 function summarizeText(text) {
   if (!text || text.length < 100) return text;
   let sentences = (text.match(/[^.!?]+[.!?]+/g) || [text]).map(s => s.trim()).filter(s => s.length > 20);
   if (sentences.length <= 2) return text;
 
-  const keywords = { 'important': 4, 'clé': 4, 'essentiel': 4, 'résultat': 4, 'conclusion': 4, 'découvert': 4, 'impact': 4, 'key': 4, 'result': 4, 'found': 3, 'shows': 3 };
+  const keywords = {
+    'important': 4, 'clé': 4, 'essentiel': 4, 'résultat': 4, 'conclusion': 4,
+    'découvert': 4, 'impact': 4, 'key': 4, 'result': 4, 'found': 3, 'shows': 3
+  };
 
   const scored = sentences.map((s, i) => {
     let score = 1;
     if (i === 0) score += 5;
     if (i === sentences.length - 1) score += 4;
-    const words = s.split(/\s+/).length;
-    if (words >= 8 && words <= 30) score += 3;
+    const wc = s.split(/\s+/).length;
+    if (wc >= 8 && wc <= 30) score += 3;
     Object.entries(keywords).forEach(([kw, w]) => { if (s.toLowerCase().includes(kw)) score += w; });
     if (/\d+/.test(s)) score += 2;
     return { s, score, i };
   });
 
   const keepCount = Math.max(2, Math.ceil(sentences.length * 0.35));
-  return scored.sort((a, b) => b.score - a.score).slice(0, keepCount).sort((a, b) => a.i - b.i).map(x => x.s).join(' ');
+  return scored.sort((a, b) => b.score - a.score).slice(0, keepCount)
+    .sort((a, b) => a.i - b.i).map(x => x.s).join(' ');
 }

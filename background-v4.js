@@ -2,6 +2,9 @@
 console.log('[AITools] Background worker initialized');
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // ============================================================================
+  // ADD NOTE
+  // ============================================================================
   if (message.action === 'addNote') {
     const note = message.data;
     chrome.storage.local.get('notes', (data) => {
@@ -13,6 +16,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // ============================================================================
+  // TRANSLATE TEXT
+  // ============================================================================
   if (message.action === 'translateText') {
     const { text, sourceLang, targetLang } = message;
     console.log('[AITools] Translation request:', (sourceLang || 'auto'), '->', targetLang);
@@ -28,7 +34,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const validLangs = ['en', 'fr', 'es', 'de', 'it', 'pt', 'ru', 'ja', 'zh', 'ar', 'ko', 'tr'];
         const sourceLangCode = validLangs.includes(sourceLang) ? sourceLang : 'en';
 
-        // Try MyMemory API
+        // ---- API 1 : MyMemory ----
         try {
           const url = new URL('https://api.mymemory.translated.net/get');
           url.searchParams.append('q', textToTranslate);
@@ -37,35 +43,76 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const response = await fetch(url);
           const data = await response.json();
 
-          if (data?.responseData?.translatedText &&
-            data.responseData.translatedText.length > 0 &&
-            !data.responseData.translatedText.includes('QUERY LENGTH') &&
-            !data.responseData.translatedText.includes('INVALID') &&
-            data.responseData.translatedText.toLowerCase() !== textToTranslate.toLowerCase()) {
-            sendResponse({ success: true, text: data.responseData.translatedText });
+          const translated = data.responseData?.translatedText || '';
+          const isSame = translated.trim().toLowerCase() === textToTranslate.trim().toLowerCase();
+          const isError =
+            data.responseStatus !== 200 ||
+            translated.includes('QUERY LENGTH') ||
+            translated.includes('INVALID') ||
+            translated.includes('NO QUERY') ||
+            translated.length < 3 ||
+            isSame;
+
+          if (!isError) {
+            console.log('[AITools] Translation OK via MyMemory');
+            sendResponse({ success: true, text: translated });
             return;
           }
+          console.log('[AITools] MyMemory response invalid:', translated.substring(0, 80));
         } catch (e1) {
           console.log('[AITools] MyMemory failed:', e1.message);
         }
 
-        // Fallback: Reverso
+        // ---- API 2 : Reverso ----
         try {
-          const reversoUrl = 'https://api.reverso.net/translate/text/json?language_from=' + sourceLangCode +
-            '&language_to=' + targetLang + '&input=' + encodeURIComponent(textToTranslate);
+          const reversoUrl = 'https://api.reverso.net/translate/text/json?language_from=' +
+            sourceLangCode + '&language_to=' + targetLang +
+            '&input=' + encodeURIComponent(textToTranslate);
+
           const reversoResponse = await fetch(reversoUrl);
           const reversoData = await reversoResponse.json();
 
-          if (reversoData?.translation?.length > 0 &&
-            reversoData.translation[0].toLowerCase() !== textToTranslate.toLowerCase()) {
-            sendResponse({ success: true, text: reversoData.translation[0] });
+          const revTranslated = reversoData?.translation?.[0] || '';
+          const revSame = revTranslated.trim().toLowerCase() === textToTranslate.trim().toLowerCase();
+
+          if (revTranslated && revTranslated.length > 2 && !revSame) {
+            console.log('[AITools] Translation OK via Reverso');
+            sendResponse({ success: true, text: revTranslated });
             return;
           }
+          console.log('[AITools] Reverso response invalid');
         } catch (e2) {
           console.log('[AITools] Reverso failed:', e2.message);
         }
 
+        // ---- API 3 : LibreTranslate (instance publique) ----
+        try {
+          const ltResponse = await fetch('https://libretranslate.com/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              q: textToTranslate,
+              source: sourceLangCode,
+              target: targetLang,
+              format: 'text'
+            })
+          });
+          const ltData = await ltResponse.json();
+          const ltTranslated = ltData?.translatedText || '';
+          const ltSame = ltTranslated.trim().toLowerCase() === textToTranslate.trim().toLowerCase();
+
+          if (ltTranslated && ltTranslated.length > 2 && !ltSame) {
+            console.log('[AITools] Translation OK via LibreTranslate');
+            sendResponse({ success: true, text: ltTranslated });
+            return;
+          }
+        } catch (e3) {
+          console.log('[AITools] LibreTranslate failed:', e3.message);
+        }
+
+        console.log('[AITools] All translation APIs failed');
         sendResponse({ success: false, error: 'Translation service unavailable' });
+
       } catch (e) {
         console.error('[AITools] Translation error:', e.message);
         sendResponse({ success: false, error: e.message });
@@ -76,6 +123,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+// ============================================================================
+// ON INSTALL — set all defaults
+// ============================================================================
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
     console.log('[AITools] Extension installed v4.0');
@@ -90,7 +140,6 @@ chrome.runtime.onInstalled.addListener((details) => {
       autoTranslatorEnabled: true,
       translatorTargetLang: 'fr',
       performanceModeEnabled: false,
-      // Button visibility — ALL enabled by default
       buttonVisibility: {
         googleButtons: true,
         summarizerButton: true,
@@ -101,13 +150,7 @@ chrome.runtime.onInstalled.addListener((details) => {
         readingTimeBadge: true,
         notesHighlighter: true
       },
-      // Google buttons — ALL enabled by default
-      googleButtonsVisibility: {
-        lucky: true,
-        filters: true,
-        maps: true,
-        chatgpt: true
-      },
+      googleButtonsVisibility: { lucky: true, filters: true, maps: true, chatgpt: true },
       googleButtonsConfig: {
         lucky: { label: '🍀 Chance', action: 'lucky', color: '#5f6368' },
         filters: { label: '🔍 Filtres', action: 'filters', color: '#5f6368' },

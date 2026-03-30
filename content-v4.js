@@ -5,7 +5,6 @@ const DEBUG = false;
 
 let extensionEnabled = true;
 let darkModeEnabled = false;
-let readingTimeBadgeShown = false;
 let highlighterEnabled = true;
 
 let extensionSettings = {
@@ -39,32 +38,83 @@ let buttonVisibility = {
   notesHighlighter: true
 };
 
-// Load all settings from storage
-chrome.storage.local.get(null, (result) => {
-  if (result.aiDetectorSensitivity) extensionSettings.aiDetectorSensitivity = parseInt(result.aiDetectorSensitivity);
-  if (result.summarizerLength) extensionSettings.summarizerLength = parseInt(result.summarizerLength);
-  if (result.summarizerLang) extensionSettings.summarizerLang = result.summarizerLang;
-  if (result.autoTranslatorEnabled !== undefined) extensionSettings.autoTranslatorEnabled = result.autoTranslatorEnabled;
-  if (result.translatorTargetLang) extensionSettings.translatorTargetLang = result.translatorTargetLang;
-  if (result.cookieBlockerEnabled !== undefined) extensionSettings.cookieBlockerEnabled = result.cookieBlockerEnabled;
-  if (result.readingTimeEnabled !== undefined) extensionSettings.readingTimeEnabled = result.readingTimeEnabled;
-  if (result.quickStatsEnabled !== undefined) extensionSettings.quickStatsEnabled = result.quickStatsEnabled;
-  if (result.performanceModeEnabled !== undefined) extensionSettings.performanceModeEnabled = result.performanceModeEnabled;
-  if (result['aitools-visibility']) {
-    elementVisibility = { ...elementVisibility, ...result['aitools-visibility'] };
+// ============================================================================
+// SINGLE INIT BLOCK — fixes race condition (bugs #1 and #10)
+// All variables are assigned BEFORE any init function is called.
+// ============================================================================
+chrome.storage.local.get(null, (data) => {
+  // --- assign all settings ---
+  extensionEnabled = data.extensionEnabled !== false;
+  darkModeEnabled = data.darkModeEnabled === true;
+
+  if (data.aiDetectorSensitivity) extensionSettings.aiDetectorSensitivity = parseInt(data.aiDetectorSensitivity);
+  if (data.summarizerLength) extensionSettings.summarizerLength = parseInt(data.summarizerLength);
+  if (data.summarizerLang) extensionSettings.summarizerLang = data.summarizerLang;
+  if (data.autoTranslatorEnabled !== undefined) extensionSettings.autoTranslatorEnabled = data.autoTranslatorEnabled;
+  if (data.translatorTargetLang) extensionSettings.translatorTargetLang = data.translatorTargetLang;
+  if (data.cookieBlockerEnabled !== undefined) extensionSettings.cookieBlockerEnabled = data.cookieBlockerEnabled;
+  if (data.readingTimeEnabled !== undefined) extensionSettings.readingTimeEnabled = data.readingTimeEnabled;
+  if (data.quickStatsEnabled !== undefined) extensionSettings.quickStatsEnabled = data.quickStatsEnabled;
+  if (data.performanceModeEnabled !== undefined) extensionSettings.performanceModeEnabled = data.performanceModeEnabled;
+  if (data.aiDetectorEnabled !== undefined) extensionSettings.aiDetectorEnabled = data.aiDetectorEnabled;
+  if (data.summarizerEnabled !== undefined) extensionSettings.summarizerEnabled = data.summarizerEnabled;
+  if (data.focusModeEnabled !== undefined) extensionSettings.focusModeEnabled = data.focusModeEnabled;
+
+  if (data['aitools-visibility']) {
+    elementVisibility = { ...elementVisibility, ...data['aitools-visibility'] };
   }
-  if (result.buttonVisibility) {
-    buttonVisibility = { ...buttonVisibility, ...result.buttonVisibility };
+  if (data.buttonVisibility) {
+    buttonVisibility = { ...buttonVisibility, ...data.buttonVisibility };
   }
+
+  // highlighterEnabled depends on buttonVisibility — must be set after loading it
   highlighterEnabled = buttonVisibility.notesHighlighter !== false;
+
+  // Initialize defaults for Google buttons if not set
+  if (!data.googleButtonsVisibility) {
+    chrome.storage.local.set({
+      googleButtonsVisibility: { lucky: true, filters: true, maps: true, chatgpt: true }
+    });
+  }
+  if (!data.googleButtonsConfig) {
+    chrome.storage.local.set({
+      googleButtonsConfig: {
+        lucky: { label: '🍀 Chance', action: 'lucky', color: '#5f6368' },
+        filters: { label: '🔍 Filtres', action: 'filters', color: '#5f6368' },
+        maps: { label: '🗺️ Maps', action: 'maps', color: '#5f6368' },
+        chatgpt: { label: '🤖 ChatGPT', action: 'chatgpt', color: '#5f6368' }
+      }
+    });
+  }
+
+  if (!extensionEnabled) return;
+
+  // --- now call all inits, in order, with correct state ---
+  if (darkModeEnabled) enableDarkMode();
+
+  setupHighlighter();
+  setupGoogleEnhancements();
+
+  if (data.blockSponsoredEnabled) setTimeout(blockSponsoredResults, 2000);
+  if (data.focusModeEnabled) enableFocusMode();
+
+  if (extensionSettings.readingTimeEnabled) initReadingTime();
+
+  if (!extensionSettings.performanceModeEnabled) {
+    initAIDetector();
+  }
+
+  initSummarizer();
+  initAutoTranslator();
+  initCookieBlocker();
+  initQuickStats();
+  initFocusMode();
 });
 
 // ============================================================================
 // DRAGGABLE UTILITY
 // ============================================================================
 function makeDraggable(element, storageKey) {
-  if (DEBUG) console.log('[AITools] makeDraggable:', storageKey);
-
   let isDragging = false;
   let startX = 0, startY = 0;
   let offsetX = 0, offsetY = 0;
@@ -89,7 +139,6 @@ function makeDraggable(element, storageKey) {
     dragDistance = 0;
     startX = e.clientX;
     startY = e.clientY;
-
     element.style.position = 'fixed';
     element.style.zIndex = '999999';
 
@@ -157,28 +206,19 @@ function setupHighlighter() {
     if (!highlighterEnabled) return;
     const selected = window.getSelection().toString().trim();
 
-    // Remove existing menu
-    if (menu && menu.parentNode) {
-      menu.remove();
-      menu = null;
-    }
-
+    if (menu && menu.parentNode) { menu.remove(); menu = null; }
     if (!selected) return;
 
     menu = document.createElement('div');
     menu.id = 'aitools-highlight-menu';
     menu.style.cssText = `
-      position: fixed;
-      background: white;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 8px;
-      z-index: 10001;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      font-size: 12px;
+      position: fixed; background: white; border: 1px solid #ddd; border-radius: 8px;
+      padding: 8px; z-index: 10001; box-shadow: 0 4px 12px rgba(0,0,0,0.15); font-size: 12px;
     `;
 
-    const rect = window.getSelection().getRangeAt(0).getBoundingClientRect();
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
     menu.style.left = Math.min(rect.left, window.innerWidth - 160) + 'px';
     menu.style.top = (rect.bottom + 8) + 'px';
 
@@ -196,17 +236,14 @@ function setupHighlighter() {
     document.body.appendChild(menu);
   });
 
-  // Disappear immediately when selection is cleared
+  // Disappear immediately when selection is cleared (bug fix)
   document.addEventListener('selectionchange', () => {
     const selected = window.getSelection().toString().trim();
-    if (!selected && menu && menu.parentNode) {
-      menu.remove();
-      menu = null;
-    }
+    if (!selected && menu && menu.parentNode) { menu.remove(); menu = null; }
   });
 }
 
-window.aiToolsAddNote = function(text) {
+window.aiToolsAddNote = function (text) {
   chrome.runtime.sendMessage({
     action: 'addNote',
     data: { text, url: window.location.href, title: document.title, timestamp: new Date().toISOString() }
@@ -214,42 +251,55 @@ window.aiToolsAddNote = function(text) {
 };
 
 // ============================================================================
+// SHARED CONTENT EXTRACTION — used by summarizer and translator (bug #9)
+// ============================================================================
+function extractRelevantPageText(maxLength = 6000) {
+  // Strategy 1: semantic main element
+  const mainEl = document.querySelector('article, [role="main"], main');
+  if (mainEl) return mainEl.innerText.trim().substring(0, maxLength);
+
+  // Strategy 2: filtered paragraphs
+  const excluded = new Set(['NAV', 'FOOTER', 'HEADER', 'ASIDE', 'SCRIPT', 'STYLE', 'NOSCRIPT']);
+  const paragraphs = Array.from(document.querySelectorAll('p'))
+    .filter(el => {
+      let p = el.parentElement;
+      while (p) {
+        if (excluded.has(p.tagName) || p.getAttribute('role') === 'navigation') return false;
+        p = p.parentElement;
+      }
+      return el.innerText.trim().length > 60;
+    })
+    .map(el => el.innerText.trim())
+    .join('\n');
+
+  if (paragraphs.length > 200) return paragraphs.substring(0, maxLength);
+
+  // Fallback
+  return document.body.innerText.substring(0, maxLength);
+}
+
+// ============================================================================
 // GOOGLE SEARCH ENHANCEMENTS
 // ============================================================================
 function setupGoogleEnhancements() {
   if (!window.location.hostname.includes('google.')) return;
 
-  // Only show buttons if there's an active search query
   function hasActiveSearch() {
     try {
-      const params = new URLSearchParams(window.location.search);
-      const q = params.get('q');
+      const q = new URLSearchParams(window.location.search).get('q');
       return q && q.trim().length > 0;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }
 
-  if (!hasActiveSearch()) {
-    if (DEBUG) console.log('[AITools] No search query, skipping Google buttons');
-    return;
-  }
-
-  // Check if globally enabled (default true)
-  if (buttonVisibility.googleButtons === false) {
-    if (DEBUG) console.log('[AITools] Google buttons disabled');
-    return;
-  }
+  if (!hasActiveSearch()) return;
+  if (buttonVisibility.googleButtons === false) return;
 
   function getGoogleSearchInput() {
     let input = document.querySelector('input[name="q"]');
     if (input && input.offsetParent !== null) return input;
 
-    const searchForm = document.querySelector('form[action*="/search"]');
-    if (searchForm) {
-      input = searchForm.querySelector('input[type="text"]');
-      if (input) return input;
-    }
+    const form = document.querySelector('form[action*="/search"]');
+    if (form) { input = form.querySelector('input[type="text"]'); if (input) return input; }
 
     const inputs = document.querySelectorAll('input[type="text"]');
     for (let inp of inputs) {
@@ -257,9 +307,8 @@ function setupGoogleEnhancements() {
     }
 
     try {
-      const params = new URLSearchParams(window.location.search);
-      const query = params.get('q') || '';
-      if (query) return { value: query, fromURL: true };
+      const q = new URLSearchParams(window.location.search).get('q') || '';
+      if (q) return { value: q, fromURL: true };
     } catch {}
 
     return null;
@@ -270,47 +319,32 @@ function setupGoogleEnhancements() {
   const injectGoogleButtons = () => {
     if (isInjecting) return;
     if (!hasActiveSearch()) return;
+    if (document.getElementById('aitools-google-buttons')) return;
 
     const searchInput = getGoogleSearchInput();
-    if (!searchInput) {
-      setTimeout(injectGoogleButtons, 1000);
-      return;
-    }
-
-    if (document.getElementById('aitools-google-buttons')) return;
+    if (!searchInput) { setTimeout(injectGoogleButtons, 1000); return; }
 
     isInjecting = true;
 
     const container = document.createElement('div');
     container.id = 'aitools-google-buttons';
     container.style.cssText = `
-      position: fixed;
-      top: 80px;
-      right: 20px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-      background: transparent;
-      z-index: 10000;
-      max-width: 400px;
+      position: fixed; top: 80px; right: 20px; display: flex; align-items: center;
+      gap: 8px; flex-wrap: wrap; background: transparent; z-index: 10000; max-width: 400px;
     `;
 
     if (!document.getElementById('aitools-google-styles')) {
       const style = document.createElement('style');
       style.id = 'aitools-google-styles';
       style.textContent = `
-        .aitools-gb {
-          display: inline-flex; align-items: center; padding: 8px 12px;
-          background: transparent; color: #5f6368; border: none; border-radius: 4px;
-          font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;
-          white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          pointer-events: auto; user-select: none;
-        }
-        .aitools-gb:hover { color: #202124; background: rgba(0,0,0,0.05); border-radius: 4px; }
-        .aitools-gb:active { background: rgba(102,126,234,0.1); }
-        #aitools-google-buttons { cursor: grab !important; }
-        #aitools-google-buttons:active { cursor: grabbing !important; }
+        .aitools-gb { display:inline-flex;align-items:center;padding:8px 12px;background:transparent;
+          color:#5f6368;border:none;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer;
+          transition:all 0.2s;white-space:nowrap;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+          pointer-events:auto;user-select:none; }
+        .aitools-gb:hover { color:#202124;background:rgba(0,0,0,0.05); }
+        .aitools-gb:active { background:rgba(102,126,234,0.1); }
+        #aitools-google-buttons { cursor:grab !important; }
+        #aitools-google-buttons:active { cursor:grabbing !important; }
       `;
       document.head.appendChild(style);
     }
@@ -319,6 +353,9 @@ function setupGoogleEnhancements() {
       const visibility = result.googleButtonsVisibility || { lucky: true, filters: true, maps: true, chatgpt: true };
       const config = result.googleButtonsConfig || {};
 
+      const currentQuery = getGoogleSearchInput()?.value?.trim() ||
+        new URLSearchParams(window.location.search).get('q') || '';
+
       const buttonDefs = [
         { key: 'lucky', label: '🍀 Chance', action: 'lucky' },
         { key: 'filters', label: '🔍 Filtres', action: 'filters' },
@@ -326,16 +363,14 @@ function setupGoogleEnhancements() {
         { key: 'chatgpt', label: '🤖 ChatGPT', action: 'chatgpt' }
       ];
 
-      // Check if music search → add YouTube Music button
-      const currentQuery = getGoogleSearchInput()?.value?.trim() || new URLSearchParams(window.location.search).get('q') || '';
-      const musicKeywords = ['music', 'musique', 'chanson', 'song', 'album', 'artist', 'artiste', 'lyrics', 'paroles', 'titre', 'track', 'remix', 'feat', 'clip', 'discographie'];
-      const isMusicSearch = musicKeywords.some(kw => currentQuery.toLowerCase().includes(kw));
-      if (isMusicSearch) {
+      // Dynamic: YouTube Music if music search (improvement I)
+      const musicKeywords = ['music', 'musique', 'chanson', 'song', 'album', 'artist', 'artiste',
+        'lyrics', 'paroles', 'titre', 'track', 'remix', 'feat', 'clip', 'discographie'];
+      if (musicKeywords.some(kw => currentQuery.toLowerCase().includes(kw))) {
         buttonDefs.push({ key: 'ytmusic', label: '🎵 YT Music', action: 'ytmusic' });
       }
 
       buttonDefs.forEach((def) => {
-        // ytmusic has no visibility toggle, always shown when music search
         if (def.key !== 'ytmusic' && visibility[def.key] === false) return;
 
         const customConfig = config[def.key] || {};
@@ -353,14 +388,9 @@ function setupGoogleEnhancements() {
         btn.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-
-          const input = getGoogleSearchInput();
-          const query = input?.value?.trim() || new URLSearchParams(window.location.search).get('q') || '';
-
-          if (!query) {
-            alert('⚠️ Entrez une recherche');
-            return;
-          }
+          const query = getGoogleSearchInput()?.value?.trim() ||
+            new URLSearchParams(window.location.search).get('q') || '';
+          if (!query) { alert('⚠️ Entrez une recherche'); return; }
 
           switch (action) {
             case 'lucky':
@@ -404,8 +434,8 @@ function setupGoogleEnhancements() {
   new MutationObserver(() => {
     if (window.location.href !== lastUrl) {
       lastUrl = window.location.href;
-      const container = document.getElementById('aitools-google-buttons');
-      if (container) container.remove();
+      const c = document.getElementById('aitools-google-buttons');
+      if (c) c.remove();
       isInjecting = false;
       if (hasActiveSearch()) setTimeout(injectGoogleButtons, 300);
     } else if (!document.getElementById('aitools-google-buttons') && hasActiveSearch()) {
@@ -434,27 +464,23 @@ let cookieObserverPaused = false;
 function initCookieBlocker() {
   if (!extensionSettings.cookieBlockerEnabled) return;
 
-  setTimeout(() => {
-    closeCookiePopups();
-  }, 1500);
+  setTimeout(() => closeCookiePopups(), 1500);
 
   let debounceTimer = null;
   cookieObserver = new MutationObserver(() => {
     if (cookieObserverPaused) return;
     if (debounceTimer) return;
-    debounceTimer = setTimeout(() => {
-      closeCookiePopups();
-      debounceTimer = null;
-    }, 300);
+    debounceTimer = setTimeout(() => { closeCookiePopups(); debounceTimer = null; }, 300);
   });
 
-  cookieObserver.observe(document.body, {
-    childList: true,
-    subtree: false
-  });
+  cookieObserver.observe(document.body, { childList: true, subtree: false });
 }
 
-const COOKIE_KEYWORDS = ['cookie', 'cookies', 'gdpr', 'consentement', 'consent', 'privacy', 'vie privée', 'données personnelles', 'personal data', 'accepter', 'accept', 'politique de confidentialité'];
+const COOKIE_KEYWORDS = [
+  'cookie', 'cookies', 'gdpr', 'consentement', 'consent', 'privacy',
+  'vie privée', 'données personnelles', 'personal data', 'accepter', 'accept',
+  'politique de confidentialité'
+];
 
 function elementHasCookieKeyword(element) {
   const text = element.innerText?.toLowerCase() || '';
@@ -463,28 +489,26 @@ function elementHasCookieKeyword(element) {
 
 function closeCookiePopups() {
   const popupSelectors = [
-    '[id*="cookie"], [class*="cookie"]',
-    '[id*="consent"], [class*="consent"]',
-    '[id*="gdpr"], [class*="gdpr"]',
+    '[id*="cookie"],[class*="cookie"]',
+    '[id*="consent"],[class*="consent"]',
+    '[id*="gdpr"],[class*="gdpr"]',
     '[role="dialog"][aria-label*="cookie" i]',
     '[role="dialog"][aria-label*="consent" i]',
-    '[id*="onetrust"], [class*="onetrust"]',
-    '[id*="cookiepro"], [class*="cookiepro"]',
-    '[id*="borlabs"], [class*="borlabs"]',
-    '[id*="termly"], [class*="termly"]'
+    '[id*="onetrust"],[class*="onetrust"]',
+    '[id*="cookiepro"],[class*="cookiepro"]',
+    '[id*="borlabs"],[class*="borlabs"]',
+    '[id*="termly"],[class*="termly"]'
   ];
 
   document.querySelectorAll(popupSelectors.join(', ')).forEach(popup => {
     if (!isVisible(popup)) return;
-    // Must be tall enough and have cookie keywords
     if (popup.offsetHeight < 50) return;
     const text = popup.innerText || '';
     if (text.length < 20) return;
     if (!elementHasCookieKeyword(popup)) return;
 
-    const clicked = tryClickAcceptButton(popup);
+    const clicked = tryClickCookieButton(popup);
     if (clicked) {
-      // Pause observer for 5 seconds to avoid loops
       cookieObserverPaused = true;
       setTimeout(() => { cookieObserverPaused = false; }, 5000);
     }
@@ -494,36 +518,47 @@ function closeCookiePopups() {
 function isVisible(element) {
   if (!element) return false;
   const style = window.getComputedStyle(element);
-  return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0' && element.offsetHeight > 0;
+  return style.display !== 'none' && style.visibility !== 'hidden' &&
+    style.opacity !== '0' && element.offsetHeight > 0;
 }
 
-function tryClickAcceptButton(popup) {
+function tryClickCookieButton(popup) {
+  const buttons = popup.querySelectorAll('button, a[role="button"], [role="button"]');
+
+  // Improvement E: try "refuse all" first (better for privacy)
+  const refusePatterns = [
+    'refuser tout', 'tout refuser', 'reject all', 'refuse all',
+    'nécessaires uniquement', 'essential only', 'nur notwendige',
+    'solo necessari', 'continuer sans accepter', 'decline all'
+  ];
+  for (const btn of buttons) {
+    const btnText = btn.textContent.toLowerCase().trim();
+    for (const pattern of refusePatterns) {
+      if (btnText.includes(pattern)) { btn.click(); return true; }
+    }
+  }
+
+  // Then try "accept"
   const acceptPatterns = [
-    'accept all', 'accepter tout', 'tout accepter', 'j\'accepte', 'agree',
-    'allow all', 'autoriser tout', 'confirm', 'continue', 'ok', 'accept',
+    'accept all', 'accepter tout', 'tout accepter', "j'accepte", 'agree',
+    'allow all', 'autoriser tout', 'confirm', 'ok', 'accept',
     'aceptar', 'alle akzeptieren', 'accetta', 'concordo', 'oui', 'yes'
   ];
-
-  const buttons = popup.querySelectorAll('button, a[role="button"], [role="button"]');
   for (const btn of buttons) {
     const btnText = btn.textContent.toLowerCase().trim();
     const btnClass = btn.className.toLowerCase();
     const btnId = btn.id.toLowerCase();
 
     for (const pattern of acceptPatterns) {
-      if (btnText.includes(pattern)) {
-        btn.click();
-        return true;
-      }
+      if (btnText.includes(pattern)) { btn.click(); return true; }
     }
-
-    if (btnClass.includes('accept') || btnClass.includes('agree') || btnId.includes('accept') || btnId.includes('agree')) {
-      btn.click();
-      return true;
+    if (btnClass.includes('accept') || btnClass.includes('agree') ||
+      btnId.includes('accept') || btnId.includes('agree')) {
+      btn.click(); return true;
     }
   }
 
-  // Hide as fallback only if very clearly a cookie popup
+  // Fallback: hide
   popup.style.display = 'none';
   return false;
 }
@@ -536,33 +571,49 @@ function initAIDetector() {
   if (!extensionSettings.aiDetectorEnabled) return;
 
   const hostname = window.location.hostname;
-  if (hostname.includes('google.') || hostname.includes('facebook.') || hostname.includes('twitter.') ||
-    hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) return;
+  if (hostname.includes('google.') || hostname.includes('facebook.') ||
+    hostname.includes('twitter.') || hostname.includes('instagram.') ||
+    hostname.includes('youtube.') || hostname.includes('reddit.')) return;
 
   setTimeout(() => {
     const text = document.body.innerText;
     if (text.length < 500) return;
-    const score = detectAIText(text.substring(0, 10000));
+    const result = detectAIText(text.substring(0, 10000));
     const threshold = extensionSettings.aiDetectorSensitivity || 60;
-    if (score > threshold) showAIBadge(score);
+    if (result.score > threshold) showAIBadge(result);
   }, 3000);
 }
 
+// Improvement C: return score + details
 function detectAIText(text) {
-  let score = 0;
-  const passiveCount = (text.match(/(\bwas\b|\bwere\b|\bbeing\b|\bby\b)/gi) || []).length;
-  const structureCount = (text.match(/(\.\s[A-Z][a-z]{3,})/g) || []).length;
-  const formalCount = (text.match(/(\bthus\b|\btherefore\b|\bin conclusion\b|\bmoreover\b)/gm) || []).length;
-  const wordCount = text.split(/\s+/).length;
-  score += (passiveCount / wordCount * 100) * 0.3;
-  score += (structureCount / text.split('.').length * 100) * 0.4;
-  score += (formalCount / Math.max(1, text.split('\n').length) * 100) * 0.3;
-  return Math.min(100, Math.round(score));
+  const passiveMatches = text.match(/(\bwas\b|\bwere\b|\bbeing\b)/gi) || [];
+  const formalMatches = text.match(/(\bthus\b|\btherefore\b|\bmoreover\b|\bfurthermore\b|\bin conclusion\b)/gi) || [];
+  const structureMatches = text.match(/(\.\s[A-Z][a-z]{3,})/g) || [];
+  const wordCount = Math.max(1, text.split(/\s+/).length);
+  const sentenceCount = Math.max(1, text.split('.').length);
+  const lineCount = Math.max(1, text.split('\n').length);
+
+  const score = Math.min(100, Math.round(
+    (passiveMatches.length / wordCount * 100) * 0.3 +
+    (structureMatches.length / sentenceCount * 100) * 0.4 +
+    (formalMatches.length / lineCount * 100) * 0.3
+  ));
+
+  return {
+    score,
+    details: {
+      passif: passiveMatches.length,
+      formel: formalMatches.length,
+      structure: structureMatches.length
+    }
+  };
 }
 
-function showAIBadge(score) {
+function showAIBadge(result) {
   if (!elementVisibility.aiBadge) return;
   if (document.getElementById('aitools-ai-badge')) return;
+
+  const { score, details } = result;
 
   const badge = document.createElement('div');
   badge.id = 'aitools-ai-badge';
@@ -570,7 +621,7 @@ function showAIBadge(score) {
     position: fixed; top: 80px; right: 20px;
     background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
     color: white; padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
-    z-index: 9999; box-shadow: 0 4px 16px rgba(255,107,107,0.3); cursor: grab;
+    z-index: 9999; box-shadow: 0 4px 16px rgba(255,107,107,0.3); cursor: pointer;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     display: flex; align-items: center; justify-content: space-between; gap: 8px; user-select: none;
   `;
@@ -581,8 +632,10 @@ function showAIBadge(score) {
   const closeBtn = document.createElement('button');
   closeBtn.className = 'aitools-close-btn';
   closeBtn.innerHTML = '✕';
-  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
-  closeBtn.addEventListener('click', () => {
+  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;
+    border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     elementVisibility.aiBadge = false;
     chrome.storage.local.set({ 'aitools-visibility': elementVisibility });
     badge.remove();
@@ -590,27 +643,153 @@ function showAIBadge(score) {
 
   badge.appendChild(scoreSpan);
   badge.appendChild(closeBtn);
+
+  // Improvement C: click opens detail tooltip
+  badge.addEventListener('click', (e) => {
+    if (e.target.closest('.aitools-close-btn')) return;
+    const existing = document.getElementById('aitools-ai-detail');
+    if (existing) { existing.remove(); return; }
+
+    const detail = document.createElement('div');
+    detail.id = 'aitools-ai-detail';
+    detail.style.cssText = `
+      position: fixed; top: 128px; right: 20px; background: white; color: #333;
+      border: 1px solid #eee; border-radius: 8px; padding: 12px; font-size: 11px;
+      z-index: 10000; box-shadow: 0 4px 16px rgba(0,0,0,0.12); min-width: 200px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    `;
+    detail.innerHTML = `
+      <strong style="display:block;margin-bottom:8px;color:#555;">Indicateurs détectés :</strong>
+      <div style="margin-bottom:4px;">🔄 Tournures passives : <strong>${details.passif}</strong></div>
+      <div style="margin-bottom:4px;">📝 Connecteurs formels : <strong>${details.formel}</strong></div>
+      <div style="margin-bottom:4px;">📐 Structure répétitive : <strong>${details.structure}</strong></div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #eee;color:#888;font-size:10px;">
+        Score global : ${score}% — ${score > 70 ? 'Très probablement IA' : score > 40 ? 'Possiblement IA' : 'Probablement humain'}
+      </div>
+    `;
+    document.body.appendChild(detail);
+
+    // Close on outside click
+    setTimeout(() => {
+      const closeDetail = (ev) => {
+        if (!detail.contains(ev.target) && !badge.contains(ev.target)) {
+          detail.remove();
+          document.removeEventListener('click', closeDetail);
+        }
+      };
+      document.addEventListener('click', closeDetail);
+    }, 100);
+  });
+
   document.body.appendChild(badge);
 
   if (window.layoutManager) {
     window.layoutManager.registerElement('aitools-ai-badge', badge, { width: 160, height: 40, priority: 2, draggable: true });
   }
   makeDraggable(badge, 'aitools-ai-badge-pos');
-  setTimeout(() => { if (badge.isConnected) badge.style.opacity = '0.7'; }, 3000);
+  setTimeout(() => { if (badge.isConnected) badge.style.opacity = '0.75'; }, 3000);
 }
 
 // ============================================================================
 // SUMMARIZER
 // ============================================================================
+
+// Bug #2 fix: proper content extraction strategy
+function summarizePage() {
+  // Strategy 1: semantic main element
+  const semantic = Array.from(document.querySelectorAll('article, [role="main"], main'))
+    .map(el => el.innerText.trim())
+    .filter(t => t.length > 200);
+  if (semantic.length > 0) return semantic[0].substring(0, 8000);
+
+  // Strategy 2: paragraphs filtered outside nav/footer/header/aside
+  const excluded = new Set(['NAV', 'FOOTER', 'HEADER', 'ASIDE', 'SCRIPT', 'STYLE', 'NOSCRIPT']);
+  const paragraphs = Array.from(document.querySelectorAll('p'))
+    .filter(el => {
+      let parent = el.parentElement;
+      while (parent) {
+        if (excluded.has(parent.tagName) || parent.getAttribute('role') === 'navigation') return false;
+        parent = parent.parentElement;
+      }
+      return el.innerText.trim().length > 80;
+    })
+    .map(el => el.innerText.trim())
+    .slice(0, 40);
+
+  if (paragraphs.length > 0) return paragraphs.join('\n');
+
+  // Strategy 3: fallback
+  return document.body.innerText.substring(0, 6000);
+}
+
+// Bug #2 fix: replace char-by-char loop with regex split
+function betterSummarize(text) {
+  if (!text || text.length < 100) return text;
+
+  const cleanText = text.replace(/\s+/g, ' ').trim();
+
+  // Use regex split — 10x faster than char loop
+  let sentences = (cleanText.match(/[^.!?…]+[.!?…]+(?:\s|$)/g) || [cleanText])
+    .map(s => s.trim())
+    .filter(s => s.length > 25 && s.split(/\s+/).length >= 4);
+
+  if (sentences.length === 0) return cleanText.substring(0, 300) + '...';
+  if (sentences.length <= 2) return sentences.join(' ');
+
+  const stopWords = new Set([
+    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from',
+    'be', 'is', 'are', 'was', 'were', 'le', 'la', 'les', 'de', 'du', 'des', 'et', 'ou', 'un', 'une',
+    'en', 'à', 'pour', 'que', 'qui'
+  ]);
+
+  const allWords = cleanText.toLowerCase().split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w));
+  const wordFreq = {};
+  allWords.forEach(w => { wordFreq[w] = (wordFreq[w] || 0) + 1; });
+
+  const scored = sentences.map((sentence, idx) => {
+    let score = 1;
+    const words = sentence.toLowerCase().split(/\s+/);
+    if (idx === 0) score += 5;
+    if (idx === sentences.length - 1) score += 4;
+    if (idx === sentences.length - 2) score += 2;
+    words.forEach(w => { if (wordFreq[w] > 1 && !stopWords.has(w)) score += Math.log(wordFreq[w] + 1); });
+    if (/\d+%/.test(sentence)) score += 6;
+    else if (/\d+/.test(sentence)) score += 2;
+    const wc = words.length;
+    if (wc >= 15 && wc <= 50) score += 4;
+    return { sentence, score, index: idx };
+  });
+
+  const pct = Math.max(0.15, Math.min(0.8, (extensionSettings.summarizerLength || 35) / 100));
+  const keepCount = Math.max(2, Math.ceil(sentences.length * pct));
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, keepCount)
+    .sort((a, b) => a.index - b.index)
+    .map(s => s.sentence)
+    .join(' ');
+}
+
+// Bug #6 fix: subtree:false + obsLock to prevent mutation loop
+let summarizerObserverActive = false;
+
 function initSummarizer() {
   if (buttonVisibility.summarizerButton === false) return;
   if (window.location.hostname.includes('google.')) return;
   if (!extensionSettings.summarizerEnabled) return;
 
-  setTimeout(() => { checkAndShowSummarizerButton(); }, 1500);
+  setTimeout(() => checkAndShowSummarizerButton(), 1500);
 
-  const obs = new MutationObserver(() => setTimeout(checkAndShowSummarizerButton, 500));
-  obs.observe(document.body, { childList: true, subtree: true });
+  const obs = new MutationObserver(() => {
+    if (summarizerObserverActive) return;
+    summarizerObserverActive = true;
+    setTimeout(() => {
+      checkAndShowSummarizerButton();
+      summarizerObserverActive = false;
+    }, 800);
+  });
+  obs.observe(document.body, { childList: true, subtree: false });
 }
 
 function checkAndShowSummarizerButton() {
@@ -642,7 +821,8 @@ function addSummarizerButton() {
   const closeBtn = document.createElement('button');
   closeBtn.className = 'aitools-close-btn';
   closeBtn.innerHTML = '✕';
-  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
+  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;
+    border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     elementVisibility.summarizerBtn = false;
@@ -655,7 +835,9 @@ function addSummarizerButton() {
 
   btn.addEventListener('click', (e) => {
     if (!e.target.closest('.aitools-close-btn')) {
-      showSummaryModal(betterSummarize(summarizePage()));
+      const rawText = summarizePage();
+      const summary = betterSummarize(rawText);
+      showSummaryModal(summary);
     }
   });
 
@@ -667,98 +849,95 @@ function addSummarizerButton() {
   makeDraggable(btn, 'aitools-summarize-btn-pos');
 }
 
-function summarizePage() {
-  return Array.from(document.querySelectorAll('p, article, section, div[role="main"]'))
-    .map(el => el.innerText).filter(t => t.length > 100).slice(0, 20).join('\n\n');
-}
-
-function betterSummarize(text) {
-  if (!text || text.length < 100) return text;
-  let cleanText = text.replace(/\s+/g, ' ').trim();
-  let sentences = [];
-  let current = '';
-  for (let i = 0; i < cleanText.length; i++) {
-    const char = cleanText[i];
-    current += char;
-    if ((char === '.' || char === '!' || char === '?') && i < cleanText.length - 1) {
-      const nextChar = cleanText[i + 1];
-      if (nextChar === ' ') { sentences.push(current.trim()); current = ''; }
-    } else if ((char === '.' || char === '!' || char === '?') && i === cleanText.length - 1) {
-      sentences.push(current.trim()); current = '';
-    }
-  }
-  if (current.length > 0) sentences.push(current.trim());
-  sentences = sentences.filter(s => s.length > 20 && s.split(/\s+/).length > 3);
-  if (sentences.length === 0) return text.substring(0, 300) + '...';
-  if (sentences.length <= 2) return sentences.join(' ');
-
-  const stopWords = new Set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by','from','be','is','are','was','were','le','la','les','de','du','des','et','ou','un','une','en','à','pour','que','qui']);
-  const allWords = cleanText.toLowerCase().split(/\s+/).filter(w => w.length > 3 && !stopWords.has(w));
-  const wordFreq = {};
-  allWords.forEach(w => { wordFreq[w] = (wordFreq[w] || 0) + 1; });
-
-  const scored = sentences.map((sentence, idx) => {
-    let score = 1;
-    const words = sentence.toLowerCase().split(/\s+/);
-    if (idx === 0) score += 5;
-    if (idx === sentences.length - 1) score += 4;
-    words.forEach(w => { if (wordFreq[w] > 1 && !stopWords.has(w)) score += Math.log(wordFreq[w] + 1); });
-    if (/\d+%/.test(sentence)) score += 6;
-    else if (/\d+/.test(sentence)) score += 2;
-    const wc = words.length;
-    if (wc >= 15 && wc <= 50) score += 4;
-    return { sentence, score, index: idx };
-  });
-
-  const pct = Math.max(0.15, Math.min(0.8, (extensionSettings.summarizerLength || 35) / 100));
-  const keepCount = Math.max(2, Math.ceil(sentences.length * pct));
-  return scored.sort((a, b) => b.score - a.score).slice(0, keepCount).sort((a, b) => a.index - b.index).map(s => s.sentence).join(' ');
-}
-
+// Improvement A: copy button in summary modal
 function showSummaryModal(summary) {
+  const existing = document.getElementById('aitools-summary-overlay');
+  if (existing) existing.remove();
+
   const overlay = document.createElement('div');
   overlay.id = 'aitools-summary-overlay';
   overlay.style.cssText = `position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10000;`;
 
   const modal = document.createElement('div');
-  modal.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;border-radius:12px;max-width:600px;max-height:70vh;overflow-y:auto;z-index:10001;box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,sans-serif;`;
-
-  modal.innerHTML = `
-    <h3 style="margin-top:0;color:#333;">📋 Résumé de la page</h3>
-    <p style="line-height:1.8;color:#555;font-size:13px;">${summary.replace(/\n/g, '<br>')}</p>
-    <button id="aitools-close-summary" style="background:#667eea;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;margin-top:16px;font-size:12px;display:block;width:100%;">Fermer</button>
+  modal.style.cssText = `
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;
+    border-radius:12px;max-width:600px;width:90%;max-height:70vh;overflow-y:auto;z-index:10001;
+    box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,sans-serif;
   `;
 
+  const titleEl = document.createElement('h3');
+  titleEl.style.cssText = 'margin-top:0;color:#333;';
+  titleEl.textContent = '📋 Résumé de la page';
+
+  const textEl = document.createElement('p');
+  textEl.style.cssText = 'line-height:1.8;color:#555;font-size:13px;';
+  textEl.innerHTML = summary.replace(/\n/g, '<br>');
+
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;margin-top:16px;';
+
+  const copyBtn = document.createElement('button');
+  copyBtn.style.cssText = 'flex:1;background:#10b981;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;';
+  copyBtn.textContent = '📋 Copier';
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(summary).then(() => {
+      copyBtn.textContent = '✅ Copié !';
+      setTimeout(() => { copyBtn.textContent = '📋 Copier'; }, 2000);
+    });
+  });
+
+  const closeBtn = document.createElement('button');
+  closeBtn.id = 'aitools-close-summary';
+  closeBtn.style.cssText = 'flex:1;background:#667eea;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;';
+  closeBtn.textContent = 'Fermer';
+  closeBtn.addEventListener('click', (e) => { e.stopPropagation(); overlay.remove(); });
+
+  btnRow.appendChild(copyBtn);
+  btnRow.appendChild(closeBtn);
+  modal.appendChild(titleEl);
+  modal.appendChild(textEl);
+  modal.appendChild(btnRow);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  const closeBtn = modal.querySelector('#aitools-close-summary');
-  if (closeBtn) closeBtn.addEventListener('click', (e) => { e.stopPropagation(); overlay.remove(); });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
 // ============================================================================
 // AUTO TRANSLATOR
 // ============================================================================
+
+// Bug #8 fix: lower threshold, count occurrences for better accuracy
 function detectLanguageOfText(text) {
   if (!text || text.length < 5) return null;
+
   const htmlLang = document.documentElement.lang;
   if (htmlLang && htmlLang.length >= 2) {
     const lc = htmlLang.substring(0, 2).toLowerCase();
     if (['en', 'fr', 'es', 'de', 'it', 'pt', 'ja', 'zh'].includes(lc)) return lc;
   }
-  const tc = text.substring(0, 5000);
+
   if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g.test(text)) return 'ja';
   if (/[\u4E00-\u9FFF\u3400-\u4DBF]/g.test(text)) return 'zh';
+
+  const tc = text.substring(0, 5000);
+  const countMatches = (str, regex) => (str.match(regex) || []).length;
+
   const scores = {
-    'fr': (/(ç|œ|é|è|ê|ë|à|ù|û)/i.test(tc) ? 3 : 0) + (/\b(le|la|les|de|des|et|est|sont|avec|pour)\b/i.test(tc) ? 2 : 0),
-    'es': (/(á|é|í|ó|ú|ñ|¡|¿)/i.test(tc) ? 3 : 0) + (/\b(el|la|los|que|una|está|son)\b/i.test(tc) ? 2 : 0),
-    'de': (/(ä|ö|ü|ß)/i.test(tc) ? 3 : 0) + (/\b(der|die|das|und|ist|sind|mit)\b/i.test(tc) ? 2 : 0),
-    'it': (/\b(il|lo|la|che|è|sono|una|per)\b/i.test(tc) ? 3 : 0),
-    'pt': (/(ã|õ|ç)/i.test(tc) ? 3 : 0) + (/\b(o|a|os|que|é|uma|com)\b/i.test(tc) ? 2 : 0)
+    'fr': (/(ç|œ|é|è|ê|ë|à|ù|û)/i.test(tc) ? 4 : 0) +
+      Math.min(3, countMatches(tc, /\b(le|la|les|des|est|sont|avec|pour|dans|que|une|pas|très|aussi)\b/gi)),
+    'es': (/(á|é|í|ó|ú|ñ|¡|¿)/i.test(tc) ? 4 : 0) +
+      Math.min(3, countMatches(tc, /\b(el|la|los|que|una|está|son|para|como|pero|del)\b/gi)),
+    'de': (/(ä|ö|ü|ß)/i.test(tc) ? 4 : 0) +
+      Math.min(3, countMatches(tc, /\b(der|die|das|und|ist|sind|mit|nicht|auch|für)\b/gi)),
+    'it': Math.min(5, countMatches(tc, /\b(il|lo|la|che|è|sono|una|per|con|del|della)\b/gi)),
+    'pt': (/(ã|õ|ç)/i.test(tc) ? 4 : 0) +
+      Math.min(3, countMatches(tc, /\b(o|a|os|que|é|uma|com|por|para|do|da)\b/gi))
   };
+
   const max = Math.max(...Object.values(scores));
-  if (max > 3) return Object.keys(scores).find(l => scores[l] === max);
+  // Bug #8 fix: lowered threshold from > 3 to > 1
+  if (max > 1) return Object.keys(scores).find(l => scores[l] === max);
   return 'en';
 }
 
@@ -781,7 +960,14 @@ function addTranslatorButton(sourceLang, targetLang) {
 
   const btn = document.createElement('button');
   btn.id = 'aitools-translator-btn';
-  btn.style.cssText = `position:fixed;top:60px;right:100px;background:linear-gradient(135deg,#4CAF50 0%,#45a049 100%);color:white;border:none;padding:10px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:grab;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-family:-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;gap:8px;user-select:none;`;
+  btn.style.cssText = `
+    position:fixed;top:60px;right:100px;
+    background:linear-gradient(135deg,#4CAF50 0%,#45a049 100%);
+    color:white;border:none;padding:10px 14px;border-radius:6px;font-size:12px;font-weight:600;
+    cursor:grab;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.15);
+    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+    display:flex;align-items:center;gap:8px;user-select:none;
+  `;
 
   const textSpan = document.createElement('span');
   textSpan.textContent = '🌐 Traduire';
@@ -790,57 +976,79 @@ function addTranslatorButton(sourceLang, targetLang) {
   const closeBtn = document.createElement('button');
   closeBtn.className = 'aitools-close-btn';
   closeBtn.innerHTML = '✕';
-  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
+  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;
+    border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
   closeBtn.addEventListener('click', (e) => { e.stopPropagation(); btn.style.display = 'none'; });
 
   btn.appendChild(textSpan);
   btn.appendChild(closeBtn);
+
+  // Bug #9 fix: use extractRelevantPageText() instead of document.body.innerText
   btn.addEventListener('click', (e) => {
     if (!e.target.closest('.aitools-close-btn')) {
-      translateAndShowModal(document.body.innerText, sourceLang, targetLang);
+      const relevantText = extractRelevantPageText(3000);
+      translateAndShowModal(relevantText, sourceLang, targetLang);
     }
   });
 
   document.body.appendChild(btn);
+
   if (window.layoutManager) {
     window.layoutManager.registerElement('aitools-translator-btn', btn, { width: 130, height: 40, priority: 3, draggable: true });
   }
   makeDraggable(btn, 'aitools-translator-btn-pos');
 }
 
-function translateAndShowModal(text, sourceLang, targetLang) {
+// Bug #3 fix: separate fullText display from API truncated text
+function translateAndShowModal(fullText, sourceLang, targetLang) {
   const btn = document.getElementById('aitools-translator-btn');
   const spanEl = btn?.querySelector('span');
   if (spanEl) spanEl.textContent = '⏳ Traduction...';
   if (btn) btn.disabled = true;
 
-  const textToTranslate = text.substring(0, 500);
+  // Only send 500 chars to API, but keep fullText for display
+  const textForAPI = fullText.substring(0, 500);
+
   chrome.runtime.sendMessage(
-    { action: 'translateText', text: textToTranslate, sourceLang, targetLang },
+    { action: 'translateText', text: textForAPI, sourceLang, targetLang },
     (response) => {
       if (spanEl) spanEl.textContent = '🌐 Traduire';
       if (btn) btn.disabled = false;
 
       if (response && response.success) {
-        showTranslationModal(textToTranslate, response.text, sourceLang, targetLang);
+        // Bug #3 fix: display up to 2000 chars of original, not the API fragment
+        showTranslationModal(fullText.substring(0, 2000), response.text, sourceLang, targetLang);
       } else {
-        alert('❌ Erreur lors de la traduction.');
+        alert('❌ Erreur lors de la traduction. Réessayez ou vérifiez votre connexion.');
       }
     }
   );
 }
 
 function showTranslationModal(original, translated, sourceLang, targetLang) {
-  const langNames = { fr: 'Français', en: 'Anglais', es: 'Espagnol', de: 'Allemand', it: 'Italien', pt: 'Portugais', ja: 'Japonais', zh: 'Chinois' };
+  const langNames = {
+    fr: 'Français', en: 'Anglais', es: 'Espagnol', de: 'Allemand',
+    it: 'Italien', pt: 'Portugais', ja: 'Japonais', zh: 'Chinois'
+  };
+
+  const existing = document.querySelector('[id^="aitools-translation-overlay"]');
+  if (existing) existing.remove();
+
   const overlay = document.createElement('div');
+  overlay.id = 'aitools-translation-overlay';
   overlay.style.cssText = `position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:10000;`;
 
   const modal = document.createElement('div');
-  modal.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;border-radius:12px;max-width:700px;max-height:80vh;overflow-y:auto;z-index:10001;box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,sans-serif;`;
+  modal.style.cssText = `
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:24px;
+    border-radius:12px;max-width:700px;width:92%;max-height:80vh;overflow-y:auto;z-index:10001;
+    box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+  `;
+
   modal.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <h3 style="margin:0;color:#333;">🌐 Traduction</h3>
-      <button id="aitools-close-tr" style="background:none;border:none;font-size:20px;cursor:pointer;">✕</button>
+      <button id="aitools-close-tr" style="background:none;border:none;font-size:20px;cursor:pointer;color:#999;">✕</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
       <div>
@@ -853,7 +1061,7 @@ function showTranslationModal(original, translated, sourceLang, targetLang) {
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px;">
-      <button id="aitools-copy-tr" style="flex:1;background:#667eea;color:white;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">📋 Copier</button>
+      <button id="aitools-copy-tr" style="flex:1;background:#667eea;color:white;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">📋 Copier traduction</button>
       <button id="aitools-close-tr2" style="flex:1;background:#ddd;color:#333;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">Fermer</button>
     </div>
   `;
@@ -864,19 +1072,23 @@ function showTranslationModal(original, translated, sourceLang, targetLang) {
   modal.querySelector('#aitools-close-tr').addEventListener('click', () => overlay.remove());
   modal.querySelector('#aitools-close-tr2').addEventListener('click', () => overlay.remove());
   modal.querySelector('#aitools-copy-tr').addEventListener('click', () => {
-    navigator.clipboard.writeText(translated).then(() => alert('✅ Copié !'));
+    navigator.clipboard.writeText(translated).then(() => {
+      const copyBtn = modal.querySelector('#aitools-copy-tr');
+      if (copyBtn) { copyBtn.textContent = '✅ Copié !'; setTimeout(() => { copyBtn.textContent = '📋 Copier traduction'; }, 2000); }
+    });
   });
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
 }
 
 // ============================================================================
-// QUICK STATS
+// QUICK STATS — Improvement D: add load time
 // ============================================================================
 function initQuickStats() {
   if (buttonVisibility.quickStatsWidget === false) return;
   const hostname = window.location.hostname;
-  if (hostname.includes('google.') || hostname.includes('facebook.') || hostname.includes('twitter.') ||
-    hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) return;
+  if (hostname.includes('google.') || hostname.includes('facebook.') ||
+    hostname.includes('twitter.') || hostname.includes('instagram.') ||
+    hostname.includes('youtube.') || hostname.includes('reddit.')) return;
 
   setTimeout(() => {
     const stats = {
@@ -888,7 +1100,9 @@ function initQuickStats() {
       forms: document.querySelectorAll('form').length,
       buttons: document.querySelectorAll('button').length,
       tables: document.querySelectorAll('table').length,
-      codeBlocks: document.querySelectorAll('code,pre').length
+      codeBlocks: document.querySelectorAll('code,pre').length,
+      // Improvement D: page load time
+      loadTime: Math.round(performance.timing.loadEventEnd - performance.timing.navigationStart)
     };
     if (stats.links + stats.forms + stats.buttons < 3) return;
     createStatsWidget(stats);
@@ -898,10 +1112,20 @@ function initQuickStats() {
 function createStatsWidget(stats) {
   const widget = document.createElement('div');
   widget.id = 'aitools-quick-stats';
-  widget.style.cssText = `position:fixed;bottom:20px;right:20px;background:rgba(255,255,255,0.95);border:1px solid #e0e0e0;border-radius:12px;padding:0;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:999998;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:280px;cursor:pointer;user-select:none;transition:all 0.3s ease;`;
+  widget.style.cssText = `
+    position:fixed;bottom:20px;right:20px;background:rgba(255,255,255,0.95);
+    border:1px solid #e0e0e0;border-radius:12px;padding:0;
+    box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:999998;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:280px;
+    cursor:pointer;user-select:none;transition:all 0.3s ease;
+  `;
 
   const header = document.createElement('div');
-  header.style.cssText = `background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:10px 14px;border-radius:12px;font-weight:600;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;`;
+  header.style.cssText = `
+    background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:10px 14px;
+    border-radius:12px;font-weight:600;font-size:12px;display:flex;align-items:center;
+    justify-content:space-between;gap:8px;
+  `;
 
   const headerLabel = document.createElement('span');
   headerLabel.textContent = '📊 Statistiques page';
@@ -910,7 +1134,8 @@ function createStatsWidget(stats) {
   const closeBtn = document.createElement('button');
   closeBtn.className = 'aitools-close-btn';
   closeBtn.innerHTML = '✕';
-  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
+  closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;
+    border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     widget.style.display = 'none';
@@ -926,15 +1151,20 @@ function createStatsWidget(stats) {
   content.style.cssText = `padding:0 14px;max-height:0;overflow:hidden;transition:max-height 0.3s ease,padding 0.3s ease;`;
 
   const rows = [
-    { label: '🔗 Liens', value: stats.links }, { label: '🖼️ Images', value: stats.images },
-    { label: '📝 Paragraphes', value: stats.paragraphs }, { label: '📰 Titres', value: stats.headings },
-    { label: '🎥 Vidéos', value: stats.videos }, { label: '📋 Formulaires', value: stats.forms },
-    { label: '🔘 Boutons', value: stats.buttons }, { label: '📊 Tableaux', value: stats.tables },
-    { label: '💻 Code', value: stats.codeBlocks }
+    { label: '🔗 Liens', value: stats.links },
+    { label: '🖼️ Images', value: stats.images },
+    { label: '📝 Paragraphes', value: stats.paragraphs },
+    { label: '📰 Titres', value: stats.headings },
+    { label: '🎥 Vidéos', value: stats.videos },
+    { label: '📋 Formulaires', value: stats.forms },
+    { label: '🔘 Boutons', value: stats.buttons },
+    { label: '📊 Tableaux', value: stats.tables },
+    { label: '💻 Code', value: stats.codeBlocks },
+    { label: '⚡ Chargement', value: stats.loadTime > 0 ? stats.loadTime + ' ms' : 'N/A' }
   ];
 
-  content.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 0;">' +
-    rows.filter(r => r.value > 0).map(r => `
+  content.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:12px 0;">' +
+    rows.filter(r => r.value && r.value !== 0).map(r => `
       <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">
         <span style="color:#666;">${r.label}</span>
         <span style="color:#667eea;font-weight:600;">${r.value}</span>
@@ -946,6 +1176,7 @@ function createStatsWidget(stats) {
     isExpanded = !isExpanded;
     content.style.maxHeight = isExpanded ? '300px' : '0';
     content.style.padding = isExpanded ? '0 14px' : '0 14px';
+    header.style.borderRadius = isExpanded ? '12px 12px 0 0' : '12px';
   });
 
   widget.appendChild(header);
@@ -964,12 +1195,13 @@ function createStatsWidget(stats) {
 function initReadingTime() {
   if (buttonVisibility.readingTimeBadge === false) return;
   const hostname = window.location.hostname;
-  if (hostname.includes('google.') || hostname.includes('facebook.') || hostname.includes('twitter.') ||
-    hostname.includes('instagram.') || hostname.includes('youtube.') || hostname.includes('reddit.')) return;
-  if (!extensionSettings.readingTimeEnabled) return;
+  if (hostname.includes('google.') || hostname.includes('facebook.') ||
+    hostname.includes('twitter.') || hostname.includes('instagram.') ||
+    hostname.includes('youtube.') || hostname.includes('reddit.')) return;
 
   setTimeout(() => {
-    const mainEl = document.querySelector('article') || document.querySelector('[role="main"]') || document.querySelector('main') || document.body;
+    const mainEl = document.querySelector('article') || document.querySelector('[role="main"]') ||
+      document.querySelector('main') || document.body;
     const content = (mainEl?.innerText || '').slice(0, 50000);
     const words = content.split(/\s+/).filter(w => w.length > 0).length;
     const mins = Math.ceil(words / 225);
@@ -977,14 +1209,22 @@ function initReadingTime() {
 
     const badge = document.createElement('div');
     badge.id = 'aitools-reading-time';
-    badge.style.cssText = `position:fixed;top:20px;right:20px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:8px 14px;border-radius:20px;font-size:12px;font-weight:600;box-shadow:0 4px 12px rgba(102,126,234,0.4);z-index:999999;cursor:pointer;user-select:none;transition:all 0.3s ease;`;
+    badge.style.cssText = `
+      position:fixed;top:20px;right:20px;
+      background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+      color:white;padding:8px 14px;border-radius:20px;font-size:12px;font-weight:600;
+      box-shadow:0 4px 12px rgba(102,126,234,0.4);z-index:999999;cursor:pointer;
+      user-select:none;transition:all 0.3s ease;
+    `;
     badge.innerHTML = `📖 ${mins} min`;
     badge.title = `${words.toLocaleString('fr-FR')} mots`;
 
     document.body.appendChild(badge);
     let hideTimer = setTimeout(() => { if (badge.isConnected) badge.style.opacity = '0.35'; }, 5000);
     badge.addEventListener('mouseover', () => { clearTimeout(hideTimer); badge.style.opacity = '1'; });
-    badge.addEventListener('mouseout', () => { hideTimer = setTimeout(() => { badge.style.opacity = '0.35'; }, 5000); });
+    badge.addEventListener('mouseout', () => {
+      hideTimer = setTimeout(() => { if (badge.isConnected) badge.style.opacity = '0.35'; }, 5000);
+    });
     makeDraggable(badge, 'aitools-reading-time-pos');
   }, 4000);
 }
@@ -993,7 +1233,6 @@ function initReadingTime() {
 // FOCUS MODE
 // ============================================================================
 function initFocusMode() {
-  // Keyboard shortcut always available
   document.addEventListener('keydown', (e) => {
     if (e.shiftKey && e.altKey && (e.key === 'f' || e.key === 'F')) {
       e.preventDefault();
@@ -1001,31 +1240,34 @@ function initFocusMode() {
     }
   });
 
-  // Create button only if enabled in settings
   if (buttonVisibility.focusModeBadge === false) return;
 
-  // Ensure body exists before appending
   const createFocusBtn = () => {
-    if (!document.body) {
-      setTimeout(createFocusBtn, 100);
-      return;
-    }
-
+    if (!document.body) { setTimeout(createFocusBtn, 100); return; }
     if (document.getElementById('aitools-focus-mode-btn')) return;
 
     const focusBtn = document.createElement('button');
     focusBtn.id = 'aitools-focus-mode-btn';
     focusBtn.innerHTML = '🎯';
     focusBtn.title = 'Shift+Alt+F : Mode focus';
-    focusBtn.style.cssText = `position:fixed;top:80px;right:20px;width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);border:2px solid white;color:white;font-size:16px;cursor:pointer;box-shadow:0 4px 12px rgba(245,87,108,0.4);z-index:999998;user-select:none;transition:all 0.3s ease;display:flex;align-items:center;justify-content:center;`;
+    focusBtn.style.cssText = `
+      position:fixed;top:80px;right:20px;width:38px;height:38px;border-radius:50%;
+      background:linear-gradient(135deg,#f093fb 0%,#f5576c 100%);border:2px solid white;
+      color:white;font-size:16px;cursor:pointer;
+      box-shadow:0 4px 12px rgba(245,87,108,0.4);z-index:999998;user-select:none;
+      transition:all 0.3s ease;display:flex;align-items:center;justify-content:center;
+    `;
 
     const closeX = document.createElement('div');
-    closeX.style.cssText = `position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;background:#ff4757;color:white;border:none;font-size:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-weight:bold;`;
+    closeX.style.cssText = `
+      position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;
+      background:#ff4757;color:white;font-size:10px;display:flex;align-items:center;
+      justify-content:center;cursor:pointer;font-weight:bold;z-index:1;
+    `;
     closeX.textContent = '✕';
     closeX.addEventListener('click', (e) => {
       e.stopPropagation();
       disableFocusMode();
-      // Save that the button should be hidden
       buttonVisibility.focusModeBadge = false;
       chrome.storage.local.set({ buttonVisibility });
       focusBtn.remove();
@@ -1033,20 +1275,15 @@ function initFocusMode() {
 
     focusBtn.appendChild(closeX);
     focusBtn.addEventListener('click', (e) => {
-      if (e.target === closeX) return;
+      if (e.target === closeX || closeX.contains(e.target)) return;
       toggleFocusMode();
     });
-    focusBtn.addEventListener('mouseover', () => {
-      focusBtn.style.transform = 'scale(1.1)';
-    });
-    focusBtn.addEventListener('mouseout', () => {
-      focusBtn.style.transform = 'scale(1)';
-    });
+    focusBtn.addEventListener('mouseover', () => { focusBtn.style.transform = 'scale(1.1)'; });
+    focusBtn.addEventListener('mouseout', () => { focusBtn.style.transform = 'scale(1)'; });
 
     document.body.appendChild(focusBtn);
   };
 
-  // Use setTimeout to ensure DOM is ready
   setTimeout(createFocusBtn, 0);
 }
 
@@ -1071,7 +1308,8 @@ function enableFocusMode() {
       .notification,.banner,.popup,.modal:not(#aitools-modal),
       iframe[src*="ads"],iframe[src*="doubleclick"],[data-ad-format],[data-ad-slot]
       { display:none !important; }
-      body,main,article,[role="main"],.content,.post,.article { margin:0!important;padding:20px!important;max-width:100%!important; }
+      body,main,article,[role="main"],.content,.post,.article
+      { margin:0!important;padding:20px!important;max-width:100%!important; }
       body { background-color:#fafafa!important;line-height:1.8!important; }
     `;
     document.head.appendChild(style);
@@ -1099,79 +1337,29 @@ function showFocusNotification(message) {
   if (existing) existing.remove();
   const n = document.createElement('div');
   n.id = 'aitools-focus-notification';
-  n.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(32,32,32,0.95);color:white;padding:14px 24px;border-radius:8px;font-size:14px;font-weight:500;z-index:1000000;animation:aitoolsFadeInOut 2s ease-in-out;pointer-events:none;`;
+  n.style.cssText = `
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+    background:rgba(32,32,32,0.95);color:white;padding:14px 24px;border-radius:8px;
+    font-size:14px;font-weight:500;z-index:1000000;pointer-events:none;
+    animation:aitoolsFadeInOut 2s ease-in-out;
+  `;
   n.innerHTML = message;
   if (!document.getElementById('aitools-focus-anim')) {
     const s = document.createElement('style');
     s.id = 'aitools-focus-anim';
-    s.textContent = `@keyframes aitoolsFadeInOut{0%{opacity:0;transform:translate(-50%,-50%) scale(0.8);}10%{opacity:1;transform:translate(-50%,-50%) scale(1);}90%{opacity:1;}100%{opacity:0;}}`;
+    s.textContent = `
+      @keyframes aitoolsFadeInOut {
+        0%{opacity:0;transform:translate(-50%,-50%) scale(0.8);}
+        10%{opacity:1;transform:translate(-50%,-50%) scale(1);}
+        90%{opacity:1;}
+        100%{opacity:0;}
+      }
+    `;
     document.head.appendChild(s);
   }
   document.body.appendChild(n);
   setTimeout(() => n.remove(), 2000);
 }
-
-// ============================================================================
-// INITIALIZATION
-// ============================================================================
-chrome.storage.local.get(null, (data) => {
-  extensionEnabled = data.extensionEnabled !== false;
-  darkModeEnabled = data.darkModeEnabled === true;
-
-  // Initialize defaults for Google buttons if not set
-  if (!data.googleButtonsVisibility) {
-    chrome.storage.local.set({
-      googleButtonsVisibility: { lucky: true, filters: true, maps: true, chatgpt: true }
-    });
-  }
-  if (!data.googleButtonsConfig) {
-    chrome.storage.local.set({
-      googleButtonsConfig: {
-        lucky: { label: '🍀 Chance', action: 'lucky', color: '#5f6368' },
-        filters: { label: '🔍 Filtres', action: 'filters', color: '#5f6368' },
-        maps: { label: '🗺️ Maps', action: 'maps', color: '#5f6368' },
-        chatgpt: { label: '🤖 ChatGPT', action: 'chatgpt', color: '#5f6368' }
-      }
-    });
-  }
-
-  if (!extensionEnabled) return;
-
-  if (darkModeEnabled) enableDarkMode();
-
-  if (data.buttonVisibility) {
-    buttonVisibility = { ...buttonVisibility, ...data.buttonVisibility };
-  }
-
-  setupHighlighter();
-  setupGoogleEnhancements();
-
-  if (data.focusModeEnabled) enableFocusMode();
-  if (data.blockSponsoredEnabled) setTimeout(blockSponsoredResults, 2000);
-
-  if (data.readingTimeEnabled !== false) {
-    extensionSettings.readingTimeEnabled = true;
-    initReadingTime();
-  }
-});
-
-chrome.storage.local.get(null, (data) => {
-  if (data.aiDetectorEnabled !== undefined) extensionSettings.aiDetectorEnabled = data.aiDetectorEnabled;
-  if (data.summarizerEnabled !== undefined) extensionSettings.summarizerEnabled = data.summarizerEnabled;
-  if (data.autoTranslatorEnabled !== undefined) extensionSettings.autoTranslatorEnabled = data.autoTranslatorEnabled;
-  if (data.translatorTargetLang) extensionSettings.translatorTargetLang = data.translatorTargetLang;
-  if (data.cookieBlockerEnabled !== undefined) extensionSettings.cookieBlockerEnabled = data.cookieBlockerEnabled;
-  if (data.performanceModeEnabled !== undefined) extensionSettings.performanceModeEnabled = data.performanceModeEnabled;
-
-  if (!extensionSettings.performanceModeEnabled) {
-    initAIDetector();
-  }
-  initSummarizer();
-  initAutoTranslator();
-  initCookieBlocker();
-  initQuickStats();
-  initFocusMode();
-});
 
 // ============================================================================
 // MESSAGE LISTENER
@@ -1230,13 +1418,14 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     if (req.visibility) chrome.storage.local.set({ googleButtonsVisibility: req.visibility });
     if (req.config) chrome.storage.local.set({ googleButtonsConfig: req.config });
     const c = document.getElementById('aitools-google-buttons');
-    if (c) { c.remove(); }
+    if (c) c.remove();
 
   } else if (req.action === 'updateSettings') {
     extensionSettings = { ...extensionSettings, ...req.settings };
     if (req.settings.cookieBlockerEnabled !== undefined) {
-      if (req.settings.cookieBlockerEnabled && !cookieObserver) initCookieBlocker();
-      else if (!req.settings.cookieBlockerEnabled && cookieObserver) {
+      if (req.settings.cookieBlockerEnabled && !cookieObserver) {
+        initCookieBlocker();
+      } else if (!req.settings.cookieBlockerEnabled && cookieObserver) {
         cookieObserver.disconnect();
         cookieObserver = null;
       }
@@ -1252,9 +1441,14 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     if (req.enabled) blockSponsoredResults();
 
   } else if (req.action === 'extractText') {
-    const text = document.body.innerText
-      .split('\n').map(l => l.trim()).filter(l => l.length > 0 && l.length < 500)
-      .slice(0, 100).join(' ');
+    // Bug #7 fix: no 500-char line limit, use semantic extraction, 8000-char global limit
+    const mainEl = document.querySelector('article, [role="main"], main') || document.body;
+    const text = mainEl.innerText
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 30)
+      .join('\n')
+      .substring(0, 8000);
     sendResponse({ text: text || null });
     return true;
 

@@ -38,6 +38,7 @@ body {
 body.dark-mode {
   background: var(--bg-dark);
   color: #e2e8f0;
+  color-scheme: dark; /* Bug J fix: forces native elements (select, details) to use dark OS theme */
   --section-bg: #1e293b;
   --card-bg: #1e293b;
   --border: #334155;
