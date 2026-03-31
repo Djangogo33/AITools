@@ -110,8 +110,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('optitoolsBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://djangogo33.github.io/optitools' });
   });
-  document.getElementById('extensionBtn').addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://github.com/djangogo33/AITools' });
+  document.getElementById('githubBtn').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://github.com/djangogo33' });
   });
 
   document.getElementById('chatgptBtn').addEventListener('click', () => {
