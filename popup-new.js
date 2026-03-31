@@ -104,9 +104,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('discordBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://discord.gg/J2ssa2Wkjr' });
   });
-  document.getElementById('siteBtn').addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://optitools.odoo.com' });
+  document.getElementById('about-meBtn').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://djangogo33.github.io/about-me' });
   });
+  document.getElementById('optitoolsBtn').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://djangogo33.github.io/optitools' });
+  });
+  document.getElementById('extensionBtn').addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://github.com/djangogo33/AITools' });
+  });
+
   document.getElementById('chatgptBtn').addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://chatgpt.com' });
   });
