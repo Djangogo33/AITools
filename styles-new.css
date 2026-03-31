@@ -513,6 +513,9 @@ body.dark-mode .content::-webkit-scrollbar-thumb { background: #334155; }
 .btn-orange { background: var(--warning); color: white; }
 .btn-orange:hover { background: #d97706; }
 
+.btn-teal { background: #14b8a6; color: white; }
+.btn-teal:hover { background: #0d9488; }
+
 .btn-danger { background: var(--danger); color: white; }
 .btn-danger:hover { background: #dc2626; }
 
