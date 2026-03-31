@@ -492,6 +492,21 @@ body.dark-mode .content::-webkit-scrollbar-thumb { background: #334155; }
 .btn-green { background: var(--success); color: white; }
 .btn-green:hover { background: #059669; }
 
+.btn-gray { background: #6b7280; color: white; }
+.btn-gray:hover { background: #4b5563; }
+
+.btn-black { background: #111827; color: white; }
+.btn-black:hover { background: #1f2937; }
+
+.btn-red { background: var(--danger); color: white; }
+.btn-red:hover { background: #dc2626; }
+
+.btn-yellow { background: var(--warning); color: white; }
+.btn-yellow:hover { background: #d97706; }
+
+.btn-purple { background: #8b5cf6; color: white; }
+.btn-purple:hover { background: #7c3aed; }
+
 .btn-blue { background: var(--primary); color: white; }
 .btn-blue:hover { background: var(--primary-dark); }
 
