@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AITools Pro v4.0</title>
+  <link rel="stylesheet" href="styles-new.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-content">
+      <div class="logo-container">
+        <img src="icons/logo aitools sans fond sans texte.png" alt="AITools" class="logo-img">
+        <div class="logo-info">
+          <div class="header-status">
+            <span class="status-dot"></span>
+            <span id="headerSiteStatus">Prêt</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-controls">
+        <button id="disableAllBtn" class="icon-btn" title="Tout désactiver">⊘</button>
+        <button id="darkModeBtn" class="icon-btn" title="Mode sombre">🌙</button>
+        <button id="toggleExtension" class="icon-btn active" title="Activer/Désactiver">✓</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="nav">
+    <button class="nav-btn active" data-tab="quick">
+      <span class="nav-icon">⚡</span>
+      <span class="nav-label">Accès</span>
+    </button>
+    <button class="nav-btn" data-tab="google">
+      <span class="nav-icon">🔍</span>
+      <span class="nav-label">Google</span>
+    </button>
+    <button class="nav-btn" data-tab="tools">
+      <span class="nav-icon">🛠️</span>
+      <span class="nav-label">Outils</span>
+    </button>
+    <button class="nav-btn" data-tab="ai">
+      <span class="nav-icon">🧠</span>
+      <span class="nav-label">IA</span>
+    </button>
+    <button class="nav-btn" data-tab="settings">
+      <span class="nav-icon">⚙️</span>
+      <span class="nav-label">Config</span>
+    </button>
+  </nav>
+
+  <!-- Content -->
+  <main class="content">
+
+    <!-- ===================== QUICK TAB ===================== -->
+    <section class="tab active" id="quick">
+      <div class="section-title">🚀 Ouvrir</div>
+      <div class="btn-group">
+        <button id="whatsappBtn" class="btn btn-green">💬 WhatsApp</button>
+        <button id="discordBtn" class="btn btn-blue">📨 Discord</button>
+        <button id="about-meBtn" class="btn btn-orange">🌐 About Me</button>
+        <button id="optitoolsBtn" class="btn btn-cyan">🛠️ Optitools</button>
+        <button id="githubBtn" class="btn btn-teal">🐙 GitHub</button>
+        <button id="chatgptBtn" class="btn btn-gray">🤖 ChatGPT</button>
+      </div>
+
+      <hr class="separator">
+
+      <div class="section-title">⚡ Réglages rapides</div>
+      <div class="section">
+        <label class="switch-row">
+          <span>🌙 Mode sombre</span>
+          <label class="switch">
+            <input type="checkbox" id="darkModeToggle">
+            <span class="slider"></span>
+          </label>
+        </label>
+        <hr class="separator">
+        <label class="switch-row">
+          <span>🚫 Sans publicités</span>
+          <label class="switch">
+            <input type="checkbox" id="blockSponsored">
+            <span class="slider"></span>
+          </label>
+        </label>
+        <hr class="separator">
+        <label class="switch-row">
+          <span>🍪 Bloqueur cookies</span>
+          <label class="switch">
+            <input type="checkbox" id="cookieBlockerQuickToggle" checked>
+            <span class="slider"></span>
+          </label>
+        </label>
+      </div>
+    </section>
+
+    <!-- ===================== GOOGLE TAB ===================== -->
+    <section class="tab" id="google">
+      <div class="section-title">🔍 Recherche</div>
+      <div class="section">
+        <div class="input-wrapper">
+          <input
+            type="text"
+            id="googleSearchInput"
+            placeholder="Cherchez sur Google..."
+            class="input-field"
+          >
+          <button class="input-search-btn" id="googleSearchBtn" title="Lancer la recherche">🔍</button>
+        </div>
+      </div>
+
+      <div class="section-title">📂 Catégories</div>
+      <div class="section">
+        <div class="categories">
+          <button class="category-badge" data-category="orthographe">✏️ Ortho</button>
+          <button class="category-badge" data-category="wiki">📖 Wiki</button>
+          <button class="category-badge" data-category="trends">📈 Tendances</button>
+          <button class="category-badge" data-category="news">📰 Actualités</button>
+          <button class="category-badge" data-category="images">🎨 Images</button>
+          <button class="category-badge" data-category="videos">🎬 Vidéos</button>
+        </div>
+      </div>
+
+      <details>
+        <summary>🔘 Boutons de recherche & personnalisation</summary>
+        <div class="details-content">
+          <p class="label" style="margin-bottom:8px;">Visibilité :</p>
+          <label class="switch-row">
+            <span>🍀 Chance</span>
+            <label class="switch"><input type="checkbox" id="googleButtonLucky" checked><span class="slider"></span></label>
+          </label>
+          <label class="switch-row" style="margin-top:6px;">
+            <span>🔍 Filtres</span>
+            <label class="switch"><input type="checkbox" id="googleButtonFilters" checked><span class="slider"></span></label>
+          </label>
+          <label class="switch-row" style="margin-top:6px;">
+            <span>🗺️ Maps</span>
+            <label class="switch"><input type="checkbox" id="googleButtonMaps" checked><span class="slider"></span></label>
+          </label>
+          <label class="switch-row" style="margin-top:6px;">
+            <span>🤖 ChatGPT</span>
+            <label class="switch"><input type="checkbox" id="googleButtonChatGPT" checked><span class="slider"></span></label>
+          </label>
+
+          <hr class="separator">
+          <p class="label" style="margin-bottom:8px;">Personnaliser :</p>
+          <select id="googleButtonCustomizeSelect" style="width:100%;padding:6px;margin-bottom:10px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:var(--section-bg);color:var(--text);">
+            <option value="">Sélectionner un bouton...</option>
+            <option value="lucky">🍀 Chance</option>
+            <option value="filters">🔍 Filtres</option>
+            <option value="maps">🗺️ Maps</option>
+            <option value="chatgpt">🤖 ChatGPT</option>
+          </select>
+
+          <div id="googleButtonCustomizeView" style="display:none;">
+            <div style="margin-bottom:8px;">
+              <label style="display:block;font-size:11px;color:var(--text-light);margin-bottom:4px;">Étiquette :</label>
+              <input type="text" id="googleButtonCustomizeLabel" placeholder="ex: 🍀 Chance" style="width:100%;padding:6px;font-size:11px;border:1px solid var(--border);border-radius:4px;box-sizing:border-box;background:var(--section-bg);color:var(--text);">
+            </div>
+            <div style="margin-bottom:8px;">
+              <label style="display:block;font-size:11px;color:var(--text-light);margin-bottom:4px;">Couleur :</label>
+              <input type="color" id="googleButtonCustomizeColor" value="#5f6368" style="width:100%;height:28px;border:1px solid var(--border);border-radius:4px;cursor:pointer;">
+            </div>
+            <div style="margin-bottom:8px;">
+              <label style="display:block;font-size:11px;color:var(--text-light);margin-bottom:4px;">Action :</label>
+              <select id="googleButtonCustomizeAction" style="width:100%;padding:6px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:var(--section-bg);color:var(--text);">
+                <option value="lucky">Google Chance (I'm Feeling Lucky)</option>
+                <option value="maps">Google Maps</option>
+                <option value="chatgpt">ChatGPT</option>
+                <option value="filters">Filtres avancés</option>
+              </select>
+            </div>
+            <button id="googleButtonCustomizeReset" style="width:100%;padding:6px;font-size:11px;background:#f0f0f0;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:#666;">↻ Réinitialiser</button>
+          </div>
+        </div>
+      </details>
+
+      <details style="margin-top:8px;">
+        <summary>⚙️ Opérateurs de recherche avancés</summary>
+        <div class="details-content">
+          <p class="label" style="margin-bottom:8px;">Généraux :</p>
+          <div class="filters-grid">
+            <button class="filter-item" data-operator="intitle:">📌 Titre</button>
+            <button class="filter-item" data-operator="inurl:">🔗 URL</button>
+            <button class="filter-item" data-operator="site:">🌐 Site</button>
+            <button class="filter-item" data-operator="filetype:">📄 Type</button>
+            <button class="filter-item" data-operator="after:">📅 Après</button>
+            <button class="filter-item" data-operator="before:">📅 Avant</button>
+            <button class="filter-item" data-operator="related:">🔀 Similaires</button>
+            <button class="filter-item" data-operator='"'>💬 Exact</button>
+            <button class="filter-item" data-operator="-">➖ Exclure</button>
+          </div>
+          <p class="label" style="margin:10px 0 8px;">Images :</p>
+          <div class="filters-grid">
+            <button class="filter-item" data-operator="imagesize:">📐 Taille</button>
+            <button class="filter-item" data-operator="isz:l ">🖼️ Grande</button>
+            <button class="filter-item" data-operator="isz:m ">🖼️ Moyenne</button>
+            <button class="filter-item" data-operator="itp:photo ">📷 Photo</button>
+            <button class="filter-item" data-operator="itp:clipart ">✂️ Clipart</button>
+            <button class="filter-item" data-operator="iar:t ">📱 Vertical</button>
+            <button class="filter-item" data-operator="iar:w ">🖥️ Horizontal</button>
+            <button class="filter-item" data-operator="ic:color ">🌈 Couleur</button>
+            <button class="filter-item" data-operator="ic:gray ">⬜ N&B</button>
+            <button class="filter-item" data-operator="ic:trans ">🔲 Transp.</button>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ===================== TOOLS TAB ===================== -->
+    <section class="tab" id="tools">
+      <div class="section-title">🛠️ Outils</div>
+
+      <div class="card">
+        <div class="card-icon">⏱️</div>
+        <div class="card-info">
+          <div class="card-title">Pomodoro</div>
+          <div class="card-desc">Minuteur 25min pour la concentration</div>
+          <div id="pomodoroStatus" style="font-size:11px;color:var(--primary);margin-top:3px;display:none;"></div>
+        </div>
+        <div class="card-action">
+          <label class="switch">
+            <input type="checkbox" id="pomodoroToggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🗂️</div>
+        <div class="card-info">
+          <div class="card-title">Nettoyer onglets</div>
+          <div class="card-desc">Organise les onglets par domaine</div>
+        </div>
+        <div class="card-action">
+          <label class="switch">
+            <input type="checkbox" id="tabCleanerToggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">📝</div>
+        <div class="card-info">
+          <div class="card-title">Mes notes</div>
+          <div class="card-desc">Textes surlignés et sauvegardés</div>
+        </div>
+        <div class="card-action">
+          <button id="notesViewBtn" class="btn btn-sm btn-blue">Voir</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">✂️</div>
+        <div class="card-info">
+          <div class="card-title">Résumer la page</div>
+          <div class="card-desc">Résumé intelligent du contenu</div>
+        </div>
+        <div class="card-action">
+          <button id="summarizeBtn" class="btn btn-sm btn-blue">Résumer</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🔒</div>
+        <div class="card-info">
+          <div class="card-title">Anonymiser données</div>
+          <div class="card-desc">Remplace noms, emails, tél... pour l'IA</div>
+        </div>
+        <div class="card-action">
+          <button id="anonymizeBtn" class="btn btn-sm btn-blue">Ouvrir</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">📄</div>
+        <div class="card-info">
+          <div class="card-title">PDF Tools</div>
+          <div class="card-desc">Extraire le texte des PDF</div>
+        </div>
+        <div class="card-action">
+          <button id="pdfBtn" class="btn btn-sm">Ouvrir</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">📥</div>
+        <div class="card-info">
+          <div class="card-title">Exporter données</div>
+          <div class="card-desc">Sauvegarde notes en JSON ou Markdown</div>
+        </div>
+        <div class="card-action" style="display:flex;flex-direction:column;gap:4px;">
+          <button id="exportDataBtn" class="btn btn-sm">JSON</button>
+          <button id="exportDataMdBtn" class="btn btn-sm" style="background:#6366f1;color:white;">MD</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🗑️</div>
+        <div class="card-info">
+          <div class="card-title">Effacer notes</div>
+          <div class="card-desc">Supprime toutes les notes sauvegardées</div>
+        </div>
+        <div class="card-action">
+          <button id="clearNotesBtn" class="btn btn-sm btn-danger">Effacer</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== AI TAB ===================== -->
+    <section class="tab" id="ai">
+      <div class="section-title">🧠 Outils Intelligence Artificielle</div>
+
+      <div class="card">
+        <div class="card-icon">🤖</div>
+        <div class="card-info">
+          <div class="card-title">Détecteur IA</div>
+          <div class="card-desc">Analyse si un texte est généré par IA</div>
+        </div>
+        <div class="card-action">
+          <button id="aiDetectorBtn" class="btn btn-sm btn-blue">Tester</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🌐</div>
+        <div class="card-info">
+          <div class="card-title">Traducteur</div>
+          <div class="card-desc">Ouvre Google Translate avec le texte</div>
+        </div>
+        <div class="card-action">
+          <button id="translatorBtn" class="btn btn-sm btn-blue">Traduire</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🎨</div>
+        <div class="card-info">
+          <div class="card-title">Palette couleurs</div>
+          <div class="card-desc">Génère une palette aléatoire</div>
+        </div>
+        <div class="card-action">
+          <button id="paletteBtn" class="btn btn-sm btn-blue">Générer</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">▶️</div>
+        <div class="card-info">
+          <div class="card-title">YouTube Enhancer</div>
+          <div class="card-desc">Fonctionnalités avancées YouTube</div>
+        </div>
+        <div class="card-action">
+          <button id="youtubeBtn" class="btn btn-sm btn-blue">Ouvrir</button>
+        </div>
+      </div>
+
+      <hr class="separator">
+      <div class="section-title" style="margin-top:4px;">⚙️ Paramètres IA</div>
+
+      <div class="section">
+        <label class="switch-row">
+          <span>Détecteur IA automatique</span>
+          <label class="switch"><input type="checkbox" id="aiDetectorEnabled" checked><span class="slider"></span></label>
+        </label>
+        <div class="slider-container" style="margin-top:10px;">
+          <div class="slider-labels">
+            <span>Moins sensible</span>
+            <span>Plus sensible</span>
+          </div>
+          <input type="range" id="aiDetectorSensitivity" min="40" max="90" value="60" class="styled-range">
+          <div class="slider-value">Sensibilité : <span id="aiSensValue">60</span>%</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <label class="switch-row">
+          <span>Résumeur de page</span>
+          <label class="switch"><input type="checkbox" id="summarizerEnabled" checked><span class="slider"></span></label>
+        </label>
+        <div class="slider-container" style="margin-top:10px;">
+          <div class="slider-labels">
+            <span>Court</span>
+            <span>Long</span>
+          </div>
+          <input type="range" id="summarizerLength" min="20" max="60" value="35" class="styled-range">
+          <div class="slider-value">Longueur : <span id="sumLenValue">35</span>%</div>
+        </div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12px;">
+          <span>Langue résumé :</span>
+          <select id="summarizerLang" style="padding:4px 6px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:var(--section-bg);color:var(--text);">
+            <option value="fr">Français</option>
+            <option value="en">Anglais</option>
+            <option value="es">Espagnol</option>
+            <option value="de">Allemand</option>
+            <option value="it">Italien</option>
+            <option value="pt">Portugais</option>
+            <option value="ja">Japonais</option>
+            <option value="zh">Chinois</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section">
+        <label class="switch-row">
+          <span>🌐 Traducteur automatique</span>
+          <label class="switch"><input type="checkbox" id="autoTranslatorEnabled" checked><span class="slider"></span></label>
+        </label>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12px;">
+          <span>Langue cible :</span>
+          <select id="translatorTargetLang" style="padding:4px 6px;font-size:11px;border:1px solid var(--border);border-radius:4px;background:var(--section-bg);color:var(--text);">
+            <option value="fr">Français</option>
+            <option value="en">Anglais</option>
+            <option value="es">Espagnol</option>
+            <option value="de">Allemand</option>
+            <option value="it">Italien</option>
+            <option value="pt">Portugais</option>
+            <option value="ja">Japonais</option>
+            <option value="zh">Chinois</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== SETTINGS TAB ===================== -->
+    <section class="tab" id="settings">
+
+      <!-- POSITIONNEMENT -->
+      <div class="config-section">
+        <div class="config-section-title">📍 Positionnement</div>
+        <select id="layoutSelect" style="width:100%;padding:7px;margin-bottom:7px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--section-bg);color:var(--text);">
+          <option value="adaptive">🔄 Adaptative (Auto)</option>
+          <option value="compact">📦 Compacte (Colonne droite)</option>
+          <option value="minimal">⚡ Minimale (Critiques seulement)</option>
+          <option value="custom">🎨 Personnalisée</option>
+        </select>
+        <p style="font-size:10px;color:var(--text-light);margin-bottom:8px;">Les boutons se repositionnent automatiquement pour éviter les chevauchements.</p>
+        <button id="resetLayoutBtn" class="btn btn-sm" style="width:100%;">↺ Réinitialiser le layout</button>
+      </div>
+
+      <!-- BOUTONS VISIBLES -->
+      <div class="config-section">
+        <div class="config-section-title">👁️ Boutons visibles sur les pages</div>
+
+        <label class="switch-row">
+          <span>🔍 Boutons Google</span>
+          <label class="switch"><input type="checkbox" id="googleButtonsVisible" checked class="button-toggle" data-button-type="googleButtons"><span class="slider"></span></label>
+        </label>
+        <hr class="separator">
+        <label class="switch-row">
+          <span>✂️ Bouton Résumé</span>
+          <label class="switch"><input type="checkbox" id="summarizerButtonVisible" checked class="button-toggle" data-button-type="summarizerButton"><span class="slider"></span></label>
+        </label>
+        <hr class="separator">
+        <label class="switch-row">
+          <span>🤖 Badge Détecteur IA</span>
+          <label class="switch"><input type="checkbox" id="aiDetectorBadgeVisible" checked class="button-toggle" data-button-type="aiDetectorBadge"><span class="slider"></span></label>
+        </label>
+        <hr class="separator">
+        <label class="switch-row">
+          <span>🌐 Bouton Traducteur</span>
+          <label class="switch"><input type="checkbox" id="translationButtonsVisible" checked class="button-toggle" data-button-type="translationButtons"><span class="slider"></span></label>
+        </label>
+        <hr class="separator">
+        <label class="switch-row">
+          <span>📊 Widget Stats page</span>
+          <label class="switch"><input type="checkbox" id="quickStatsWidgetVisible" checked class="button-toggle" data-button-type="quickStatsWidget"><span class="slider"></span></label>
+        </label>
+        <hr class="separator">
+        <label class="switch-row">
+          <span>🎯 Bouton Focus Mode</span>
+          <label class="switch"><input type="checkbox" id="focusModeBadgeVisible" checked class="button-toggle" data-button-type="focusModeBadge"><span class="slider"></span></label>
+        </label>
+        <hr class="separator">
+        <label class="switch-row">
+          <span>📖 Badge Temps de lecture</span>
+          <label class="switch"><input type="checkbox" id="readingTimeBadgeVisible" checked class="button-toggle" data-button-type="readingTimeBadge"><span class="slider"></span></label>
+        </label>
+        <hr class="separator">
+        <label class="switch-row">
+          <span>📝 Menu notes (sélection)</span>
+          <label class="switch"><input type="checkbox" id="notesHighlighterVisible" checked class="button-toggle" data-button-type="notesHighlighter"><span class="slider"></span></label>
+        </label>
+
+        <hr class="separator">
+        <button id="resetPositionsBtn" class="btn btn-sm" style="width:100%;margin-top:4px;">↺ Réinitialiser toutes les positions</button>
+      </div>
+
+      <!-- COOKIES -->
+      <div class="config-section">
+        <div class="config-section-title">🍪 Anti-cookies</div>
+        <label class="switch-row">
+          <span>Activer le bloqueur</span>
+          <label class="switch"><input type="checkbox" id="cookieBlockerEnabled" checked><span class="slider"></span></label>
+        </label>
+      </div>
+
+      <!-- SYSTÈME -->
+      <div class="config-section">
+        <div class="config-section-title">⚙️ Système</div>
+        <label class="switch-row">
+          <span>⏰ Temps de lecture</span>
+          <label class="switch"><input type="checkbox" id="readingTimeToggle" checked><span class="slider"></span></label>
+        </label>
+        <hr class="separator">
+        <label class="switch-row">
+          <span>💱 Convertisseur devises</span>
+          <label class="switch"><input type="checkbox" id="currencyConverterToggle"><span class="slider"></span></label>
+        </label>
+        <hr class="separator">
+        <label class="switch-row">
+          <span>⚡ Mode performance</span>
+          <label class="switch"><input type="checkbox" id="performanceModeEnabled"><span class="slider"></span></label>
+        </label>
+        <p style="font-size:10px;color:var(--text-light);margin-top:4px;">Désactive les fonctionnalités lourdes pour les pages complexes.</p>
+
+        <hr class="separator">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-light);margin-bottom:6px;">🆕 Page nouvelle fenêtre :</label>
+        <select id="newtabUrlPreset" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:4px;font-size:11px;margin-bottom:6px;background:var(--section-bg);color:var(--text);">
+          <option value="google">🔵 Google</option>
+          <option value="bing">🔹 Bing</option>
+          <option value="qwant">🔴 Qwant</option>
+          <option value="duckduckgo">🦆 DuckDuckGo</option>
+          <option value="startpage">🔒 StartPage</option>
+          <option value="yahoo">🟡 Yahoo</option>
+          <option value="ecosia">🌱 Ecosia</option>
+          <option value="brave">🦁 Brave</option>
+          <option value="custom">⚙️ Personnalisée</option>
+        </select>
+        <input type="text" id="newtabUrlCustom" placeholder="https://example.com" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:4px;font-size:11px;display:none;background:var(--section-bg);color:var(--text);">
+      </div>
+
+      <!-- DANGER ZONE -->
+      <div class="config-section">
+        <div class="config-section-title">⚠️ Zone dangereuse</div>
+        <button id="resetBtn" class="btn btn-sm btn-danger" style="width:100%;">🔄 Réinitialiser toute l'extension</button>
+      </div>
+
+      <div class="footer">
+        <p>AITools Pro v4.0 — Données stockées localement</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toaster -->
+  <div id="aitools-toaster"></div>
+
+  <!-- Notes Modal -->
+  <div id="notesModal" class="modal hidden">
+    <div class="modal-content">
+      <h3>📝 Mes notes</h3>
+      <div id="notesList" style="max-height:300px;overflow-y:auto;margin-bottom:12px;"></div>
+      <button id="closeNotesBtn" class="btn btn-sm" style="width:100%;">Fermer</button>
+    </div>
+  </div>
+
+  <!-- Anonymizer Modal -->
+  <div id="anonymizeModal" class="modal hidden">
+    <div class="modal-content" style="width:360px;">
+      <h3>🔒 Anonymiser des données</h3>
+      <p style="font-size:11px;color:var(--text-light);margin-bottom:10px;">Collez votre texte ou importez un fichier .txt. Les données personnelles seront remplacées avant envoi à une IA.</p>
+      <textarea id="anonymizeInput" placeholder="Collez votre texte ici..." style="width:100%;height:120px;padding:8px;font-size:12px;border:1px solid var(--border);border-radius:6px;resize:vertical;font-family:inherit;background:var(--section-bg);color:var(--text);"></textarea>
+      <!-- Improvement F: file import -->
+      <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+        <label style="font-size:11px;color:var(--text-light);flex-shrink:0;">📂 Ou importer :</label>
+        <input type="file" id="anonymizeFileInput" accept=".txt" style="font-size:10px;flex:1;">
+      </div>
+      <button id="anonymizeRunBtn" class="btn btn-blue" style="width:100%;margin-top:8px;">🔒 Anonymiser</button>
+      <div id="anonymizeSummary" style="display:none;margin-top:8px;padding:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;font-size:11px;color:#166534;"></div>
+      <textarea id="anonymizeOutput" placeholder="Résultat anonymisé..." style="width:100%;height:100px;padding:8px;font-size:12px;border:1px solid var(--border);border-radius:6px;resize:vertical;margin-top:8px;display:none;font-family:inherit;background:var(--section-bg);color:var(--text);" readonly></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button id="anonymizeCopyBtn" class="btn btn-green btn-sm" style="flex:1;display:none;">📋 Copier</button>
+        <button id="anonymizeCloseBtn" class="btn btn-sm" style="flex:1;">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup-new.js"></script>
+</body>
+</html>
