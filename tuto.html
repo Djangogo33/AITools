@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <!-- Anti-flash dark mode -->
+  <script>if(localStorage.getItem("tf_dark")==="true")document.documentElement.classList.add("dark");</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tutoriel — TutoFacile</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/nav.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-inner">
+    <a href="index.html" class="nav-logo"><div class="nav-logo-icon">🎓</div>TutoFacile</a>
+    <nav class="nav-links">
+      <a href="index.html" class="nav-link">Accueil</a>
+      <a href="contribute.html" class="nav-link">Contribuer</a>
+    </nav>
+    <div class="nav-actions">
+      <div class="lang-switch">
+        <button class="lang-btn" data-lang="fr">🇫🇷</button>
+        <button class="lang-btn" data-lang="en">🇬🇧</button>
+      </div>
+      <button class="dark-toggle">🌙</button>
+      <a href="login.html" class="btn btn-ghost btn-sm" id="nav-login">Connexion</a>
+      <a href="dashboard.html" class="btn btn-ghost btn-sm" id="nav-dashboard" style="display:none">Dashboard</a>
+      <button class="btn btn-ghost btn-sm" id="nav-logout" style="display:none">Déconnexion</button>
+    </div>
+    <button class="nav-burger" id="nav-burger"><span></span><span></span><span></span></button>
+  </div>
+</header>
+<nav class="nav-mobile" id="nav-mobile">
+  <a href="index.html" class="nav-link">Accueil</a>
+  <a href="login.html" class="nav-link" id="nav-login-m">Connexion</a>
+  <a href="dashboard.html" class="nav-link" id="nav-dash-m" style="display:none">Dashboard</a>
+</nav>
+
+<main class="tuto-page">
+  <div class="container" id="tuto-container">
+    <div class="loader"></div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <p>© <span id="footer-year"></span> TutoFacile — <a href="index.html">Accueil</a> · <a href="contribute.html">Contribuer</a></p>
+    </div>
+  </div>
+</footer>
+
+<script src="js/nav.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/data.js"></script>
+<script>
+document.getElementById('footer-year').textContent = new Date().getFullYear();
+
+const urlParams = new URLSearchParams(window.location.search);
+const tutoId    = urlParams.get('id');
+
+if (!tutoId) {
+  document.getElementById('tuto-container').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">❌</div>
+      <h3>Tutoriel introuvable</h3>
+      <p>Aucun identifiant fourni.</p>
+      <a href="index.html" class="btn btn-primary" style="margin-top:16px">Retour à l'accueil</a>
+    </div>`;
+} else {
+  TutoData.getById(tutoId).then(t => {
+    if (!t) {
+      document.getElementById('tuto-container').innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🔍</div>
+          <h3>Tutoriel introuvable</h3>
+          <p>Ce tutoriel n'existe pas ou a été supprimé.</p>
+          <a href="index.html" class="btn btn-primary" style="margin-top:16px">Retour à l'accueil</a>
+        </div>`;
+      return;
+    }
+
+    /* Incrémenter les vues */
+    TutoData.addView(t.id);
+
+    /* Mettre à jour le titre */
+    document.title = `${t.titre} — TutoFacile`;
+
+    /* Difficulté badge */
+    const diffColor = { Facile: 'success', Moyen: 'warning', Difficile: 'danger' }[t.difficulty] || 'info';
+
+    document.getElementById('tuto-container').innerHTML = `
+      <!-- Fil d'Ariane -->
+      <nav style="font-size:0.85rem;color:var(--text-light);margin-bottom:24px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <a href="index.html" style="color:var(--primary)">Accueil</a>
+        <span>›</span>
+        <a href="category.html?cat=${encodeURIComponent(t.categorie||'')}" style="color:var(--primary)">${t.categorie||'Catégorie'}</a>
+        <span>›</span>
+        <span>${t.titre}</span>
+      </nav>
+
+      <!-- Header -->
+      <div class="tuto-header">
+        <div class="tuto-header-cat">${t.emoji||'📚'} ${t.categorie||''}</div>
+        <h1>${t.titre}</h1>
+        <div class="tuto-meta">
+          <span>⏱️ ${t.time||'?'} min de lecture</span>
+          <span><span class="badge badge-${diffColor}">${t.difficulty||'N/A'}</span></span>
+          <span>👁️ ${(t.views||0)+1} vues</span>
+          ${t.authorName ? `<span>✍️ Par ${t.authorName}</span>` : ''}
+        </div>
+      </div>
+
+      <!-- Image de couverture -->
+      ${t.image ? `<img src="${t.image}" alt="${t.titre}" class="tuto-cover">` : ''}
+
+      <!-- Contenu -->
+      <div class="tuto-layout">
+        <article class="tuto-content card card-body" style="padding:32px">
+          ${t.content || '<p>Ce tutoriel n\'a pas encore de contenu.</p>'}
+        </article>
+
+        <!-- Sidebar -->
+        <aside class="tuto-sidebar-card">
+          <div class="card card-body" style="margin-bottom:16px">
+            <h3 style="margin-bottom:12px">📋 Infos</h3>
+            <div style="display:flex;flex-direction:column;gap:10px;font-size:0.9rem">
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-light)">Catégorie</span>
+                <a href="category.html?cat=${encodeURIComponent(t.categorie||'')}" style="color:var(--primary);font-weight:600">${t.categorie||'—'}</a>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-light)">Difficulté</span>
+                <span class="badge badge-${diffColor}">${t.difficulty||'—'}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-light)">Durée</span>
+                <span>⏱️ ${t.time||'?'} min</span>
+              </div>
+              <div style="display:flex;justify-content:space-between">
+                <span style="color:var(--text-light)">Vues</span>
+                <span>👁️ ${(t.views||0)+1}</span>
+              </div>
+              ${t.authorName ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-light)">Auteur</span><span>✍️ ${t.authorName}</span></div>` : ''}
+            </div>
+          </div>
+
+          <div class="card card-body">
+            <h3 style="margin-bottom:12px">🔗 Partager</h3>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button class="btn btn-ghost btn-sm btn-full" onclick="copyLink()">📋 Copier le lien</button>
+              <a href="https://twitter.com/intent/tweet?text=${encodeURIComponent(t.titre)}&url=${encodeURIComponent(window.location.href)}"
+                 target="_blank" rel="noopener" class="btn btn-ghost btn-sm btn-full">🐦 Twitter/X</a>
+              <a href="https://discord.com/invite/7F8jX2Se" target="_blank" rel="noopener"
+                 class="btn btn-ghost btn-sm btn-full" style="background:#5865f2;color:#fff;border-color:#5865f2">💬 Discord</a>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- CTA Contribuer -->
+      <div style="margin-top:50px;padding:30px;background:var(--primary-light);border:1px solid var(--primary);border-radius:var(--r-xl);text-align:center">
+        <h3 style="margin-bottom:10px">Vous aussi, partagez vos savoirs ! ✍️</h3>
+        <p style="color:var(--text-light);margin-bottom:20px">Créez un tutoriel et aidez des milliers de personnes à apprendre.</p>
+        <a href="contribute.html" class="btn btn-primary btn-lg">📝 Créer un tutoriel</a>
+      </div>
+    `;
+  });
+}
+
+function copyLink() {
+  navigator.clipboard.writeText(window.location.href).then(() => toast('Lien copié ! 📋'));
+}
+</script>
+</body>
+</html>

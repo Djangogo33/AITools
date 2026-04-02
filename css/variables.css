@@ -1,0 +1,78 @@
+/* ============================================================
+   variables.css — Design tokens TutoFacile
+   ============================================================ */
+
+:root {
+  /* Palette principale */
+  --primary:       #0066ff;
+  --primary-dark:  #0052cc;
+  --primary-light: rgba(0, 102, 255, 0.08);
+  --accent:        #00c4a7;
+  --accent-light:  rgba(0, 196, 167, 0.08);
+
+  /* Statuts */
+  --success:  #22c55e;
+  --warning:  #f59e0b;
+  --danger:   #ef4444;
+  --info:     #3b82f6;
+
+  /* Texte */
+  --text:       #1a1a2e;
+  --text-light: #6b7280;
+  --text-inv:   #ffffff;
+
+  /* Fonds */
+  --bg:         #ffffff;
+  --bg-soft:    #f8fafc;
+  --bg-muted:   #f1f5f9;
+
+  /* Bordures */
+  --border:       #e5e7eb;
+  --border-focus: var(--primary);
+
+  /* Ombres */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.10);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+
+  /* Typographie */
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Fira Code', 'Courier New', monospace;
+
+  /* Rayons */
+  --r-sm:  4px;
+  --r-md:  8px;
+  --r-lg:  12px;
+  --r-xl:  16px;
+  --r-full: 9999px;
+
+  /* Transitions */
+  --t: 0.2s ease;
+  --t-slow: 0.35s ease;
+
+  /* Espacements */
+  --max-w: 1200px;
+  --gap:   24px;
+}
+
+/* ── Mode sombre ── */
+html.dark {
+  --primary:       #4d8eff;
+  --primary-dark:  #6fa3ff;
+  --primary-light: rgba(77, 142, 255, 0.1);
+  --accent:        #00e8c8;
+  --accent-light:  rgba(0, 232, 200, 0.1);
+
+  --text:       #f0f0f0;
+  --text-light: #9ca3af;
+  --text-inv:   #1a1a2e;
+
+  --bg:       #0f1117;
+  --bg-soft:  #1a1d27;
+  --bg-muted: #252836;
+
+  --border:  #2d3048;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.35);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
+}

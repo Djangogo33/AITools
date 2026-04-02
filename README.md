@@ -1,137 +1,92 @@
-# 🚀 AITools Pro v4.0 - Suite Complète d'Outils Intelligents pour Chrome
+# 🎓 TutoFacile — Plateforme de tutoriels gratuits
 
-**AITools Pro** est une extension Chrome tout-en-un conçue pour transformer votre navigation. Boostez vos recherches Google, améliorez votre productivité et profitez d'une interface repensée, intuitive et personnalisable.
-
----
-
-## ✨ Nouveautés v4.0
-
-| Fonctionnalité | Description |
-|---|---|
-| 🎨 **Interface redessinée** | Navigation par onglets avec icônes + labels, switches CSS, cartes visuelles |
-| 🔒 **Anonymiseur de données** | Remplace automatiquement les données personnelles avant envoi à une IA |
-| 🎵 **Bouton YouTube Music** | Apparaît automatiquement sur les recherches musicales |
-| 🍪 **Anti-cookies amélioré** | Détection par mots-clés, moins de faux positifs, toggle rapide |
-| 📍 **Boutons Google corrigés** | S'affichent uniquement après une recherche (pas sur la page d'accueil) |
-| ✅ **Toaster de feedback** | Confirmation visuelle à chaque action |
-| 🎯 **Focus Mode corrigé** | Fonctionne dès le premier chargement, désactivable proprement |
-| 📝 **Menu notes corrigé** | Disparaît instantanément quand la sélection est relâchée |
+**Site :** https://djangogo33.github.io/optitools  
+**Admin :** https://djangogo33.github.io/optitools/admin.html  
+**Repo :** https://github.com/Djangogo33/optitools  
+**Créateur :** [Djangogo33](https://djangogo33.github.io/about-me)
 
 ---
 
-## 🔍 Fonctionnalités principales
+## 🌐 Écosystème
 
-### Onglet ⚡ Accès
-- Liens rapides : WhatsApp, Discord, Site Internet, ChatGPT
-- Réglages rapides avec switches : Mode sombre, Sans pub, Bloqueur cookies
-
-### Onglet 🔍 Google
-- Champ de recherche intégré avec bouton de lancement
-- 6 catégories : Ortho, Wiki, Tendances, Actualités, Images, Vidéos
-- Boutons de recherche contextuels (Chance, Filtres, Maps, ChatGPT, 🎵 YT Music si recherche musicale)
-- **20+ opérateurs de recherche avancés** : généraux + image (taille, orientation, couleur, type)
-- Personnalisation complète de chaque bouton (label, couleur, action)
-
-### Onglet 🛠️ Outils
-- **Pomodoro** (25 min) avec minuteur en temps réel
-- **Mes notes** : textes surlignés sauvegardés
-- **Résumer la page** : résumé intelligent du contenu
-- **🔒 Anonymiser données** : remplace noms, emails, téléphones, dates, IP, IBAN, NSS, codes postaux, URLs
-- **PDF Tools**, export de données, nettoyage d'onglets
-
-### Onglet 🧠 IA
-- Détecteur de contenu généré par IA (sensibilité réglable)
-- Résumeur automatique (longueur et langue configurables)
-- Traducteur automatique (8 langues, avec détection de la langue source)
-- Générateur de palettes de couleurs
-- YouTube Enhancer
-
-### Onglet ⚙️ Config
-- **Positionnement** : 4 modes (Adaptative, Compacte, Minimale, Personnalisée)
-- **Boutons visibles** : toggle individuel pour chaque élément injecté sur les pages
-- **Anti-cookies** : activation/désactivation
-- **Système** : page nouvelle fenêtre, mode performance, réinitialisation
+| Projet | Lien |
+|--------|------|
+| 💬 Discord | https://discord.com/invite/7F8jX2Se |
+| 📱 WhatsApp | https://whatsapp.com/channel/0029VbCJCg06GcG7aLZPGu1f |
+| 🧩 AITools Pro | https://github.com/Djangogo33/AITools |
+| 👤 About Me | https://djangogo33.github.io/about-me |
 
 ---
 
-## 🔒 Anonymiseur de données
-
-L'anonymiseur remplace automatiquement :
-
-| Donnée | Exemple | Remplacement |
-|---|---|---|
-| Nom propre | Paul Dupont | `[NOM]` |
-| Email | contact@exemple.fr | `[EMAIL]` |
-| Téléphone | 06 12 34 56 78 | `[TÉLÉPHONE]` |
-| Date | 12/03/2024 | `[DATE]` |
-| Adresse IP | 192.168.1.1 | `[IP]` |
-| NSS | 1 80 12 75 123 456 78 | `[NSS]` |
-| IBAN | FR76 3000... | `[IBAN]` |
-| Code postal | 75008 | `[CODE POSTAL]` |
-| URL | https://exemple.com | `[URL]` |
-
-Un résumé du nombre d'éléments anonymisés par catégorie est affiché. Le résultat est copiable en un clic.
-
----
-
-## 🍪 Bloqueur de cookies amélioré
-
-Le bloqueur ne s'active désormais que si le popup contient des mots-clés reconnus (`cookie`, `consent`, `gdpr`, `accepter`, etc.) **et** fait plus de 50px de hauteur. Après avoir agi, il se met en pause 5 secondes pour éviter les boucles.
-
-Toggle rapide disponible dans l'onglet **Accès** et dans **Config**.
-
----
-
-## 🏗️ Structure du projet
+## 📁 Structure des fichiers
 
 ```
-AITools/
-├── manifest.json          # Configuration MV3
-├── popup-new.html         # Interface (420px, 640px max-height)
-├── popup-new.js           # Logique popup
-├── styles-new.css         # Design avec switches CSS
-├── content-v4.js          # Script injecté dans les pages
-├── background-v4.js       # Service worker
-├── layout-manager.js      # Gestionnaire de positions
-├── newtab.html/js         # Page nouvel onglet
-└── icons/                 # Logos
+optitools/
+├── index.html          ← Page d'accueil (+ bandeau promo écosystème)
+├── login.html          ← Connexion utilisateur
+├── register.html       ← Inscription
+├── dashboard.html      ← Espace utilisateur (créer/éditer/supprimer ses tutos, visibilité privé/public)
+├── admin.html          ← Panel admin (auth SHA-256)
+├── tuto.html           ← Visionneuse d'un tutoriel
+├── category.html       ← Parcourir par catégorie
+├── contribute.html     ← Formulaire de contribution public
+├── legal.html          ← Mentions légales
+├── css/
+│   ├── variables.css   ← Design tokens (couleurs, fonts, espacements, dark mode html.dark)
+│   ├── base.css        ← Reset + composants réutilisables
+│   ├── nav.css         ← Barre de navigation
+│   └── pages.css       ← Styles spécifiques par page (+ .tip-box pour tutos enrichis)
+├── js/
+│   ├── auth.js         ← Auth SHA-256 (utilisateurs + admin)
+│   ├── data.js         ← Gestion tutoriels (localStorage + JSON, champ published)
+│   └── nav.js          ← Navigation, dark mode no-flash, langue, toasts
+├── data/
+│   └── tutorials.json  ← 20 tutoriels enrichis avec étapes détaillées et tip-box
+├── assets/
+│   └── favicon.svg
+└── .github/workflows/
+    └── deploy.yml      ← Déploiement automatique GitHub Pages
 ```
 
 ---
 
-## 🐛 Dépannage
+## 🔐 Authentification
 
-### Les boutons Google n'apparaissent pas
-Ils ne s'affichent qu'**après avoir effectué une recherche** (URL avec `?q=...`). C'est voulu.
+### Utilisateurs publics
+- Mot de passe hashé **SHA-256** via Web Crypto API
+- Session signée stockée en **localStorage** (7 jours)
+- `tf_users` · `tf_session`
 
-### Les boutons Google ne fonctionnent pas au premier lancement
-Réinstaller l'extension ou aller dans `chrome://extensions` → Actualiser.
+### Admin
+- Identifiant : `admin`
+- Mot de passe par défaut : `TutoAdmin2026!`
+- Hash SHA-256 dans `js/auth.js` → `ADMIN_PASS_HASH`
+- Session en **sessionStorage**
 
-### Le focus mode n'apparaît pas
-Rechargez la page. Si le problème persiste, allez dans **Config → Boutons visibles** et activez "Bouton Focus Mode".
-
-### Anti-cookies trop agressif
-Désactivez-le temporairement depuis l'onglet **Accès** (toggle "Bloqueur cookies").
-
----
-
-## 🔐 Confidentialité
-
-- ✅ Tout fonctionne **en local** — aucun serveur externe (sauf les APIs de traduction)
-- ✅ Pas de tracking, pas de données vendues
-- ✅ Les données anonymisées ne quittent jamais l'extension
+**Changer le mot de passe admin :**
+1. https://emn178.github.io/online-tools/sha256.html → générer le hash
+2. Remplacer `ADMIN_PASS_HASH` dans `js/auth.js`
 
 ---
 
-## 📞 Support
+## 📝 Visibilité des tutoriels
 
-Discord : https://discord.gg/J2ssa2Wkjr
+Les tutoriels créés via le dashboard peuvent être :
+- 🔒 **Privé** — visible uniquement par le créateur (défaut)
+- 🌍 **Public** — visible par tous les visiteurs
+
+Le champ `published: true/false` dans `data.js` contrôle cela.
 
 ---
 
-| Information | Détail |
-|---|---|
-| **Version** | 4.0.0 |
-| **Date** | Mars 2026 |
-| **Manifest** | V3 |
-| **Statut** | ✅ Production |
+## 🐛 Bugs corrigés
+
+- ✅ **Dark mode flash** — `html.dark` appliqué avant le rendu via snippet `<head>` + IIFE dans `nav.js`
+- ✅ **Boutons de langue** — `data-lang-bound` pour éviter le double-binding des listeners
+- ✅ **Tutoriels** — contenu enrichi avec étapes détaillées, `.tip-box`, listes de matériel
+
+---
+
+## 🚀 Déploiement GitHub Pages
+
+Push sur `main` → GitHub Actions se déclenche → site live automatiquement.

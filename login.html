@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <!-- Anti-flash dark mode -->
+  <script>if(localStorage.getItem("tf_dark")==="true")document.documentElement.classList.add("dark");</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connexion — TutoFacile</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/nav.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-inner">
+    <a href="index.html" class="nav-logo">
+      <div class="nav-logo-icon">🎓</div>TutoFacile
+    </a>
+    <div class="nav-actions" style="margin-left:auto">
+      <div class="lang-switch">
+        <button class="lang-btn" data-lang="fr">🇫🇷</button>
+        <button class="lang-btn" data-lang="en">🇬🇧</button>
+      </div>
+      <button class="dark-toggle">🌙</button>
+    </div>
+  </div>
+</header>
+
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">🔐</div>
+      <h1>Connexion</h1>
+      <p>Accédez à votre espace TutoFacile</p>
+    </div>
+
+    <div id="login-error" class="alert alert-danger" style="display:none"></div>
+
+    <div class="form-group">
+      <label>Nom d'utilisateur</label>
+      <input type="text" id="login-user" class="form-control" placeholder="Votre pseudonyme" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Mot de passe</label>
+      <input type="password" id="login-pass" class="form-control" placeholder="••••••••" autocomplete="current-password">
+    </div>
+
+    <button class="btn btn-primary btn-full btn-lg" id="login-btn" onclick="doLogin()">
+      Se connecter
+    </button>
+
+    <div class="auth-footer">
+      Pas encore de compte ? <a href="register.html">S'inscrire</a>
+    </div>
+  </div>
+</div>
+
+<script src="js/nav.js"></script>
+<script src="js/auth.js"></script>
+<script>
+/* Rediriger si déjà connecté */
+Auth.getCurrentUser().then(user => {
+  if (user) window.location.href = 'dashboard.html';
+});
+
+async function doLogin() {
+  const btn  = document.getElementById('login-btn');
+  const err  = document.getElementById('login-error');
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+
+  err.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Connexion…';
+
+  try {
+    await Auth.login(user, pass);
+    toast('Bienvenue ! 👋', 'success');
+    setTimeout(() => window.location.href = 'dashboard.html', 800);
+  } catch(e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Se connecter';
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <!-- Anti-flash dark mode -->
+  <script>if(localStorage.getItem("tf_dark")==="true")document.documentElement.classList.add("dark");</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Catégorie — TutoFacile</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/nav.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-inner">
+    <a href="index.html" class="nav-logo"><div class="nav-logo-icon">🎓</div>TutoFacile</a>
+    <nav class="nav-links">
+      <a href="index.html" class="nav-link">Accueil</a>
+      <div class="nav-dropdown">
+        <button class="nav-dropdown-toggle">
+          Catégories
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="nav-dropdown-menu">
+          <a href="category.html?cat=Bricolage"  class="nav-dropdown-item">🔨 Bricolage</a>
+          <a href="category.html?cat=Cuisine"    class="nav-dropdown-item">👨‍🍳 Cuisine</a>
+          <a href="category.html?cat=Code"       class="nav-dropdown-item">💻 Programmation</a>
+          <a href="category.html?cat=Jardinage"  class="nav-dropdown-item">🌱 Jardinage</a>
+          <a href="category.html?cat=Bien-être"  class="nav-dropdown-item">🧘 Bien-être</a>
+        </div>
+      </div>
+      <a href="contribute.html" class="nav-link">Contribuer</a>
+    </nav>
+    <div class="nav-actions">
+      <div class="lang-switch">
+        <button class="lang-btn" data-lang="fr">🇫🇷</button>
+        <button class="lang-btn" data-lang="en">🇬🇧</button>
+      </div>
+      <button class="dark-toggle">🌙</button>
+      <a href="login.html" class="btn btn-ghost btn-sm" id="nav-login">Connexion</a>
+      <a href="dashboard.html" class="btn btn-ghost btn-sm" id="nav-dashboard" style="display:none">Dashboard</a>
+      <button class="btn btn-ghost btn-sm" id="nav-logout" style="display:none">Déconnexion</button>
+    </div>
+    <button class="nav-burger" id="nav-burger"><span></span><span></span><span></span></button>
+  </div>
+</header>
+<nav class="nav-mobile" id="nav-mobile">
+  <a href="index.html" class="nav-link">Accueil</a>
+  <a href="category.html" class="nav-link">Toutes les catégories</a>
+  <a href="login.html" class="nav-link" id="nav-login-m">Connexion</a>
+</nav>
+
+<!-- Hero catégorie -->
+<div class="category-hero">
+  <div class="container">
+    <div id="cat-icon" style="font-size:3rem;margin-bottom:12px">📁</div>
+    <h1 id="cat-title">Catégories</h1>
+    <p id="cat-desc" style="color:var(--text-light)">Parcourez tous nos tutoriels</p>
+  </div>
+</div>
+
+<div class="container" style="padding-top:30px;padding-bottom:60px">
+  <!-- Filtres -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:28px;align-items:center">
+    <div style="flex:1;min-width:240px">
+      <input type="text" id="search-input" class="form-control" placeholder="Rechercher dans cette catégorie…">
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="filter-btn active" data-diff="all">Tous</button>
+      <button class="filter-btn" data-diff="Facile">🟢 Facile</button>
+      <button class="filter-btn" data-diff="Moyen">🟡 Moyen</button>
+      <button class="filter-btn" data-diff="Difficile">🔴 Difficile</button>
+    </div>
+    <div>
+      <select id="sort-select" class="form-control" style="width:auto">
+        <option value="newest">Plus récents</option>
+        <option value="views">Plus vus</option>
+        <option value="oldest">Plus anciens</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="tuto-grid" id="cat-grid">
+    <div class="loader"></div>
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <p>© <span id="footer-year"></span> TutoFacile — <a href="index.html">Accueil</a></p>
+    </div>
+  </div>
+</footer>
+
+<script src="js/nav.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/data.js"></script>
+<script>
+document.getElementById('footer-year').textContent = new Date().getFullYear();
+
+const CAT_META = {
+  'Bricolage':   { icon: '🔨', desc: 'Réparez, construisez et décorez votre maison.' },
+  'Cuisine':     { icon: '👨‍🍳', desc: 'Recettes délicieuses et techniques culinaires.' },
+  'Code':        { icon: '💻', desc: 'Programmation web, Python, JavaScript et plus.' },
+  'Jardinage':   { icon: '🌱', desc: 'Cultivez votre jardin et vos plantes.' },
+  'Bien-être':   { icon: '🧘', desc: 'Yoga, méditation et santé au quotidien.' },
+  'Électronique':{ icon: '⚡', desc: 'Électronique, Arduino, DIY tech.' },
+};
+
+const urlParams = new URLSearchParams(window.location.search);
+const currentCat = urlParams.get('cat') || '';
+
+/* Mettre à jour le hero */
+if (currentCat && CAT_META[currentCat]) {
+  document.getElementById('cat-icon').textContent  = CAT_META[currentCat].icon;
+  document.getElementById('cat-title').textContent = currentCat;
+  document.getElementById('cat-desc').textContent  = CAT_META[currentCat].desc;
+  document.title = `${currentCat} — TutoFacile`;
+} else if (!currentCat) {
+  document.getElementById('cat-title').textContent = 'Tous les tutoriels';
+}
+
+let _all = [];
+let currentFilter = { diff: 'all', q: '', sort: 'newest' };
+
+function tutoCard(t) {
+  const diffColors = { Facile: 'success', Moyen: 'warning', Difficile: 'danger' };
+  const badge = diffColors[t.difficulty] || 'info';
+  return `
+    <a href="tuto.html?id=${t.id}" class="card tuto-card">
+      <div class="tuto-card-image">
+        ${t.image
+          ? `<img src="${t.image}" alt="${t.titre}" loading="lazy">`
+          : `<div style="width:100%;height:100%;background:linear-gradient(135deg,var(--primary-light),var(--accent-light));display:flex;align-items:center;justify-content:center;font-size:3rem">${t.emoji||'📚'}</div>`}
+        <div class="tuto-card-badge"><span class="badge badge-${badge}">${t.difficulty||''}</span></div>
+      </div>
+      <div class="tuto-card-body">
+        <div class="tuto-card-cat">${t.categorie||''}</div>
+        <div class="tuto-card-title">${t.titre||''}</div>
+        <p class="tuto-card-desc">${(t.description||'').slice(0,80)}…</p>
+        <div class="tuto-card-meta">
+          <span>⏱️ ${t.time||'?'} min</span>
+          <span>👁️ ${t.views||0}</span>
+        </div>
+      </div>
+    </a>`;
+}
+
+function render() {
+  const filtered = TutoData.filter(_all, {
+    q   : currentFilter.q,
+    cat : currentCat || 'all',
+    diff: currentFilter.diff,
+    sort: currentFilter.sort,
+  });
+  const el = document.getElementById('cat-grid');
+  el.innerHTML = filtered.length
+    ? filtered.map(tutoCard).join('')
+    : `<div class="empty-state"><div class="empty-icon">🔍</div><h3>Aucun résultat</h3><p>Essayez d'autres filtres.</p></div>`;
+}
+
+/* Filtres */
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter.diff = btn.dataset.diff;
+    render();
+  });
+});
+
+document.getElementById('search-input').addEventListener('input', e => {
+  currentFilter.q = e.target.value.trim();
+  render();
+});
+
+document.getElementById('sort-select').addEventListener('change', e => {
+  currentFilter.sort = e.target.value;
+  render();
+});
+
+/* Init */
+TutoData.getAll().then(tutos => {
+  _all = tutos;
+  render();
+});
+</script>
+</body>
+</html>

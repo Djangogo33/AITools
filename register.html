@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <!-- Anti-flash dark mode -->
+  <script>if(localStorage.getItem("tf_dark")==="true")document.documentElement.classList.add("dark");</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inscription — TutoFacile</title>
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="stylesheet" href="css/variables.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/nav.css">
+  <link rel="stylesheet" href="css/pages.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-inner">
+    <a href="index.html" class="nav-logo">
+      <div class="nav-logo-icon">🎓</div>TutoFacile
+    </a>
+    <div class="nav-actions" style="margin-left:auto">
+      <div class="lang-switch">
+        <button class="lang-btn" data-lang="fr">🇫🇷</button>
+        <button class="lang-btn" data-lang="en">🇬🇧</button>
+      </div>
+      <button class="dark-toggle">🌙</button>
+    </div>
+  </div>
+</header>
+
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">📝</div>
+      <h1>Créer un compte</h1>
+      <p>Rejoignez la communauté TutoFacile</p>
+    </div>
+
+    <div id="reg-error"   class="alert alert-danger"  style="display:none"></div>
+    <div id="reg-success" class="alert alert-success" style="display:none"></div>
+
+    <div class="form-group">
+      <label>Nom d'utilisateur <span style="color:var(--danger)">*</span></label>
+      <input type="text" id="reg-user" class="form-control" placeholder="3 caractères minimum" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Adresse email <span style="color:var(--danger)">*</span></label>
+      <input type="email" id="reg-email" class="form-control" placeholder="exemple@email.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Mot de passe <span style="color:var(--danger)">*</span></label>
+      <input type="password" id="reg-pass" class="form-control" placeholder="6 caractères minimum" autocomplete="new-password">
+    </div>
+    <div class="form-group">
+      <label>Confirmer le mot de passe</label>
+      <input type="password" id="reg-pass2" class="form-control" placeholder="••••••••" autocomplete="new-password">
+    </div>
+
+    <button class="btn btn-primary btn-full btn-lg" id="reg-btn" onclick="doRegister()">
+      Créer mon compte
+    </button>
+
+    <div class="auth-footer">
+      Déjà un compte ? <a href="login.html">Se connecter</a>
+    </div>
+  </div>
+</div>
+
+<script src="js/nav.js"></script>
+<script src="js/auth.js"></script>
+<script>
+Auth.getCurrentUser().then(user => {
+  if (user) window.location.href = 'dashboard.html';
+});
+
+async function doRegister() {
+  const btn   = document.getElementById('reg-btn');
+  const err   = document.getElementById('reg-error');
+  const ok    = document.getElementById('reg-success');
+  const user  = document.getElementById('reg-user').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass  = document.getElementById('reg-pass').value;
+  const pass2 = document.getElementById('reg-pass2').value;
+
+  err.style.display = ok.style.display = 'none';
+
+  if (pass !== pass2) {
+    err.textContent = 'Les mots de passe ne correspondent pas.';
+    err.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Création…';
+
+  try {
+    await Auth.register(user, email, pass);
+    ok.textContent = '✅ Compte créé ! Redirection…';
+    ok.style.display = 'block';
+    setTimeout(() => window.location.href = 'dashboard.html', 1200);
+  } catch(e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Créer mon compte';
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') doRegister();
+});
+</script>
+</body>
+</html>
