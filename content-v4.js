@@ -6,6 +6,7 @@ const DEBUG = false;
 let extensionEnabled = true;
 let darkModeEnabled = false;
 let highlighterEnabled = true;
+let cookieBlockerPaused = false; // For cookie blocker pause state
 
 let extensionSettings = {
   aiDetectorEnabled: true,
@@ -1210,12 +1211,90 @@ function betterSummarize(text, length = 35) {
   const pct = Math.max(0.15, Math.min(0.8, (length || extensionSettings.summarizerLength || 35) / 100));
   const keepCount = Math.max(2, Math.ceil(sentences.length * pct));
 
-  return scored
+  const selectedSentences = scored
     .sort((a, b) => b.score - a.score)
     .slice(0, keepCount)
     .sort((a, b) => a.index - b.index)
-    .map(s => s.sentence)
-    .join(' ');
+    .map(s => s.sentence);
+
+  // Format with structure and sections
+  return formatSummary(selectedSentences.join(' '));
+}
+
+// Create structured summary with sections and numbering
+function formatSummary(rawSummary) {
+  if (!rawSummary || rawSummary.length < 50) return rawSummary;
+
+  // Split into sentences
+  const sentences = rawSummary.match(/[^.!?]+[.!?]+/g) || [rawSummary];
+  if (sentences.length < 3) return rawSummary;
+
+  // Group sentences into logical sections (max 3-4 sentences per section)
+  const sections = [];
+  let currentSection = [];
+  let sectionCount = 0;
+
+  for (let i = 0; i < sentences.length; i++) {
+    const sentence = sentences[i].trim();
+    currentSection.push(sentence);
+
+    // Create new section every 3-4 sentences or at end
+    if (currentSection.length >= 3 || i === sentences.length - 1) {
+      sectionCount++;
+      const sectionTitle = generateSectionTitle(currentSection, sectionCount);
+      sections.push({
+        title: sectionTitle,
+        content: currentSection.join(' ').trim()
+      });
+      currentSection = [];
+    }
+  }
+
+  // Format with numbering and clear structure
+  let formatted = '';
+  sections.forEach((section, idx) => {
+    formatted += `${idx + 1}. ${section.title}\n`;
+    formatted += `   ${section.content}\n\n`;
+  });
+
+  return formatted.trim();
+}
+
+// Generate contextual section titles based on content
+function generateSectionTitle(sentences, sectionNumber) {
+  if (!sentences || sentences.length === 0) return `Section ${sectionNumber}`;
+
+  const firstSentence = sentences[0].toLowerCase();
+  
+  // Detect common patterns
+  if (/^(la|le|le) france|^france|^la républ|^un état|^un pays/i.test(firstSentence)) {
+    return ['Définition', 'Présentation générale', 'Mise en contexte', 'Vue d\'ensemble'][sectionNumber % 4];
+  }
+  if (/histoire|passé|ancien|avant|siècle|période/i.test(firstSentence)) {
+    return ['Historique', 'Contexte historique', 'Évolution', 'Antécédents'][sectionNumber % 4];
+  }
+  if (/territoire|superficie|géogr|zone|région|climat/i.test(firstSentence)) {
+    return ['Géographie', 'Localisation', 'Caractéristiques géographiques', 'Environnement'][sectionNumber % 4];
+  }
+  if (/économ|pib|industri|commerce|ressourc|produit/i.test(firstSentence)) {
+    return ['Économie', 'Situation économique', 'Ressources', 'Développement'][sectionNumber % 4];
+  }
+  if (/populat|habitant|démo|person|citoyen|socié/i.test(firstSentence)) {
+    return ['Population', 'Démographie', 'Sociologie', 'Statistiques'][sectionNumber % 4];
+  }
+  if (/gouvern|régime|politiq|État|instit|admin/i.test(firstSentence)) {
+    return ['Gouvernance', 'Système politique', 'Administration', 'Organisation institutionnelle'][sectionNumber % 4];
+  }
+  if (/cultur|art|traditi|langue|littér|science/i.test(firstSentence)) {
+    return ['Culture', 'Arts et traditions', 'Patrimoine', 'Vie culturelle'][sectionNumber % 4];
+  }
+  if (/membre|organis|inter|union|traité|accord/i.test(firstSentence)) {
+    return ['Relations internationales', 'Engagements', 'Organisations', 'Partenariats'][sectionNumber % 4];
+  }
+
+  // Fallback: extract first few significant words
+  const words = firstSentence.split(/\s+/).slice(0, 4).join(' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 // ============================================================================
