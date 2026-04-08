@@ -1333,7 +1333,7 @@ async function generateSummaryWithAI(text, length = 35) {
   }
 }
 
-// Sidebar panel for summary (simple toast-like display)
+// Sidebar panel for summary (with formatting, titles, and copy button)
 function showSummaryPanel(summary) {
   if (!summary || summary.trim().length === 0) {
     alert('❌ Impossible de générer un résumé pour cette page');
@@ -1343,64 +1343,137 @@ function showSummaryPanel(summary) {
   const existing = document.getElementById('aitools-summary-panel');
   if (existing) existing.remove();
 
-  // Simple toast container
+  // Container with better sizing
   const toast = document.createElement('div');
   toast.id = 'aitools-summary-panel';
   toast.style.cssText = `
     position: fixed;
     bottom: 20px;
     right: 20px;
-    width: 350px;
+    width: 420px;
     background: white;
-    border-radius: 8px;
-    padding: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    border-radius: 10px;
+    padding: 0;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
     z-index: 10000;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 14px;
-    line-height: 1.6;
-    color: #333;
-    max-height: 300px;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    max-height: 500px;
     animation: aitools-toast-slide 0.3s ease forwards;
   `;
 
-  const lines = summary.split('\n');
-  lines.forEach((line, i) => {
-    if (i > 0) {
-      const br = document.createElement('br');
-      toast.appendChild(br);
-    }
-    if (line.trim()) {
-      const text = document.createTextNode(line);
-      toast.appendChild(text);
-    }
+  // Header with title and buttons
+  const header = document.createElement('div');
+  header.style.cssText = `
+    padding: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 10px 10px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  `;
+
+  const title = document.createElement('h3');
+  title.style.cssText = 'margin: 0; font-size: 15px; font-weight: 600;';
+  title.textContent = '📋 Résumé';
+  header.appendChild(title);
+
+  // Copy button
+  const copyBtn = document.createElement('button');
+  copyBtn.textContent = '📋 Copier';
+  copyBtn.style.cssText = `
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    transition: background 0.2s;
+  `;
+  copyBtn.addEventListener('mouseover', () => { copyBtn.style.background = 'rgba(255,255,255,0.3)'; });
+  copyBtn.addEventListener('mouseout', () => { copyBtn.style.background = 'rgba(255,255,255,0.2)'; });
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(summary);
+    copyBtn.textContent = '✅ Copié!';
+    setTimeout(() => { copyBtn.textContent = '📋 Copier'; }, 2000);
   });
+  header.appendChild(copyBtn);
 
   // Close button
   const closeBtn = document.createElement('button');
-  closeBtn.innerHTML = '&times;';
+  closeBtn.textContent = '✕';
   closeBtn.style.cssText = `
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: none;
+    background: rgba(255,255,255,0.2);
     border: none;
-    font-size: 24px;
-    color: #999;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
     cursor: pointer;
-    width: 24px;
-    height: 24px;
-    padding: 0;
+    font-size: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: background 0.2s;
   `;
+  closeBtn.addEventListener('mouseover', () => { closeBtn.style.background = 'rgba(255,255,255,0.3)'; });
+  closeBtn.addEventListener('mouseout', () => { closeBtn.style.background = 'rgba(255,255,255,0.2)'; });
   closeBtn.addEventListener('click', () => {
     toast.style.animation = 'aitools-toast-slide-out 0.3s ease forwards';
     setTimeout(() => toast.remove(), 300);
   });
-  toast.appendChild(closeBtn);
+  header.appendChild(closeBtn);
+
+  toast.appendChild(header);
+
+  // Content area with scrolling
+  const content = document.createElement('div');
+  content.style.cssText = `
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #333;
+  `;
+
+  // Parse and format the summary
+  const sections = parseSummaryIntoSections(summary);
+  
+  sections.forEach((section, idx) => {
+    // Section title
+    const sectionTitle = document.createElement('h4');
+    sectionTitle.style.cssText = `
+      margin: ${idx === 0 ? '0 0 8px 0' : '16px 0 8px 0'};
+      font-size: 13px;
+      font-weight: 700;
+      color: #667eea;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    `;
+    sectionTitle.textContent = section.title;
+    content.appendChild(sectionTitle);
+
+    // Section content
+    const sectionContent = document.createElement('p');
+    sectionContent.style.cssText = `
+      margin: 0 0 12px 0;
+      padding-left: 12px;
+      border-left: 3px solid #667eea;
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: #555;
+    `;
+    sectionContent.textContent = section.content;
+    content.appendChild(sectionContent);
+  });
+
+  toast.appendChild(content);
 
   // Add animation if not exists
   if (!document.getElementById('aitools-toast-animations')) {
@@ -1409,7 +1482,7 @@ function showSummaryPanel(summary) {
     style.textContent = `
       @keyframes aitools-toast-slide {
         from { 
-          transform: translateX(400px); 
+          transform: translateX(450px); 
           opacity: 0; 
         }
         to { 
@@ -1423,7 +1496,7 @@ function showSummaryPanel(summary) {
           opacity: 1; 
         }
         to { 
-          transform: translateX(400px); 
+          transform: translateX(450px); 
           opacity: 0; 
         }
       }
@@ -1433,13 +1506,45 @@ function showSummaryPanel(summary) {
 
   document.body.appendChild(toast);
 
-  // Auto-hide after 10 seconds
+  // Auto-hide after 15 seconds
   setTimeout(() => {
     if (toast.isConnected) {
       toast.style.animation = 'aitools-toast-slide-out 0.3s ease forwards';
       setTimeout(() => toast.remove(), 300);
     }
-  }, 10000);
+  }, 15000);
+}
+
+// Parse summary sections (format: "1. Title\n   Content\n\n2. Title...")
+function parseSummaryIntoSections(summary) {
+  const sections = [];
+  
+  // Match pattern: "N. Title\n   Content"
+  const sectionRegex = /(\d+)\.\s+(.+?)\n\s+(.+?)(?=\n\d+\.|$)/gs;
+  let match;
+
+  while ((match = sectionRegex.exec(summary)) !== null) {
+    const num = match[1];
+    const title = match[2].trim();
+    const content = match[3].trim().replace(/\n\s+/g, ' ');
+    
+    sections.push({
+      num,
+      title,
+      content
+    });
+  }
+
+  // If no sections found, treat whole summary as one section
+  if (sections.length === 0) {
+    return [{
+      num: '1',
+      title: 'Résumé',
+      content: summary.trim()
+    }];
+  }
+
+  return sections;
 }
 
 // ============================================================================
