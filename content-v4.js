@@ -1583,6 +1583,140 @@ async function generateTranslationWithAI(text, sourceLang, targetLang) {
   }
 }
 
+// Show translation error message
+function showTranslationError(sourceLang, targetLang) {
+  const langNames = {
+    fr: 'Français', en: 'Anglais', es: 'Espagnol', de: 'Allemand',
+    it: 'Italien', pt: 'Portugais', ja: 'Japonais', zh: 'Chinois'
+  };
+
+  // Remove existing
+  const existing = document.getElementById('aitools-translation-error');
+  if (existing) existing.remove();
+
+  // Create error modal
+  const error = document.createElement('div');
+  error.id = 'aitools-translation-error';
+  error.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    z-index: 99999;
+    max-width: 500px;
+    width: 90%;
+    overflow: hidden;
+    animation: aitools-slide-up 0.3s ease;
+  `;
+
+  // Header
+  const header = document.createElement('div');
+  header.style.cssText = `
+    background: linear-gradient(135deg, #f59e0b 0%, #dc2626 100%);
+    padding: 20px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  `;
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight: 600; font-size: 16px;';
+  title.innerHTML = '⚠️ Traduction indisponible';
+  header.appendChild(title);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '✕';
+  closeBtn.style.cssText = `
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 18px;
+  `;
+  closeBtn.addEventListener('click', () => error.remove());
+  header.appendChild(closeBtn);
+  error.appendChild(header);
+
+  // Body
+  const body = document.createElement('div');
+  body.style.cssText = 'padding: 20px; color: #333; line-height: 1.6;';
+  body.innerHTML = `
+    <p style="margin: 0 0 15px;">L'API Gemini Nano (Prompt API) n'est pas disponible sur votre navigateur.</p>
+    <p style="margin: 0 0 15px; font-size: 13px; color: #666;">
+      <strong>Pour l'activer:</strong>
+    </p>
+    <ol style="margin: 0 0 15px; padding-left: 20px; font-size: 13px; color: #666;">
+      <li>Allez à <code style="background: #f3f4f6; padding: 2px 4px;">chrome://flags</code></li>
+      <li>Recherchez "Prompt API for Gemini Nano"</li>
+      <li>Mettez à "Enabled"</li>
+      <li>Redémarrez Chrome</li>
+    </ol>
+    <p style="margin: 0; font-size: 12px; color: #999;">
+      Note: Disponible sur Chrome 129+ et nécessite un accès à Gemini.
+    </p>
+  `;
+  error.appendChild(body);
+
+  // Footer
+  const footer = document.createElement('div');
+  footer.style.cssText = `
+    padding: 12px 20px;
+    background: #f9fafb;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: flex-end;
+  `;
+
+  const okBtn = document.createElement('button');
+  okBtn.textContent = 'Fermer';
+  okBtn.style.cssText = `
+    padding: 8px 16px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+  `;
+  okBtn.addEventListener('click', () => error.remove());
+  footer.appendChild(okBtn);
+  error.appendChild(footer);
+
+  // Backdrop
+  const backdrop = document.createElement('div');
+  backdrop.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 99998;
+  `;
+  backdrop.addEventListener('click', () => {
+    error.remove();
+    backdrop.remove();
+  });
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(error);
+
+  // Auto-close after 10 seconds
+  setTimeout(() => {
+    if (document.getElementById('aitools-translation-error')) {
+      error.remove();
+      backdrop.remove();
+    }
+  }, 10000);
+}
+
 // Simple popup-like translation display
 function showTranslationPanel(original, translated, sourceLang, targetLang) {
   const langNames = {
@@ -2090,14 +2224,17 @@ function addTranslatorButton(sourceLang, targetLang) {
       btn.disabled = true;
       
       const relevantText = extractRelevantPageText(3000);
+      
       // Use AI for better translation
       const translated = await generateTranslationWithAI(relevantText, sourceLang, targetLang);
       
-      if (translated) {
+      if (translated && translated.trim().length > 0) {
+        console.log('[Translator] ✅ Translation successful, showing panel');
         showTranslationPanel(relevantText.substring(0, 2000), translated, sourceLang, targetLang);
       } else {
-        // Fallback to old method if AI is not available
-        translateAndShowModal(relevantText, sourceLang, targetLang);
+        console.warn('[Translator] ⚠️ Translation failed or empty, showing error');
+        // Show error message
+        showTranslationError(sourceLang, targetLang);
       }
       
       textSpan.textContent = '🌐 Traduire';

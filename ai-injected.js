@@ -97,32 +97,38 @@ ${message.text.substring(0, 3000)}`;
       }
 
       const availability = await window.ai.canCreateTextSession();
+      console.log('[AIinjected] Translate availability:', availability);
+      
       if (availability === 'no') {
         window.postMessage({
           type: 'AITOOLS_TRANSLATE_RESPONSE',
           messageId: message.messageId,
           success: false,
-          error: 'Prompt API not supported'
+          error: 'Prompt API not supported on this browser'
         }, '*');
         return;
       }
 
       // Create session and translate
+      console.log('[AIinjected] Creating AI session for translation...');
+      const lang = message.targetLang || 'fr';
       const session = await window.ai.createTextSession();
-      const prompt = `Translate this text to ${message.targetLang}. Return ONLY the translation, no comments.
+      const prompt = `Translate this text to ${lang}. Return ONLY the translation, no comments or explanations.
 
-Text:
+Text to translate:
 ${message.text.substring(0, 2000)}`;
 
+      console.log('[AIinjected] Sending translate prompt to Gemini...');
       const result = await Promise.race([
         session.prompt(prompt),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 30000)
+          setTimeout(() => reject(new Error('Timeout after 30s')), 30000)
         )
       ]);
 
       await session.destroy();
 
+      console.log('[AIinjected] ✅ Translation successful, sending response');
       window.postMessage({
         type: 'AITOOLS_TRANSLATE_RESPONSE',
         messageId: message.messageId,
@@ -130,12 +136,12 @@ ${message.text.substring(0, 2000)}`;
         result: result
       }, '*');
     } catch (error) {
-      console.error('[AIinjected] Translate error:', error);
+      console.error('[AIinjected] ❌ Translate error:', error);
       window.postMessage({
         type: 'AITOOLS_TRANSLATE_RESPONSE',
         messageId: message.messageId,
         success: false,
-        error: error.message
+        error: error.message || 'Unknown error'
       }, '*');
     }
   }
