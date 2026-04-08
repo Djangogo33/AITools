@@ -1067,30 +1067,101 @@ function showAIBadge(result) {
 
 // Bug #2 fix: proper content extraction strategy
 function summarizePage() {
-  // Strategy 1: semantic main element
+  // Strategy 1: Wikipedia specific selector
+  const wikiContent = document.getElementById('mw-content-text');
+  if (wikiContent) {
+    const text = extractCleanText(wikiContent);
+    if (text.length > 500) return text.substring(0, 8000);
+  }
+
+  // Strategy 2: semantic main element (article, main, [role="main"])
   const semantic = Array.from(document.querySelectorAll('article, [role="main"], main'))
-    .map(el => el.innerText.trim())
+    .map(el => extractCleanText(el))
     .filter(t => t.length > 200);
   if (semantic.length > 0) return semantic[0].substring(0, 8000);
 
-  // Strategy 2: paragraphs filtered outside nav/footer/header/aside
-  const excluded = new Set(['NAV', 'FOOTER', 'HEADER', 'ASIDE', 'SCRIPT', 'STYLE', 'NOSCRIPT']);
-  const paragraphs = Array.from(document.querySelectorAll('p'))
+  // Strategy 3: find largest content area
+  const candidates = Array.from(document.querySelectorAll('div, section'))
     .filter(el => {
-      let parent = el.parentElement;
-      while (parent) {
-        if (excluded.has(parent.tagName) || parent.getAttribute('role') === 'navigation') return false;
-        parent = parent.parentElement;
-      }
-      return el.innerText.trim().length > 80;
+      const text = extractCleanText(el);
+      return text.length > 500 && text.length < 50000;
     })
+    .map(el => ({
+      element: el,
+      text: extractCleanText(el),
+      score: calculateContentScore(el)
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  if (candidates.length > 0) {
+    return candidates[0].text.substring(0, 8000);
+  }
+
+  // Strategy 4: extract all paragraphs
+  const paragraphs = Array.from(document.querySelectorAll('p'))
     .map(el => el.innerText.trim())
-    .slice(0, 40);
+    .filter(t => t.length > 50 && !isMetaContent(t))
+    .slice(0, 50)
+    .join('\n');
 
-  if (paragraphs.length > 0) return paragraphs.join('\n');
+  if (paragraphs.length > 200) return paragraphs;
 
-  // Strategy 3: fallback
+  // Last resort
   return document.body.innerText.substring(0, 6000);
+}
+
+// Helper: Extract clean text by removing unwanted elements
+function extractCleanText(element) {
+  const clone = element.cloneNode(true);
+  
+  // Remove unwanted elements
+  const unwanted = clone.querySelectorAll('nav, footer, header, aside, script, style, .toc, .navbox, .infobox, .reference, [class*="sidebar"], [class*="menu"]');
+  unwanted.forEach(el => el.remove());
+
+  // Get text and clean it
+  let text = clone.innerText || clone.textContent || '';
+  text = text.trim()
+    .split('\n')
+    .filter(line => {
+      const clean = line.trim();
+      return clean.length > 10 && !isMetaContent(clean);
+    })
+    .join('\n');
+
+  return text;
+}
+
+// Helper: Check if text is metadata (coordinates, infobox content, links, etc.)
+function isMetaContent(text) {
+  const metaPatterns = [
+    /^\d+°\s*\d+[′']\s*[NSEW]/i, // Coordinates
+    /^\[?\d+\]$/,  // Reference numbers
+    /^(?:Article|Discuss|Edit|View|History|Tools|Settings|Dark|Light|Font|Width|Color|UTC|UTC\s*[+-])/i,
+    /^(?:↑|→|←|↓|\*|·|\-){1,3}\s*\[?https?:/ // Links/arrows
+  ];
+  
+  return metaPatterns.some(pattern => pattern.test(text));
+}
+
+// Helper: Score element based on content quality
+function calculateContentScore(element) {
+  let score = 0;
+  
+  // Prefer elements with many paragraphs
+  const paragraphs = element.querySelectorAll('p');
+  score += paragraphs.length * 10;
+  
+  // Prefer elements with less navigation/sidebar content
+  const unwanted = element.querySelectorAll('nav, aside, .sidebar, .navbox, .toc');
+  score -= unwanted.length * 50;
+  
+  // Penalize if too close to nav/footer
+  const parent = element.parentElement;
+  if (parent && (parent.matches('nav, footer, aside, .sidebar'))) {
+    score -= 1000;
+  }
+  
+  return score;
 }
 
 // Bug #2 fix: replace char-by-char loop with regex split
