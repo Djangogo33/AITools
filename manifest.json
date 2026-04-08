@@ -26,7 +26,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["styles-new.css"],
+      "resources": ["styles-new.css", "ai-injected.js"],
       "matches": ["<all_urls>"]
     }
   ],
