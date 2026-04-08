@@ -4,6 +4,10 @@
 
 console.log('[AIinjected] ✅ Injected script loaded');
 
+// Check if API is available
+const API_AVAILABLE = !!(window.ai && window.ai.canCreateTextSession);
+console.log('[AIinjected] window.ai available:', API_AVAILABLE);
+
 // Listen for messages from content script
 window.addEventListener('message', async (event) => {
   // Only accept messages from our content script
@@ -12,12 +16,13 @@ window.addEventListener('message', async (event) => {
   const message = event.data;
   if (!message.type || !message.type.startsWith('AITOOLS_')) return;
 
-  console.log('[AIinjected] Received message:', message.type);
+  console.log('[AIinjected] Received message:', message.type, 'MessageId:', message.messageId);
 
   // Handle AI requests
   if (message.type === 'AITOOLS_SUMMARIZE') {
     try {
       if (!window.ai || !window.ai.canCreateTextSession) {
+        console.warn('[AIinjected] Prompt API not available for summarization');
         window.postMessage({
           type: 'AITOOLS_SUMMARIZE_RESPONSE',
           messageId: message.messageId,
@@ -28,17 +33,20 @@ window.addEventListener('message', async (event) => {
       }
 
       const availability = await window.ai.canCreateTextSession();
+      console.log('[AIinjected] Summarize availability:', availability);
+      
       if (availability === 'no') {
         window.postMessage({
           type: 'AITOOLS_SUMMARIZE_RESPONSE',
           messageId: message.messageId,
           success: false,
-          error: 'Prompt API not supported'
+          error: 'Prompt API not supported on this browser'
         }, '*');
         return;
       }
 
       // Create session and summarize
+      console.log('[AIinjected] Creating AI session for summarization...');
       const session = await window.ai.createTextSession();
       const prompt = `Summarize this text in about ${message.length || 35}% of its original length. 
 Keep key information and return ONLY the summary.
@@ -46,15 +54,17 @@ Keep key information and return ONLY the summary.
 Text to summarize:
 ${message.text.substring(0, 3000)}`;
 
+      console.log('[AIinjected] Sending prompt to Gemini...');
       const result = await Promise.race([
         session.prompt(prompt),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout')), 30000)
+          setTimeout(() => reject(new Error('Timeout after 30s')), 30000)
         )
       ]);
 
       await session.destroy();
 
+      console.log('[AIinjected] ✅ Summarization successful, sending response');
       window.postMessage({
         type: 'AITOOLS_SUMMARIZE_RESPONSE',
         messageId: message.messageId,
@@ -62,12 +72,12 @@ ${message.text.substring(0, 3000)}`;
         result: result
       }, '*');
     } catch (error) {
-      console.error('[AIinjected] Summarize error:', error);
+      console.error('[AIinjected] ❌ Summarize error:', error);
       window.postMessage({
         type: 'AITOOLS_SUMMARIZE_RESPONSE',
         messageId: message.messageId,
         success: false,
-        error: error.message
+        error: error.message || 'Unknown error'
       }, '*');
     }
   }
@@ -76,6 +86,7 @@ ${message.text.substring(0, 3000)}`;
   else if (message.type === 'AITOOLS_TRANSLATE') {
     try {
       if (!window.ai || !window.ai.canCreateTextSession) {
+        console.warn('[AIinjected] Prompt API not available for translation');
         window.postMessage({
           type: 'AITOOLS_TRANSLATE_RESPONSE',
           messageId: message.messageId,

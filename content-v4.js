@@ -1590,148 +1590,258 @@ function showTranslationPanel(original, translated, sourceLang, targetLang) {
     it: 'Italien', pt: 'Portugais', ja: 'Japonais', zh: 'Chinois'
   };
 
-  const existing = document.getElementById('aitools-translation-panel');
+  // Remove existing
+  const existing = document.getElementById('aitools-translation-modal');
   if (existing) existing.remove();
+  const backdrop = document.getElementById('aitools-translation-backdrop');
+  if (backdrop) backdrop.remove();
 
-  // Simple popup instead of full panel
-  const popup = document.createElement('div');
-  popup.id = 'aitools-translation-panel';
-  popup.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    border-radius: 8px;
-    padding: 20px;
-    max-width: 500px;
-    width: 90%;
-    max-height: 70vh;
-    overflow-y: auto;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-    z-index: 10000;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    animation: aitools-popup-in 0.3s ease;
-  `;
-
-  // Header
-  const title = document.createElement('h3');
-  title.textContent = '🌐 ' + (langNames[targetLang] || targetLang);
-  title.style.cssText = 'margin: 0 0 15px; color: #333; font-size: 16px;';
-  popup.appendChild(title);
-
-  // Translation content
-  const content = document.createElement('p');
-  content.style.cssText = 'margin: 0 0 15px; color: #555; line-height: 1.6; font-size: 14px;';
-  const lines = translated.split('\n');
-  lines.forEach((line, i) => {
-    if (i > 0) {
-      const br = document.createElement('br');
-      content.appendChild(br);
-    }
-    const text = document.createTextNode(line);
-    content.appendChild(text);
-  });
-  popup.appendChild(content);
-
-  // Buttons
-  const buttonDiv = document.createElement('div');
-  buttonDiv.style.cssText = 'display: flex; gap: 10px;';
-
-  const copyBtn = document.createElement('button');
-  copyBtn.textContent = '📋 Copier';
-  copyBtn.style.cssText = `
-    flex: 1;
-    padding: 10px;
-    background: #10b981;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 12px;
-  `;
-  copyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(translated);
-    copyBtn.textContent = '✅ Copié!';
-    setTimeout(() => { copyBtn.textContent = '📋 Copier'; }, 2000);
-  });
-
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = 'Fermer';
-  closeBtn.style.cssText = `
-    flex: 1;
-    padding: 10px;
-    background: #667eea;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 12px;
-  `;
-  closeBtn.addEventListener('click', () => {
-    popup.style.animation = 'aitools-popup-out 0.3s ease';
-    setTimeout(() => { 
-      popup.remove(); 
-      if (backdrop) backdrop.remove(); 
-    }, 300);
-  });
-
-  buttonDiv.appendChild(copyBtn);
-  buttonDiv.appendChild(closeBtn);
-  popup.appendChild(buttonDiv);
-
-  // Add animation style
-  if (!document.getElementById('aitools-popup-animations')) {
-    const style = document.createElement('style');
-    style.id = 'aitools-popup-animations';
-    style.textContent = `
-      @keyframes aitools-popup-in {
-        from { 
-          transform: translate(-50%, -50%) scale(0.9);
-          opacity: 0;
-        }
-        to { 
-          transform: translate(-50%, -50%) scale(1);
-          opacity: 1;
-        }
-      }
-      @keyframes aitools-popup-out {
-        from { 
-          transform: translate(-50%, -50%) scale(1);
-          opacity: 1;
-        }
-        to { 
-          transform: translate(-50%, -50%) scale(0.9);
-          opacity: 0;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  // Backdrop (click to close)
-  const backdrop = document.createElement('div');
-  backdrop.style.cssText = `
+  // Create backdrop
+  const bgBackdrop = document.createElement('div');
+  bgBackdrop.id = 'aitools-translation-backdrop';
+  bgBackdrop.style.cssText = `
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0,0,0,0.3);
-    z-index: 9999;
+    background: rgba(0,0,0,0.4);
+    z-index: 99998;
+    animation: aitools-fade-in 0.2s ease;
   `;
-  backdrop.addEventListener('click', () => {
-    popup.style.animation = 'aitools-popup-out 0.3s ease';
-    setTimeout(() => { 
-      popup.remove(); 
-      backdrop.remove(); 
-    }, 300);
-  });
+  bgBackdrop.addEventListener('click', closeTranslation);
 
-  document.body.appendChild(backdrop);
-  document.body.appendChild(popup);
+  // Create modal container
+  const modal = document.createElement('div');
+  modal.id = 'aitools-translation-modal';
+  modal.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 900px;
+    max-height: 80vh;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: aitools-slide-up 0.3s ease;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  `;
+
+  // Header with gradient
+  const header = document.createElement('div');
+  header.style.cssText = `
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 20px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  `;
+
+  const headerTitle = document.createElement('div');
+  headerTitle.style.cssText = 'font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px;';
+  headerTitle.innerHTML = `🌐 <span>${langNames[targetLang] || targetLang}</span>`;
+  header.appendChild(headerTitle);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '✕';
+  closeBtn.style.cssText = `
+    background: rgba(255,255,255,0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  `;
+  closeBtn.onmouseover = () => closeBtn.style.background = 'rgba(255,255,255,0.3)';
+  closeBtn.onmouseout = () => closeBtn.style.background = 'rgba(255,255,255,0.2)';
+  closeBtn.addEventListener('click', closeTranslation);
+  header.appendChild(closeBtn);
+  modal.appendChild(header);
+
+  // Content area (two columns)
+  const contentWrapper = document.createElement('div');
+  contentWrapper.style.cssText = `
+    flex: 1;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    min-height: 300px;
+  `;
+
+  // Original text column
+  const originalCol = document.createElement('div');
+  originalCol.style.cssText = `
+    padding: 20px;
+    border-right: 1px solid #e5e7eb;
+    overflow-y: auto;
+  `;
+  const originalLabel = document.createElement('div');
+  originalLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: #999; text-transform: uppercase; margin-bottom: 10px;';
+  originalLabel.textContent = '📄 Texte original';
+  originalCol.appendChild(originalLabel);
+  
+  const originalText = document.createElement('div');
+  originalText.style.cssText = 'color: #333; line-height: 1.7; font-size: 14px; white-space: pre-wrap; word-break: break-word;';
+  originalText.textContent = original;
+  originalCol.appendChild(originalText);
+  contentWrapper.appendChild(originalCol);
+
+  // Translated text column
+  const translatedCol = document.createElement('div');
+  translatedCol.style.cssText = 'padding: 20px; overflow-y: auto;';
+  const translatedLabel = document.createElement('div');
+  translatedLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; margin-bottom: 10px;';
+  translatedLabel.textContent = '✨ Traduction';
+  translatedCol.appendChild(translatedLabel);
+  
+  const translatedText = document.createElement('div');
+  translatedText.style.cssText = 'color: #333; line-height: 1.7; font-size: 14px; white-space: pre-wrap; word-break: break-word;';
+  translatedText.textContent = translated;
+  translatedCol.appendChild(translatedText);
+  contentWrapper.appendChild(translatedCol);
+
+  modal.appendChild(contentWrapper);
+
+  // Footer with buttons
+  const footer = document.createElement('div');
+  footer.style.cssText = `
+    padding: 15px 20px;
+    background: #f9fafb;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  `;
+
+  const copyBtn = document.createElement('button');
+  copyBtn.innerHTML = '📋 Copier traduction';
+  copyBtn.style.cssText = `
+    padding: 10px 16px;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 13px;
+    transition: all 0.2s;
+  `;
+  copyBtn.onmouseover = () => copyBtn.style.background = '#059669';
+  copyBtn.onmouseout = () => copyBtn.style.background = '#10b981';
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(translated).then(() => {
+      copyBtn.innerHTML = '✅ Copié!';
+      copyBtn.style.background = '#34d399';
+      setTimeout(() => {
+        copyBtn.innerHTML = '📋 Copier traduction';
+        copyBtn.style.background = '#10b981';
+      }, 2000);
+    });
+  });
+  footer.appendChild(copyBtn);
+
+  const closeFooterBtn = document.createElement('button');
+  closeFooterBtn.textContent = 'Fermer';
+  closeFooterBtn.style.cssText = `
+    padding: 10px 16px;
+    background: #e5e7eb;
+    color: #333;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 13px;
+    transition: all 0.2s;
+  `;
+  closeFooterBtn.onmouseover = () => closeFooterBtn.style.background = '#d1d5db';
+  closeFooterBtn.onmouseout = () => closeFooterBtn.style.background = '#e5e7eb';
+  closeFooterBtn.addEventListener('click', closeTranslation);
+  footer.appendChild(closeFooterBtn);
+
+  modal.appendChild(footer);
+
+  // Add animations if not present
+  if (!document.getElementById('aitools-translation-styles')) {
+    const style = document.createElement('style');
+    style.id = 'aitools-translation-styles';
+    style.textContent = `
+      @keyframes aitools-fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes aitools-slide-up {
+        from { 
+          transform: translate(-50%, -40%);
+          opacity: 0;
+        }
+        to { 
+          transform: translate(-50%, -50%);
+          opacity: 1;
+        }
+      }
+      @keyframes aitools-slide-down {
+        from { 
+          transform: translate(-50%, -50%);
+          opacity: 1;
+        }
+        to { 
+          transform: translate(-50%, -40%);
+          opacity: 0;
+        }
+      }
+      #aitools-translation-modal {
+        scrollbar-width: thin;
+        scrollbar-color: #d1d5db #f3f4f6;
+      }
+      #aitools-translation-modal::-webkit-scrollbar {
+        width: 8px;
+      }
+      #aitools-translation-modal::-webkit-scrollbar-track {
+        background: #f3f4f6;
+      }
+      #aitools-translation-modal::-webkit-scrollbar-thumb {
+        background: #d1d5db;
+        border-radius: 4px;
+      }
+      #aitools-translation-modal::-webkit-scrollbar-thumb:hover {
+        background: #9ca3af;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function closeTranslation() {
+    modal.style.animation = 'aitools-slide-down 0.2s ease forwards';
+    bgBackdrop.style.animation = 'aitools-fade-in 0.2s ease reverse forwards';
+    setTimeout(() => {
+      modal.remove();
+      bgBackdrop.remove();
+    }, 200);
+  }
+
+  // Show panels
+  document.body.appendChild(bgBackdrop);
+  document.body.appendChild(modal);
+
+  // Auto-close after 30 seconds
+  setTimeout(() => {
+    if (document.getElementById('aitools-translation-modal')) closeTranslation();
+  }, 30000);
 }
 
 // Bug #6 fix: subtree:false + throttle to prevent mutation loop
