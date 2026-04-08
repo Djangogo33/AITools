@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AITools Pro v4.0 - Demo Améliorations</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: white;
+      margin-bottom: 10px;
+      font-size: 2.5em;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+
+    .subtitle {
+      text-align: center;
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 40px;
+      font-size: 1.1em;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-bottom: 40px;
+    }
+
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+      animation: slideUp 0.6s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .card h2 {
+      color: #667eea;
+      margin-bottom: 20px;
+      font-size: 1.5em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .improvement-badge {
+      display: inline-block;
+      background: #10b981;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.85em;
+      font-weight: 600;
+      margin-left: auto;
+    }
+
+    .feature-list {
+      list-style: none;
+      margin-bottom: 20px;
+    }
+
+    .feature-list li {
+      padding: 12px 0;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .feature-list li:last-child {
+      border-bottom: none;
+    }
+
+    .feature-list li::before {
+      content: "✓";
+      color: #10b981;
+      font-weight: bold;
+      font-size: 1.2em;
+      flex-shrink: 0;
+    }
+
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin: 20px 0;
+    }
+
+    .comparison-item {
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 0.95em;
+    }
+
+    .before {
+      background: #fee;
+      border-left: 4px solid #dc2626;
+    }
+
+    .after {
+      background: #efe;
+      border-left: 4px solid #10b981;
+    }
+
+    .comparison-item strong {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .demo-section {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    }
+
+    .demo-section h3 {
+      color: #667eea;
+      margin-bottom: 20px;
+      font-size: 1.3em;
+    }
+
+    .demo-button {
+      display: inline-block;
+      background: #667eea;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1em;
+      transition: all 0.3s;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+
+    .demo-button:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .demo-button.green {
+      background: #10b981;
+    }
+
+    .demo-button.green:hover {
+      background: #059669;
+    }
+
+    .panel-demo {
+      position: fixed;
+      top: 0;
+      right: -400px;
+      width: 400px;
+      height: 100vh;
+      background: white;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      font-family: inherit;
+      transition: right 0.3s ease;
+      animation: aitools-slide-in 0.3s ease forwards;
+    }
+
+    @keyframes aitools-slide-in {
+      from { right: -400px; opacity: 0; }
+      to { right: 0; opacity: 1; }
+    }
+
+    .panel-demo.hidden {
+      right: -400px;
+      animation: aitools-slide-out 0.3s ease forwards;
+    }
+
+    @keyframes aitools-slide-out {
+      from { right: 0; opacity: 1; }
+      to { right: -400px; opacity: 0; }
+    }
+
+    .panel-header {
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .panel-close {
+      background: rgba(255,255,255,0.3);
+      border: none;
+      color: white;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .panel-close:hover {
+      background: rgba(255,255,255,0.5);
+    }
+
+    .panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      font-size: 14px;
+      line-height: 1.8;
+      color: #555;
+    }
+
+    .panel-buttons {
+      padding: 15px 20px;
+      border-top: 1px solid #eee;
+      display: flex;
+      gap: 10px;
+    }
+
+    .panel-btn {
+      flex: 1;
+      padding: 10px;
+      background: #10b981;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      transition: background 0.2s;
+    }
+
+    .panel-btn:hover {
+      background: #059669;
+    }
+
+    .benefits-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .benefits-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .benefit-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .benefit-card h4 {
+      margin-bottom: 10px;
+      font-size: 1.2em;
+    }
+
+    .benefit-card p {
+      font-size: 0.9em;
+      opacity: 0.95;
+    }
+
+    .stat-box {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 10px 0;
+      min-width: 200px;
+    }
+
+    .stat-number {
+      font-size: 2em;
+      font-weight: bold;
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 0.95em;
+      opacity: 0.9;
+    }
+
+    code {
+      background: #f5f5f5;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      color: #d63384;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎉 AITools Pro v4.0</h1>
+    <p class="subtitle">Améliorations Majeures: Traduction et Résumé</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>📋 Résumé <span class="improvement-badge">✓ Nouveau</span></h2>
+        <ul class="feature-list">
+          <li><strong>Moteur IA (Gemini Nano):</strong> Résumés plus intelligents et contextuels</li>
+          <li><strong>Affichage en Panneau:</strong> Plus pratique que la fenêtre modale</li>
+          <li><strong>Copie Rapide:</strong> Un clic pour copier dans le presse-papiers</li>
+          <li><strong>Régénération:</strong> Générer un résumé alternatif facilement</li>
+          <li><strong>Animations Fluides:</strong> Glissement élégant du panneau</li>
+        </ul>
+
+        <div class="comparison">
+          <div class="comparison-item before">
+            <strong>❌ Avant</strong>
+            Fenêtre modale avec résumé approximatif basé sur heuristiques
+          </div>
+          <div class="comparison-item after">
+            <strong>✓ Après</strong>
+            Panneau latéral avec résumé IA intelligent et copie directe
+          </div>
+        </div>
+
+        <button class="demo-button" onclick="showSummaryDemo()">📝 Voir la Démo</button>
+      </div>
+
+      <div class="card">
+        <h2>🌐 Traduction <span class="improvement-badge">✓ Nouveau</span></h2>
+        <ul class="feature-list">
+          <li><strong>Moteur IA (Gemini Nano):</strong> Traductions précises et naturelles</li>
+          <li><strong>Affichage Dual-Panel:</strong> Texte original + traduction côte à côte</li>
+          <li><strong>Détection Automatique:</strong> Détection fiable de la langue source</li>
+          <li><strong>Copie Directe:</strong> Copier la traduction en un clic</li>
+          <li><strong>Design Modernisé:</strong> Interface élégante et intuitive</li>
+        </ul>
+
+        <div class="comparison">
+          <div class="comparison-item before">
+            <strong>❌ Avant</strong>
+            Fenêtre modale avec traduction API externe peu fiable
+          </div>
+          <div class="comparison-item after">
+            <strong>✓ Après</strong>
+            Panneau dual avec traduction IA précise et copie facile
+          </div>
+        </div>
+
+        <button class="demo-button green" onclick="showTranslationDemo()">🌍 Voir la Démo</button>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <h3>🚀 Améliorations Techniques</h3>
+      
+      <div class="benefits-grid">
+        <div class="benefit-card">
+          <h4>⚡ Fiabilité</h4>
+          <p>Utilise Gemini Nano (modèle IA local) pour des résultats fiables</p>
+        </div>
+        <div class="benefit-card">
+          <h4>🎨 UX/UI</h4>
+          <p>Panneaux latérauxavec animations fluides au lieu de modales</p>
+        </div>
+        <div class="benefit-card">
+          <h4>⚙️ Performance</h4>
+          <p>Pas de requêtes API externes, traitement local sur le device</p>
+        </div>
+      </div>
+
+      <div style="margin-top: 30px; padding: 20px; background: #f5f5f5; border-radius: 8px;">
+        <h4>Détails Techniques:</h4>
+        <ul class="feature-list" style="margin-top: 15px;">
+          <li><code>generateSummaryWithAI()</code> - Résumé basé sur Gemini Nano avec fallback à heuristiques</li>
+          <li><code>generateTranslationWithAI()</code> - Traduction IA avec fallback à API externe</li>
+          <li><code>showSummaryPanel()</code> - Panneau latéral fluide pour résumés</li>
+          <li><code>showTranslationPanel()</code> - Panneau dual pour traductions</li>
+          <li><strong>Animations:</strong> CSS keyframes pour slide-in/slide-out</li>
+          <li><strong>Intégration:</strong> Compatible avec AIService (window.aiService)</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <h3>📊 Comparaison des Résultats</h3>
+      
+      <p style="margin-bottom: 20px;">
+        Exemple d'amélioration avec le même texte:
+      </p>
+
+      <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <strong>Texte Original (500 mots):</strong>
+        <p style="margin-top: 10px; color: #666; font-size: 0.95em;">
+          "L'intelligence artificielle est en train de transformer le monde de manière fondamentale. 
+          Les entreprises utilisent le machine learning pour optimiser leurs opérations, 
+          améliorer l'expérience client et innover plus rapidement. Du diagnostic médical 
+          aux véhicules autonomes, en passant par le traitement du langage naturel, 
+          les applications pratiques sont innombrables..."
+        </p>
+      </div>
+
+      <div class="comparison">
+        <div class="before">
+          <strong>❌ Avant (Heuristiques)</strong>
+          <p>
+            "L'IA transforme les entreprises. 
+            Machine learning optimise les opérations. 
+            Applications: médecine, véhicules, langage naturel."
+          </p>
+          <small>⚠️ Perte de contexte, phrases fragmentées</small>
+        </div>
+        <div class="after">
+          <strong>✓ Après (Gemini Nano)</strong>
+          <p>
+            "L'intelligence artificielle transforme le monde 
+            en permettant aux entreprises d'optimiser leurs opérations 
+            et d'innover plus rapidement. Ses applications vont du diagnostic 
+            médical aux véhicules autonomes."
+          </p>
+          <small>✅ Syntaxe naturelle, contexte préservé</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-section" style="text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+      <h3 style="color: white; margin-bottom: 20px;">🎯 Prêt à essayer?</h3>
+      <p style="margin-bottom: 20px; font-size: 1.1em;">
+        Les améliorations sont désormais actives dans votre extension AITools Pro
+      </p>
+      <button class="demo-button" style="background: white; color: #667eea;" onclick="alert('🎉 Visitez n\'importe quel site pour activer les nouvelles fonctionnalités!')">
+        Tester Maintenant
+      </button>
+    </div>
+  </div>
+
+  <!-- Panel Demo Container -->
+  <div id="panelContainer"></div>
+
+  <script>
+    function showSummaryDemo() {
+      const container = document.getElementById('panelContainer');
+      if (container.querySelector('.panel-demo')) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const panel = document.createElement('div');
+      panel.className = 'panel-demo';
+      panel.innerHTML = `
+        <div class="panel-header">
+          <h3 class="panel-title">📋 Résumé</h3>
+          <button class="panel-close" onclick="this.closest('.panel-demo').remove()">✕</button>
+        </div>
+        <div class="panel-content">
+          <p>
+            <strong>Titre:</strong> Les Transformations Numériques dans le Secteur Financier
+          </p>
+          <p style="margin-top: 15px;">
+            La technologie blockchain et l'intelligence artificielle revolutionnent l'industrie financière. 
+            Les institutions bancaires adaptent leurs stratégies pour intégrer ces innovations, créant ainsi 
+            de nouveaux modèles économiques. La cybersécurité devient une priorité absolue tandis que 
+            les régulations évoluent constamment. Les startups fintech disrupted le marché traditionnel 
+            en offrant des services plus rapides et moins coûteux.
+          </p>
+        </div>
+        <div class="panel-buttons">
+          <button class="panel-btn">📋 Copier</button>
+          <button class="panel-btn" style="background: #667eea;">🔄 Régénérer</button>
+        </div>
+      `;
+      container.appendChild(panel);
+    }
+
+    function showTranslationDemo() {
+      const container = document.getElementById('panelContainer');
+      if (container.querySelector('.panel-demo')) {
+        container.innerHTML = '';
+        return;
+      }
+
+      const panel = document.createElement('div');
+      panel.className = 'panel-demo';
+      panel.style.background = 'white';
+      
+      const header = document.createElement('div');
+      header.className = 'panel-header';
+      header.style.background = 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)';
+      header.innerHTML = `
+        <h3 class="panel-title">🌐 Traduction</h3>
+        <button class="panel-close" onclick="this.closest('.panel-demo').remove()">✕</button>
+      `;
+
+      const content = document.createElement('div');
+      content.style.cssText = `
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        font-size: 13px;
+        line-height: 1.6;
+      `;
+
+      const origCol = document.createElement('div');
+      origCol.innerHTML = `
+        <p style="margin: 0 0 10px; font-weight: 600; font-size: 12px; color: #666;">📄 Anglais</p>
+        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; color: #555; border: 1px solid #e0e0e0;">
+          "Artificial intelligence is revolutionizing the way we work. 
+          Machine learning algorithms are becoming more sophisticated each day, 
+          enabling computers to solve complex problems that were previously thought impossible."
+        </div>
+      `;
+
+      const transCol = document.createElement('div');
+      transCol.innerHTML = `
+        <p style="margin: 0 0 10px; font-weight: 600; font-size: 12px; color: #666;">✅ Français</p>
+        <div style="background: #e8f5e9; padding: 12px; border-radius: 8px; color: #333; border: 1px solid #c8e6c9;">
+          "L'intelligence artificielle révolutionne notre façon de travailler. 
+          Les algorithmes d'apprentissage automatique deviennent plus sophistiqués chaque jour, 
+          permettant aux ordinateurs de résoudre des problèmes complexes autrefois jugés impossibles."
+        </div>
+      `;
+
+      content.appendChild(origCol);
+      content.appendChild(transCol);
+
+      const footer = document.createElement('div');
+      footer.className = 'panel-buttons';
+      footer.innerHTML = `
+        <button class="panel-btn" style="background: #4CAF50;">📋 Copier</button>
+      `;
+
+      panel.appendChild(header);
+      panel.appendChild(content);
+      panel.appendChild(footer);
+      container.appendChild(panel);
+    }
+  </script>
+</body>
+</html>

@@ -39,80 +39,196 @@ let buttonVisibility = {
 };
 
 // ============================================================================
-// SINGLE INIT BLOCK — fixes race condition (bugs #1 and #10)
-// All variables are assigned BEFORE any init function is called.
+// UTILITIES: Bug Fixes #10-16 (Memory Leaks, XSS, Storage, Observers)
 // ============================================================================
-chrome.storage.local.get(null, (data) => {
-  // --- assign all settings ---
-  extensionEnabled = data.extensionEnabled !== false;
-  darkModeEnabled = data.darkModeEnabled === true;
 
-  if (data.aiDetectorSensitivity) extensionSettings.aiDetectorSensitivity = parseInt(data.aiDetectorSensitivity);
-  if (data.summarizerLength) extensionSettings.summarizerLength = parseInt(data.summarizerLength);
-  if (data.summarizerLang) extensionSettings.summarizerLang = data.summarizerLang;
-  if (data.autoTranslatorEnabled !== undefined) extensionSettings.autoTranslatorEnabled = data.autoTranslatorEnabled;
-  if (data.translatorTargetLang) extensionSettings.translatorTargetLang = data.translatorTargetLang;
-  if (data.cookieBlockerEnabled !== undefined) extensionSettings.cookieBlockerEnabled = data.cookieBlockerEnabled;
-  if (data.readingTimeEnabled !== undefined) extensionSettings.readingTimeEnabled = data.readingTimeEnabled;
-  if (data.quickStatsEnabled !== undefined) extensionSettings.quickStatsEnabled = data.quickStatsEnabled;
-  if (data.performanceModeEnabled !== undefined) extensionSettings.performanceModeEnabled = data.performanceModeEnabled;
-  if (data.aiDetectorEnabled !== undefined) extensionSettings.aiDetectorEnabled = data.aiDetectorEnabled;
-  if (data.summarizerEnabled !== undefined) extensionSettings.summarizerEnabled = data.summarizerEnabled;
-  if (data.focusModeEnabled !== undefined) extensionSettings.focusModeEnabled = data.focusModeEnabled;
-
-  if (data['aitools-visibility']) {
-    elementVisibility = { ...elementVisibility, ...data['aitools-visibility'] };
-  }
-  if (data.buttonVisibility) {
-    buttonVisibility = { ...buttonVisibility, ...data.buttonVisibility };
-  }
-
-  // highlighterEnabled depends on buttonVisibility — must be set after loading it
-  highlighterEnabled = buttonVisibility.notesHighlighter !== false;
-
-  // Initialize defaults for Google buttons if not set
-  if (!data.googleButtonsVisibility) {
-    chrome.storage.local.set({
-      googleButtonsVisibility: { lucky: true, filters: true, maps: true, chatgpt: true }
+// Bug #10-13 Fix: Subscription & Observer Managers
+const SubscriptionManager = {
+  subscriptions: new Map(),
+  subscribe(id, element, event, handler, options = {}) {
+    if (!this.subscriptions.has(id)) this.subscriptions.set(id, []);
+    element.addEventListener(event, handler, options);
+    this.subscriptions.get(id).push({ element, event, handler, options });
+  },
+  unsubscribe(id) {
+    if (!this.subscriptions.has(id)) return;
+    this.subscriptions.get(id).forEach(({ element, event, handler, options }) => {
+      element.removeEventListener(event, handler, options);
     });
+    this.subscriptions.delete(id);
+  },
+  unsubscribeAll() {
+    this.subscriptions.forEach((_, id) => this.unsubscribe(id));
+    console.log('[AITools] ✅ Subscriptions cleaned');
   }
-  if (!data.googleButtonsConfig) {
-    chrome.storage.local.set({
-      googleButtonsConfig: {
-        lucky: { label: '🍀 Chance', action: 'lucky', color: '#5f6368' },
-        filters: { label: '🔍 Filtres', action: 'filters', color: '#5f6368' },
-        maps: { label: '🗺️ Maps', action: 'maps', color: '#5f6368' },
-        chatgpt: { label: '🤖 ChatGPT', action: 'chatgpt', color: '#5f6368' }
-      }
-    });
+};
+
+const ObserverManager = {
+  observers: new Map(),
+  observe(id, target, callback, options = {}) {
+    if (this.observers.has(id)) this.observers.get(id).disconnect();
+    const observer = new MutationObserver(callback);
+    observer.observe(target, options);
+    this.observers.set(id, observer);
+    return observer;
+  },
+  disconnect(id) {
+    if (this.observers.has(id)) {
+      this.observers.get(id).disconnect();
+      this.observers.delete(id);
+    }
+  },
+  disconnectAll() {
+    this.observers.forEach(observer => observer.disconnect());
+    this.observers.clear();
+    console.log('[AITools] ✅ Observers disconnected');
   }
+};
 
-  if (!extensionEnabled) return;
+// Bug #9 Fix: XSS Prevention
+function sanitizeHTML(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 
-  // --- now call all inits, in order, with correct state ---
-  if (darkModeEnabled) enableDarkMode();
+// Bug #14 Fix: Throttle & Debounce
+function throttle(func, limit = 300) {
+  let inThrottle;
+  return function(...args) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => inThrottle = false, limit);
+    }
+  };
+}
 
-  setupHighlighter();
-  setupGoogleEnhancements();
+function debounce(func, delay = 500) {
+  let timeout;
+  return function(...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func.apply(this, args), delay);
+  };
+}
 
-  if (data.blockSponsoredEnabled) setTimeout(blockSponsoredResults, 2000);
-  if (data.focusModeEnabled) enableFocusMode();
-
-  if (extensionSettings.readingTimeEnabled) initReadingTime();
-
-  if (!extensionSettings.performanceModeEnabled) {
-    initAIDetector();
+// Bug #16 Fix: Safe Storage
+function setStorageSafe(key, value) {
+  try {
+    const size = JSON.stringify(key + JSON.stringify(value)).length;
+    if (size > 100000) {
+      console.warn('[AITools] Storage item too large:', size);
+      return false;
+    }
+    chrome.storage.local.set({ [key]: value });
+    return true;
+  } catch (error) {
+    console.error('[AITools] Storage error:', error);
+    return false;
   }
+}
 
-  initSummarizer();
-  initAutoTranslator();
-  initCookieBlocker();
-  initQuickStats();
-  initFocusMode();
+// Cleanup on unload
+window.addEventListener('beforeunload', () => {
+  SubscriptionManager.unsubscribeAll();
+  ObserverManager.disconnectAll();
 });
 
 // ============================================================================
-// DRAGGABLE UTILITY
+// ASYNC INITIALIZATION - Fixes race condition (Bug #1)
+// ============================================================================
+
+(async () => {
+  try {
+    // Attendre que le DOM soit chargé
+    if (document.readyState === 'loading') {
+      await new Promise(resolve => 
+        document.addEventListener('DOMContentLoaded', resolve, { once: true })
+      );
+    }
+
+    // Charger TOUS les paramètres en une seule requête
+    const data = await new Promise(resolve => 
+      chrome.storage.local.get(null, resolve)
+    );
+
+    // Assigner les valeurs avec fallbacks
+    extensionEnabled = data.extensionEnabled !== false;
+    darkModeEnabled = data.darkModeEnabled === true;
+
+    if (data.aiDetectorSensitivity) extensionSettings.aiDetectorSensitivity = parseInt(data.aiDetectorSensitivity);
+    if (data.summarizerLength) extensionSettings.summarizerLength = parseInt(data.summarizerLength);
+    if (data.summarizerLang) extensionSettings.summarizerLang = data.summarizerLang;
+    if (data.autoTranslatorEnabled !== undefined) extensionSettings.autoTranslatorEnabled = data.autoTranslatorEnabled;
+    if (data.translatorTargetLang) extensionSettings.translatorTargetLang = data.translatorTargetLang;
+    if (data.cookieBlockerEnabled !== undefined) extensionSettings.cookieBlockerEnabled = data.cookieBlockerEnabled;
+    if (data.readingTimeEnabled !== undefined) extensionSettings.readingTimeEnabled = data.readingTimeEnabled;
+    if (data.quickStatsEnabled !== undefined) extensionSettings.quickStatsEnabled = data.quickStatsEnabled;
+    if (data.performanceModeEnabled !== undefined) extensionSettings.performanceModeEnabled = data.performanceModeEnabled;
+    if (data.aiDetectorEnabled !== undefined) extensionSettings.aiDetectorEnabled = data.aiDetectorEnabled;
+    if (data.summarizerEnabled !== undefined) extensionSettings.summarizerEnabled = data.summarizerEnabled;
+    if (data.focusModeEnabled !== undefined) extensionSettings.focusModeEnabled = data.focusModeEnabled;
+
+    if (data['aitools-visibility']) {
+      elementVisibility = { ...elementVisibility, ...data['aitools-visibility'] };
+    }
+    if (data.buttonVisibility) {
+      buttonVisibility = { ...buttonVisibility, ...data.buttonVisibility };
+    }
+
+    // highlighterEnabled dépend de buttonVisibility
+    highlighterEnabled = buttonVisibility.notesHighlighter !== false;
+
+    // Initialiser les valeurs par défaut Google buttons
+    if (!data.googleButtonsVisibility) {
+      chrome.storage.local.set({
+        googleButtonsVisibility: { lucky: true, filters: true, maps: true, chatgpt: true }
+      });
+    }
+    if (!data.googleButtonsConfig) {
+      chrome.storage.local.set({
+        googleButtonsConfig: {
+          lucky: { label: '🍀 Chance', action: 'lucky', color: '#5f6368' },
+          filters: { label: '🔍 Filtres', action: 'filters', color: '#5f6368' },
+          maps: { label: '🗺️ Maps', action: 'maps', color: '#5f6368' },
+          chatgpt: { label: '🤖 ChatGPT', action: 'chatgpt', color: '#5f6368' }
+        }
+      });
+    }
+
+    if (!extensionEnabled) return;
+
+    console.log('[AITools] ✅ Initialization complete', { extensionEnabled, darkModeEnabled });
+
+    // Initialiser tous les modules dans l'ordre correct
+    if (darkModeEnabled) enableDarkMode();
+
+    setupHighlighter();
+    setupGoogleEnhancements();
+
+    if (data.blockSponsoredEnabled) setTimeout(blockSponsoredResults, 2000);
+    if (extensionSettings.focusModeEnabled) initFocusMode();
+
+    if (extensionSettings.readingTimeEnabled) initReadingTime();
+
+    if (!extensionSettings.performanceModeEnabled) {
+      initAIDetector();
+    }
+
+    initSummarizer();
+    initAutoTranslator();
+    initCookieBlocker();
+    initQuickStats();
+    initExtension(); // Shadow DOM interface
+
+  } catch (error) {
+    console.error('[AITools] ❌ Initialization error:', error);
+  }
+})();
+
+// ============================================================================
+// DRAGGABLE UTILITY - Bug Fix #10: Memory Leak Free
 // ============================================================================
 function makeDraggable(element, storageKey) {
   let isDragging = false;
@@ -131,7 +247,8 @@ function makeDraggable(element, storageKey) {
     }
   });
 
-  element.addEventListener('mousedown', (e) => {
+  // Bug #10 Fix: Named handlers for cleanup
+  const handleMouseDown = (e) => {
     if (e.target.closest('input, select, textarea, a')) return;
     if (e.target.closest('.aitools-close-btn')) return;
 
@@ -146,29 +263,244 @@ function makeDraggable(element, storageKey) {
     offsetX = rect.left - e.clientX;
     offsetY = rect.top - e.clientY;
     element.style.cursor = 'grabbing';
-  });
+  };
 
-  document.addEventListener('mousemove', (e) => {
+  const handleMouseMove = (e) => {
     if (!isDragging) return;
     dragDistance = Math.sqrt(Math.pow(e.clientX - startX, 2) + Math.pow(e.clientY - startY, 2));
     if (dragDistance < dragThreshold) return;
     element.style.left = (e.clientX + offsetX) + 'px';
     element.style.top = (e.clientY + offsetY) + 'px';
     element.style.right = 'auto';
-  });
+  };
 
-  document.addEventListener('mouseup', () => {
+  const handleMouseUp = () => {
     if (!isDragging) return;
     isDragging = false;
     element.style.cursor = 'grab';
     element.style.zIndex = '10000';
     if (dragDistance >= dragThreshold) {
       const rect = element.getBoundingClientRect();
-      chrome.storage.local.set({ [storageKey]: { top: rect.top, left: rect.left } });
+      setStorageSafe(storageKey, { top: rect.top, left: rect.left });
     }
+  };
+
+  element.addEventListener('mousedown', handleMouseDown);
+
+  // Bug #10 Fix: Store cleanup function
+  element._dragCleanup = () => {
+    element.removeEventListener('mousedown', handleMouseDown);
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  // Start drag listeners only when needed
+  const startDragListeners = () => {
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Modify handleMouseDown to start/stop listeners
+  const originalMouseDown = handleMouseDown;
+  element.removeEventListener('mousedown', handleMouseDown);
+  element.addEventListener('mousedown', (e) => {
+    originalMouseDown(e);
+    startDragListeners();
   });
 
   element.style.cursor = 'grab';
+}
+
+// ============================================================================
+// SHADOW DOM INTERFACE - Bug Fix #11: CSS Isolation (No double injection)
+// ============================================================================
+function initExtension() {
+  try {
+    // Bug #11 Fix: Check if already exists
+    if (document.getElementById('ai-tools-container')) {
+      console.log('[AITools] ✅ Shadow DOM already exists, skipping');
+      return;
+    }
+    
+    if (!document.body) {
+      console.warn('[AITools] ⚠️ document.body not ready yet');
+      return;
+    }
+
+    // Créer le conteneur principal
+    const aiToolsContainer = document.createElement('div');
+    aiToolsContainer.id = 'ai-tools-container';
+    
+    // Attacher Shadow Root (mode open pour debugger)
+    const shadowRoot = aiToolsContainer.attachShadow({ mode: 'open' });
+    
+    // Injecter le CSS via <link>
+    const styleLink = document.createElement('link');
+    styleLink.rel = 'stylesheet';
+    styleLink.href = chrome.runtime.getURL('styles-new.css');
+    styleLink.onerror = () => console.error('[AITools] Failed to load styles-new.css');
+    
+    // Créer le div racine de l'app
+    const appRoot = document.createElement('div');
+    appRoot.id = 'app-root';
+    appRoot.className = 'aitools-sidebar';
+    
+    // Ajouter au Shadow Root
+    shadowRoot.appendChild(styleLink);
+    shadowRoot.appendChild(appRoot);
+    
+    // Injecter le conteneur dans la page
+    document.body.appendChild(aiToolsContainer);
+    
+    // Store cleanup function
+    aiToolsContainer.cleanup = function() {
+      if (this.isConnected) this.remove();
+    };
+    
+    console.log('[AITools] ✅ Shadow DOM interface created (single instance)');
+  } catch (error) {
+    console.error('[AITools] ❌ Shadow DOM creation failed:', error);
+  }
+}
+
+// ============================================================================
+// BUG FIX #2: Detect Search on Google (Hash-based routing)
+// ============================================================================
+function hasActiveSearch() {
+  try {
+    const url = new URL(window.location);
+    
+    // Vérifier en query string (?q=...)
+    let query = url.searchParams.get('q');
+    
+    // Fallback : vérifier en hash (#q=...) pour routing client-side
+    if (!query && url.hash) {
+      const hashParams = new URLSearchParams(url.hash.slice(1));
+      query = hashParams.get('q');
+    }
+    
+    return query && query.trim().length > 0;
+  } catch (error) {
+    console.warn('[AITools] Error detecting search:', error);
+    return false;
+  }
+}
+
+// ============================================================================
+// BUG FIX #4: Focus Mode with preventDefault
+// ============================================================================
+function initFocusMode() {
+  if (!document.body) return;
+  
+  const handleFocusModeTrigger = (e) => {
+    // Ctrl+Shift+F ou Cmd+Shift+F
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyF') {
+      e.preventDefault();  // ← Crucial !
+      e.stopPropagation();
+      toggleFocusMode();
+      return false;
+    }
+  };
+  
+  document.addEventListener('keydown', handleFocusModeTrigger, true);
+  console.log('[AITools] Focus Mode initialized | Shortcut: Ctrl+Shift+F');
+}
+
+function toggleFocusMode() {
+  extensionSettings.focusModeEnabled = !extensionSettings.focusModeEnabled;
+  chrome.storage.local.set({ focusModeEnabled: extensionSettings.focusModeEnabled });
+  
+  if (extensionSettings.focusModeEnabled) {
+    document.body.style.filter = 'brightness(0.95) contrast(1.1)';
+    document.body.style.transition = 'filter 0.3s ease';
+    showToaster('🎯 Focus Mode activé', 'success');
+  } else {
+    document.body.style.filter = 'none';
+    showToaster('🎯 Focus Mode désactivé', 'info');
+  }
+}
+
+// ============================================================================
+// BUG FIX #5: Improved Language Detection (Bug #8)
+// ============================================================================
+function detectLanguage(text) {
+  try {
+    const minLength = 50; // Minimum 50 chars
+    if (text.length < minLength) return 'en'; // Texte trop court
+    
+    const langPatterns = {
+      'fr': /\b(le|la|de|et|un|est|que|pour|avec|dans|les|ce|qui|mon|pas)\b/gi,
+      'es': /\b(el|la|de|y|un|es|que|para|con|en|los|este|que|mi|no)\b/gi,
+      'de': /\b(der|die|das|und|in|zu|den|von|zu|das|mit|sich|des)\b/gi,
+      'it': /\b(il|la|di|e|un|è|che|per|con|in|da|ho|un|questi|lui)\b/gi,
+      'pt': /\b(o|a|de|e|um|é|que|para|com|em|do|da|os|este|não)\b/gi,
+      'nl': /\b(de|en|van|het|een|in|is|te|dat|die|op|aan|met|zijn)\b/gi,
+      'ru': /\b(и|в|я|не|на|он|что|ы|то|с|он)\b/gi,
+      'zh': /[\u4E00-\u9FFF]+/g // Caractères chinois
+    };
+
+    const detectedScores = {};
+    
+    for (const [lang, pattern] of Object.entries(langPatterns)) {
+      const matches = text.match(pattern) || [];
+      detectedScores[lang] = matches.length;
+    }
+
+    // Prendre la langue avec le meilleur score (seuil min de 2)
+    const best = Object.entries(detectedScores)
+      .sort(([, a], [, b]) => b - a)[0];
+
+    if (best && best[1] > 2) {  // Seuil: 2 matches minimum
+      return best[0];
+    }
+    
+    return 'en'; // Fallback
+  } catch (error) {
+    console.error('[AITools] Language detection error:', error);
+    return 'en';
+  }
+}
+
+// ============================================================================
+// BUG FIX #6: Extract Text with Word Limit (Bug #7)
+// ============================================================================
+function extractRelevantPageText(maxWords = 5000) {
+  try {
+    const selectors = [
+      'article',
+      'main',
+      '[role="main"]',
+      '.post-content',
+      '.article-body',
+      'p'
+    ];
+
+    let text = '';
+    for (const selector of selectors) {
+      const element = document.querySelector(selector);
+      if (element) {
+        text = element.innerText;
+        break;
+      }
+    }
+
+    if (!text) {
+      text = document.body.innerText;
+    }
+
+    // Nettoyer + limiter à maxWords
+    let cleanText = text
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .slice(0, maxWords)
+      .join(' ');
+
+    return cleanText.substring(0, 15000); // Max 15k chars
+  } catch (error) {
+    console.error('[AITools] Error extracting text:', error);
+    return '';
+  }
 }
 
 // ============================================================================
@@ -380,7 +712,7 @@ function setupGoogleEnhancements() {
 
         const btn = document.createElement('button');
         btn.className = 'aitools-gb';
-        btn.innerHTML = label;
+        btn.textContent = label; // Bug #15 Fix: Use textContent instead of innerHTML
         btn.type = 'button';
         btn.id = `aitools-gb-${def.key}`;
         btn.style.color = color;
@@ -431,7 +763,7 @@ function setupGoogleEnhancements() {
 
   // Watch for SPA navigation
   let lastUrl = window.location.href;
-  new MutationObserver(() => {
+  const handleNavigation = debounce(() => {
     if (window.location.href !== lastUrl) {
       lastUrl = window.location.href;
       const c = document.getElementById('aitools-google-buttons');
@@ -441,7 +773,15 @@ function setupGoogleEnhancements() {
     } else if (!document.getElementById('aitools-google-buttons') && hasActiveSearch()) {
       setTimeout(injectGoogleButtons, 100);
     }
-  }).observe(document.body, { childList: true, subtree: false });
+  }, 300);
+  
+  // Bug #12 Fix: Use ObserverManager
+  ObserverManager.observe(
+    'google-nav-observer',
+    document.body,
+    handleNavigation,
+    { childList: true, subtree: false }
+  );
 }
 
 // ============================================================================
@@ -464,16 +804,28 @@ let cookieObserverPaused = false;
 function initCookieBlocker() {
   if (!extensionSettings.cookieBlockerEnabled) return;
 
+  closeCookiePopups(); // First attempt immediately
   setTimeout(() => closeCookiePopups(), 1500);
 
-  let debounceTimer = null;
-  cookieObserver = new MutationObserver(() => {
-    if (cookieObserverPaused) return;
-    if (debounceTimer) return;
-    debounceTimer = setTimeout(() => { closeCookiePopups(); debounceTimer = null; }, 300);
-  });
+  // Bug #12 + #14 Fix: Use debounce-wrapped callback with ObserverManager
+  const debouncedCloseCookies = debounce(() => {
+    if (!cookieBlockerPaused) {
+      closeCookiePopups();
+    }
+  }, 300);
 
-  cookieObserver.observe(document.body, { childList: true, subtree: false });
+  // Use ObserverManager instead of creating new MutationObserver
+  ObserverManager.observe(
+    'cookie-observer',
+    document.body,
+    debouncedCloseCookies,
+    { 
+      childList: true, 
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'class', 'display']
+    }
+  );
 }
 
 const COOKIE_KEYWORDS = [
@@ -627,17 +979,17 @@ function showAIBadge(result) {
   `;
 
   const scoreSpan = document.createElement('span');
-  scoreSpan.textContent = `⚠️ IA: ${score}%`;
+  scoreSpan.textContent = '⚠️ IA: ' + score + '%';
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'aitools-close-btn';
-  closeBtn.innerHTML = '✕';
+  closeBtn.textContent = '✕';
   closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;
     border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     elementVisibility.aiBadge = false;
-    chrome.storage.local.set({ 'aitools-visibility': elementVisibility });
+    setStorageSafe('aitools-visibility', elementVisibility);
     badge.remove();
   });
 
@@ -658,15 +1010,34 @@ function showAIBadge(result) {
       z-index: 10000; box-shadow: 0 4px 16px rgba(0,0,0,0.12); min-width: 200px;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     `;
-    detail.innerHTML = `
-      <strong style="display:block;margin-bottom:8px;color:#555;">Indicateurs détectés :</strong>
-      <div style="margin-bottom:4px;">🔄 Tournures passives : <strong>${details.passif}</strong></div>
-      <div style="margin-bottom:4px;">📝 Connecteurs formels : <strong>${details.formel}</strong></div>
-      <div style="margin-bottom:4px;">📐 Structure répétitive : <strong>${details.structure}</strong></div>
-      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #eee;color:#888;font-size:10px;">
-        Score global : ${score}% — ${score > 70 ? 'Très probablement IA' : score > 40 ? 'Possiblement IA' : 'Probablement humain'}
-      </div>
-    `;
+    
+    // Bug #9 Fix: Use createElement instead of innerHTML
+    const title = document.createElement('strong');
+    title.style.cssText = 'display:block;margin-bottom:8px;color:#555;';
+    title.textContent = 'Indicateurs détectés :';
+    detail.appendChild(title);
+    
+    const passifDiv = document.createElement('div');
+    passifDiv.style.cssText = 'margin-bottom:4px;';
+    passifDiv.textContent = '🔄 Tournures passives : ' + details.passif;
+    detail.appendChild(passifDiv);
+    
+    const formelDiv = document.createElement('div');
+    formelDiv.style.cssText = 'margin-bottom:4px;';
+    formelDiv.textContent = '📝 Connecteurs formels : ' + details.formel;
+    detail.appendChild(formelDiv);
+    
+    const structDiv = document.createElement('div');
+    structDiv.style.cssText = 'margin-bottom:4px;';
+    structDiv.textContent = '📐 Structure répétitive : ' + details.structure;
+    detail.appendChild(structDiv);
+    
+    const scoreDiv = document.createElement('div');
+    scoreDiv.style.cssText = 'margin-top:8px;padding-top:8px;border-top:1px solid #eee;color:#888;font-size:10px;';
+    const scoreText = score > 70 ? 'Très probablement IA' : score > 40 ? 'Possiblement IA' : 'Probablement humain';
+    scoreDiv.textContent = 'Score global : ' + score + '% — ' + scoreText;
+    detail.appendChild(scoreDiv);
+    
     document.body.appendChild(detail);
 
     // Close on outside click
@@ -723,10 +1094,15 @@ function summarizePage() {
 }
 
 // Bug #2 fix: replace char-by-char loop with regex split
-function betterSummarize(text) {
+function betterSummarize(text, length = 35) {
   if (!text || text.length < 100) return text;
 
-  const cleanText = text.replace(/\s+/g, ' ').trim();
+  // BUG FIX #7: Limiter le texte d'entrée à 5000 mots max
+  const maxWords = 5000;
+  const words = text.split(/\s+/).slice(0, maxWords);
+  const limitedText = words.join(' ');
+
+  const cleanText = limitedText.replace(/\s+/g, ' ').trim();
 
   // Use regex split — 10x faster than char loop
   let sentences = (cleanText.match(/[^.!?…]+[.!?…]+(?:\s|$)/g) || [cleanText])
@@ -760,7 +1136,7 @@ function betterSummarize(text) {
     return { sentence, score, index: idx };
   });
 
-  const pct = Math.max(0.15, Math.min(0.8, (extensionSettings.summarizerLength || 35) / 100));
+  const pct = Math.max(0.15, Math.min(0.8, (length || extensionSettings.summarizerLength || 35) / 100));
   const keepCount = Math.max(2, Math.ceil(sentences.length * pct));
 
   return scored
@@ -771,7 +1147,423 @@ function betterSummarize(text) {
     .join(' ');
 }
 
-// Bug #6 fix: subtree:false + obsLock to prevent mutation loop
+// ============================================================================
+// IMPROVED SUMMARIZER — Using Gemini Nano for better results
+// ============================================================================
+async function generateSummaryWithAI(text, length = 35) {
+  // Vérifier que AIService est disponible
+  if (!window.aiService) {
+    console.warn('[Summarizer] AIService not available, using fallback');
+    return betterSummarize(text, length);
+  }
+
+  try {
+    // D'abord vérifier la disponibilité
+    const isAvailable = await window.aiService.checkAvailability();
+    if (!isAvailable) {
+      console.warn('[Summarizer] AI API not available, using fallback');
+      return betterSummarize(text, length);
+    }
+
+    // Limiter le texte à 3000 caractères pour l'API
+    const textForAI = text.substring(0, 3000);
+    const result = await window.aiService.summarize(textForAI, length);
+    
+    // Vérifier si c'est un objet error
+    if (result && result.success === false) {
+      console.warn('[Summarizer] AI error:', result.error);
+      return betterSummarize(text, length);
+    }
+    
+    // Retourner le résultat
+    return typeof result === 'string' ? result : betterSummarize(text, length);
+  } catch (err) {
+    console.warn('[Summarizer] AI error, using fallback:', err.message);
+    return betterSummarize(text, length);
+  }
+}
+
+// Sidebar panel for summary (more practical than modal)
+function showSummaryPanel(summary) {
+  const existingPanel = document.getElementById('aitools-summary-panel');
+  if (existingPanel) existingPanel.remove();
+
+  // Create panel container
+  const panel = document.createElement('div');
+  panel.id = 'aitools-summary-panel';
+  panel.style.cssText = `
+    position: fixed;
+    top: 0;
+    right: -400px;
+    width: 400px;
+    height: 100vh;
+    background: white;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    transition: right 0.3s ease;
+    animation: aitools-slide-in 0.3s ease forwards;
+  `;
+
+  // Header
+  const header = document.createElement('div');
+  header.style.cssText = `
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  `;
+  const title = document.createElement('h3');
+  title.textContent = '📋 Résumé';
+  title.style.cssText = 'margin: 0; font-size: 18px; flex: 1; min-width: 100px;';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = `
+    background: rgba(255,255,255,0.3);
+    border: none;
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  `;
+  closeBtn.addEventListener('mouseover', () => { closeBtn.style.background = 'rgba(255,255,255,0.5)'; });
+  closeBtn.addEventListener('mouseout', () => { closeBtn.style.background = 'rgba(255,255,255,0.3)'; });
+  closeBtn.addEventListener('click', () => {
+    panel.style.animation = 'aitools-slide-out 0.3s ease forwards';
+    setTimeout(() => panel.remove(), 300);
+  });
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+  panel.appendChild(header);
+
+  // Content
+  const content = document.createElement('div');
+  content.style.cssText = `
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: #333;
+  `;
+  
+  // Split by newlines and render safely
+  const lines = summary.split('\n');
+  lines.forEach((line, i) => {
+    if (i > 0) {
+      const br = document.createElement('br');
+      content.appendChild(br);
+    }
+    const textNode = document.createTextNode(line);
+    content.appendChild(textNode);
+  });
+  
+  panel.appendChild(content);
+
+  // Footer with buttons
+  const footer = document.createElement('div');
+  footer.style.cssText = `
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    gap: 10px;
+  `;
+
+  const copyBtn = document.createElement('button');
+  copyBtn.textContent = '📋 Copier';
+  copyBtn.style.cssText = `
+    flex: 1;
+    padding: 10px;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    transition: background 0.2s;
+  `;
+  copyBtn.addEventListener('mouseover', () => { copyBtn.style.background = '#059669'; });
+  copyBtn.addEventListener('mouseout', () => { copyBtn.style.background = '#10b981'; });
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(summary).then(() => {
+      copyBtn.textContent = '✅ Copié!';
+      setTimeout(() => { copyBtn.textContent = '📋 Copier'; }, 2000);
+    });
+  });
+
+  const regenerateBtn = document.createElement('button');
+  regenerateBtn.textContent = '🔄 Régénérer';
+  regenerateBtn.style.cssText = `
+    flex: 1;
+    padding: 10px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    transition: background 0.2s;
+  `;
+  regenerateBtn.addEventListener('mouseover', () => { regenerateBtn.style.background = '#5568d3'; });
+  regenerateBtn.addEventListener('mouseout', () => { regenerateBtn.style.background = '#667eea'; });
+
+  footer.appendChild(copyBtn);
+  footer.appendChild(regenerateBtn);
+  panel.appendChild(footer);
+
+  // Add slide animation
+  if (!document.getElementById('aitools-panel-animations')) {
+    const style = document.createElement('style');
+    style.id = 'aitools-panel-animations';
+    style.textContent = `
+      @keyframes aitools-slide-in {
+        from { right: -400px; opacity: 0; }
+        to { right: 0; opacity: 1; }
+      }
+      @keyframes aitools-slide-out {
+        from { right: 0; opacity: 1; }
+        to { right: -400px; opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(panel);
+}
+
+// ============================================================================
+// IMPROVED TRANSLATOR — Using Gemini Nano for better results
+// ============================================================================
+async function generateTranslationWithAI(text, sourceLang, targetLang) {
+  if (!window.aiService) {
+    console.warn('[Translator] AIService not available');
+    return null;
+  }
+
+  try {
+    const isAvailable = await window.aiService.checkAvailability();
+    if (!isAvailable) {
+      console.warn('[Translator] AI API not available');
+      return null;
+    }
+
+    const textForAI = text.substring(0, 2000);
+    const result = await window.aiService.translate(textForAI, targetLang);
+    
+    if (result && result.success === false) {
+      console.warn('[Translator] AI error:', result.error);
+      return null;
+    }
+    
+    return typeof result === 'string' ? result : null;
+  } catch (err) {
+    console.warn('[Translator] AI error:', err.message);
+    return null;
+  }
+}
+
+// Sidebar panel for translation (more practical than modal)
+function showTranslationPanel(original, translated, sourceLang, targetLang) {
+  const langNames = {
+    fr: 'Français', en: 'Anglais', es: 'Espagnol', de: 'Allemand',
+    it: 'Italien', pt: 'Portugais', ja: 'Japonais', zh: 'Chinois'
+  };
+
+  const existingPanel = document.getElementById('aitools-translation-panel');
+  if (existingPanel) existingPanel.remove();
+
+  // Create panel container
+  const panel = document.createElement('div');
+  panel.id = 'aitools-translation-panel';
+  panel.style.cssText = `
+    position: fixed;
+    top: 0;
+    right: -400px;
+    width: 400px;
+    height: 100vh;
+    background: white;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    transition: right 0.3s ease;
+    animation: aitools-slide-in 0.3s ease forwards;
+  `;
+
+  // Header
+  const header = document.createElement('div');
+  header.style.cssText = `
+    padding: 20px;
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  `;
+  const title = document.createElement('h3');
+  title.textContent = '🌐 Traduction';
+  title.style.cssText = 'margin: 0; font-size: 18px;';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = `
+    background: rgba(255,255,255,0.3);
+    border: none;
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  `;
+  closeBtn.addEventListener('mouseover', () => { closeBtn.style.background = 'rgba(255,255,255,0.5)'; });
+  closeBtn.addEventListener('mouseout', () => { closeBtn.style.background = 'rgba(255,255,255,0.3)'; });
+  closeBtn.addEventListener('click', () => {
+    panel.style.animation = 'aitools-slide-out 0.3s ease forwards';
+    setTimeout(() => panel.remove(), 300);
+  });
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+  panel.appendChild(header);
+
+  // Content with two columns
+  const content = document.createElement('div');
+  content.style.cssText = `
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+  `;
+
+  // Original text column
+  const origCol = document.createElement('div');
+  const origLabel = document.createElement('p');
+  origLabel.style.cssText = 'margin: 0 0 10px; font-weight: 600; font-size: 12px; color: #666;';
+  origLabel.textContent = '📄 ' + (langNames[sourceLang] || sourceLang);
+  const origBox = document.createElement('div');
+  origBox.style.cssText = `
+    background: #f5f5f5;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #555;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #e0e0e0;
+  `;
+  
+  const origLines = original.split('\n');
+  origLines.forEach((line, i) => {
+    if (i > 0) {
+      const br = document.createElement('br');
+      origBox.appendChild(br);
+    }
+    const textNode = document.createTextNode(line);
+    origBox.appendChild(textNode);
+  });
+
+  origCol.appendChild(origLabel);
+  origCol.appendChild(origBox);
+  content.appendChild(origCol);
+
+  // Translated text column
+  const transCol = document.createElement('div');
+  const transLabel = document.createElement('p');
+  transLabel.style.cssText = 'margin: 0 0 10px; font-weight: 600; font-size: 12px; color: #666;';
+  transLabel.textContent = '✅ ' + (langNames[targetLang] || targetLang);
+  const transBox = document.createElement('div');
+  transBox.style.cssText = `
+    background: #e8f5e9;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #333;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #c8e6c9;
+  `;
+  
+  const transLines = translated.split('\n');
+  transLines.forEach((line, i) => {
+    if (i > 0) {
+      const br = document.createElement('br');
+      transBox.appendChild(br);
+    }
+    const textNode = document.createTextNode(line);
+    transBox.appendChild(textNode);
+  });
+
+  transCol.appendChild(transLabel);
+  transCol.appendChild(transBox);
+  content.appendChild(transCol);
+
+  panel.appendChild(content);
+
+  // Footer with buttons
+  const footer = document.createElement('div');
+  footer.style.cssText = `
+    padding: 15px 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    gap: 10px;
+  `;
+
+  const copyBtn = document.createElement('button');
+  copyBtn.textContent = '📋 Copier';
+  copyBtn.style.cssText = `
+    flex: 1;
+    padding: 10px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    transition: background 0.2s;
+  `;
+  copyBtn.addEventListener('mouseover', () => { copyBtn.style.background = '#388e3c'; });
+  copyBtn.addEventListener('mouseout', () => { copyBtn.style.background = '#4CAF50'; });
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(translated).then(() => {
+      copyBtn.textContent = '✅ Copié!';
+      setTimeout(() => { copyBtn.textContent = '📋 Copier'; }, 2000);
+    });
+  });
+
+  footer.appendChild(copyBtn);
+  panel.appendChild(footer);
+
+  document.body.appendChild(panel);
+}
+
+// Bug #6 fix: subtree:false + throttle to prevent mutation loop
 let summarizerObserverActive = false;
 
 function initSummarizer() {
@@ -779,17 +1571,27 @@ function initSummarizer() {
   if (window.location.hostname.includes('google.')) return;
   if (!extensionSettings.summarizerEnabled) return;
 
+  checkAndShowSummarizerButton(); // Check immediately
   setTimeout(() => checkAndShowSummarizerButton(), 1500);
 
-  const obs = new MutationObserver(() => {
-    if (summarizerObserverActive) return;
-    summarizerObserverActive = true;
-    setTimeout(() => {
+  // Bug #12 + #14 Fix: Use debounced callback with ObserverManager
+  const debouncedCheck = debounce(() => {
+    if (!summarizerObserverActive) {
+      summarizerObserverActive = true;
       checkAndShowSummarizerButton();
-      summarizerObserverActive = false;
-    }, 800);
-  });
-  obs.observe(document.body, { childList: true, subtree: false });
+      setTimeout(() => {
+        summarizerObserverActive = false;
+      }, 800);
+    }
+  }, 500);
+
+  // Use ObserverManager instead of creating new MutationObserver
+  ObserverManager.observe(
+    'summarizer-observer',
+    document.body,
+    debouncedCheck,
+    { childList: true, subtree: false }
+  );
 }
 
 function checkAndShowSummarizerButton() {
@@ -820,7 +1622,7 @@ function addSummarizerButton() {
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'aitools-close-btn';
-  closeBtn.innerHTML = '✕';
+  closeBtn.textContent = '✕'; // Bug #9 Fix: textContent instead of innerHTML
   closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;
     border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
   closeBtn.addEventListener('click', (e) => {
@@ -833,11 +1635,16 @@ function addSummarizerButton() {
   btn.appendChild(textSpan);
   btn.appendChild(closeBtn);
 
-  btn.addEventListener('click', (e) => {
+  btn.addEventListener('click', async (e) => {
     if (!e.target.closest('.aitools-close-btn')) {
+      textSpan.textContent = '⏳ Résumé...';
+      btn.disabled = true;
       const rawText = summarizePage();
-      const summary = betterSummarize(rawText);
-      showSummaryModal(summary);
+      // Try to use AI first, fallback to old method if unavailable
+      const summary = await generateSummaryWithAI(rawText, extensionSettings.summarizerLength || 35);
+      showSummaryPanel(summary);
+      textSpan.textContent = '✂️ Résumer';
+      btn.disabled = false;
     }
   });
 
@@ -871,7 +1678,19 @@ function showSummaryModal(summary) {
 
   const textEl = document.createElement('p');
   textEl.style.cssText = 'line-height:1.8;color:#555;font-size:13px;';
-  textEl.innerHTML = summary.replace(/\n/g, '<br>');
+  textEl.textContent = summary; // Bug #9 Fix: textContent instead of innerHTML with replace
+  // If line breaks needed, split and insert br elements instead:
+  // textEl.innerHTML = summary.replace(/\n/g, '<br>') replaced with:
+  const summaryLines = summary.split('\n');
+  textEl.textContent = '';
+  summaryLines.forEach((line, i) => {
+    if (i > 0) {
+      const br = document.createElement('br');
+      textEl.appendChild(br);
+    }
+    const textNode = document.createTextNode(line);
+    textEl.appendChild(textNode);
+  });
 
   const btnRow = document.createElement('div');
   btnRow.style.cssText = 'display:flex;gap:8px;margin-top:16px;';
@@ -975,7 +1794,7 @@ function addTranslatorButton(sourceLang, targetLang) {
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'aitools-close-btn';
-  closeBtn.innerHTML = '✕';
+  closeBtn.textContent = '✕'; // Bug #9 Fix: textContent instead of innerHTML
   closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;
     border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
   closeBtn.addEventListener('click', (e) => { e.stopPropagation(); btn.style.display = 'none'; });
@@ -984,10 +1803,24 @@ function addTranslatorButton(sourceLang, targetLang) {
   btn.appendChild(closeBtn);
 
   // Bug #9 fix: use extractRelevantPageText() instead of document.body.innerText
-  btn.addEventListener('click', (e) => {
+  btn.addEventListener('click', async (e) => {
     if (!e.target.closest('.aitools-close-btn')) {
+      textSpan.textContent = '⏳ Traduction...';
+      btn.disabled = true;
+      
       const relevantText = extractRelevantPageText(3000);
-      translateAndShowModal(relevantText, sourceLang, targetLang);
+      // Use AI for better translation
+      const translated = await generateTranslationWithAI(relevantText, sourceLang, targetLang);
+      
+      if (translated) {
+        showTranslationPanel(relevantText.substring(0, 2000), translated, sourceLang, targetLang);
+      } else {
+        // Fallback to old method if AI is not available
+        translateAndShowModal(relevantText, sourceLang, targetLang);
+      }
+      
+      textSpan.textContent = '🌐 Traduire';
+      btn.disabled = false;
     }
   });
 
@@ -1045,26 +1878,70 @@ function showTranslationModal(original, translated, sourceLang, targetLang) {
     box-shadow:0 20px 60px rgba(0,0,0,0.3);font-family:-apple-system,BlinkMacSystemFont,sans-serif;
   `;
 
-  modal.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <h3 style="margin:0;color:#333;">🌐 Traduction</h3>
-      <button id="aitools-close-tr" style="background:none;border:none;font-size:20px;cursor:pointer;color:#999;">✕</button>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-      <div>
-        <p style="margin:0 0 8px;font-weight:600;font-size:11px;color:#666;">📄 ${langNames[sourceLang] || sourceLang}</p>
-        <div style="background:#f5f5f5;padding:12px;border-radius:8px;font-size:12px;line-height:1.6;color:#555;max-height:250px;overflow-y:auto;">${original.replace(/\n/g, '<br>')}</div>
-      </div>
-      <div>
-        <p style="margin:0 0 8px;font-weight:600;font-size:11px;color:#666;">✅ ${langNames[targetLang] || targetLang}</p>
-        <div style="background:#e8f5e9;padding:12px;border-radius:8px;font-size:12px;line-height:1.6;color:#333;max-height:250px;overflow-y:auto;">${translated.replace(/\n/g, '<br>')}</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:16px;">
-      <button id="aitools-copy-tr" style="flex:1;background:#667eea;color:white;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">📋 Copier traduction</button>
-      <button id="aitools-close-tr2" style="flex:1;background:#ddd;color:#333;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">Fermer</button>
-    </div>
-  `;
+  // Bug #9 Fix: Use createElement instead of innerHTML
+  const headerDiv = document.createElement('div');
+  headerDiv.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;';
+  const h3 = document.createElement('h3');
+  h3.style.cssText = 'margin:0;color:#333;';
+  h3.textContent = '🌐 Traduction';
+  const closeTr = document.createElement('button');
+  closeTr.id = 'aitools-close-tr';
+  closeTr.style.cssText = 'background:none;border:none;font-size:20px;cursor:pointer;color:#999;';
+  closeTr.textContent = '✕';
+  headerDiv.appendChild(h3);
+  headerDiv.appendChild(closeTr);
+  modal.appendChild(headerDiv);
+
+  const gridDiv = document.createElement('div');
+  gridDiv.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:16px;';
+  
+  // Original text column
+  const origCol = document.createElement('div');
+  const origLabel = document.createElement('p');
+  origLabel.style.cssText = 'margin:0 0 8px;font-weight:600;font-size:11px;color:#666;';
+  origLabel.textContent = '📄 ' + (langNames[sourceLang] || sourceLang);
+  const origContent = document.createElement('div');
+  origContent.style.cssText = 'background:#f5f5f5;padding:12px;border-radius:8px;font-size:12px;line-height:1.6;color:#555;max-height:250px;overflow-y:auto;';
+  const origText = original.split('\n');
+  origText.forEach((line, i) => {
+    if (i > 0) origContent.appendChild(document.createElement('br'));
+    origContent.appendChild(document.createTextNode(line));
+  });
+  origCol.appendChild(origLabel);
+  origCol.appendChild(origContent);
+  gridDiv.appendChild(origCol);
+
+  // Translated text column
+  const transCol = document.createElement('div');
+  const transLabel = document.createElement('p');
+  transLabel.style.cssText = 'margin:0 0 8px;font-weight:600;font-size:11px;color:#666;';
+  transLabel.textContent = '✅ ' + (langNames[targetLang] || targetLang);
+  const transContent = document.createElement('div');
+  transContent.style.cssText = 'background:#e8f5e9;padding:12px;border-radius:8px;font-size:12px;line-height:1.6;color:#333;max-height:250px;overflow-y:auto;';
+  const transText = translated.split('\n');
+  transText.forEach((line, i) => {
+    if (i > 0) transContent.appendChild(document.createElement('br'));
+    transContent.appendChild(document.createTextNode(line));
+  });
+  transCol.appendChild(transLabel);
+  transCol.appendChild(transContent);
+  gridDiv.appendChild(transCol);
+  modal.appendChild(gridDiv);
+
+  // Buttons
+  const buttonDiv = document.createElement('div');
+  buttonDiv.style.cssText = 'display:flex;gap:8px;margin-top:16px;';
+  const copyBtn = document.createElement('button');
+  copyBtn.id = 'aitools-copy-tr';
+  copyBtn.style.cssText = 'flex:1;background:#667eea;color:white;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;';
+  copyBtn.textContent = '📋 Copier traduction';
+  const closeBtn2 = document.createElement('button');
+  closeBtn2.id = 'aitools-close-tr2';
+  closeBtn2.style.cssText = 'flex:1;background:#ddd;color:#333;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;';
+  closeBtn2.textContent = 'Fermer';
+  buttonDiv.appendChild(copyBtn);
+  buttonDiv.appendChild(closeBtn2);
+  modal.appendChild(buttonDiv);
 
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
@@ -1133,7 +2010,7 @@ function createStatsWidget(stats) {
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'aitools-close-btn';
-  closeBtn.innerHTML = '✕';
+  closeBtn.textContent = '✕'; // Bug #9 Fix: textContent instead of innerHTML
   closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;
     border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
   closeBtn.addEventListener('click', (e) => {
@@ -1163,13 +2040,29 @@ function createStatsWidget(stats) {
     { label: '⚡ Chargement', value: stats.loadTime > 0 ? stats.loadTime + ' ms' : 'N/A' }
   ];
 
-  content.innerHTML = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:12px 0;">' +
-    rows.filter(r => r.value && r.value !== 0).map(r => `
-      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0f0f0;font-size:11px;">
-        <span style="color:#666;">${r.label}</span>
-        <span style="color:#667eea;font-weight:600;">${r.value}</span>
-      </div>
-    `).join('') + '</div>';
+  // Bug #9 Fix: Use createElement instead of innerHTML
+  const statsGrid = document.createElement('div');
+  statsGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:12px 0;';
+  
+  rows.filter(r => r.value && r.value !== 0).forEach(r => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f0f0f0;font-size:11px;';
+    
+    const label = document.createElement('span');
+    label.style.color = '#666;';
+    label.textContent = r.label;
+    
+    const value = document.createElement('span');
+    value.style.cssText = 'color:#667eea;font-weight:600;';
+    value.textContent = String(r.value);
+    
+    row.appendChild(label);
+    row.appendChild(value);
+    statsGrid.appendChild(row);
+  });
+  
+  content.innerHTML = '';
+  content.appendChild(statsGrid);
 
   header.addEventListener('click', (e) => {
     if (e.target.closest('.aitools-close-btn')) return;
@@ -1216,7 +2109,8 @@ function initReadingTime() {
       box-shadow:0 4px 12px rgba(102,126,234,0.4);z-index:999999;cursor:pointer;
       user-select:none;transition:all 0.3s ease;
     `;
-    badge.innerHTML = `📖 ${mins} min`;
+    badge.innerHTML = '';
+    badge.textContent = `📖 ${mins} min`; // Bug #9 Fix: textContent instead of innerHTML
     badge.title = `${words.toLocaleString('fr-FR')} mots`;
 
     document.body.appendChild(badge);
@@ -1248,7 +2142,7 @@ function initFocusMode() {
 
     const focusBtn = document.createElement('button');
     focusBtn.id = 'aitools-focus-mode-btn';
-    focusBtn.innerHTML = '🎯';
+    focusBtn.textContent = '🎯'; // Bug #9 Fix: textContent instead of innerHTML
     focusBtn.title = 'Shift+Alt+F : Mode focus';
     focusBtn.style.cssText = `
       position:fixed;top:80px;right:20px;width:38px;height:38px;border-radius:50%;
@@ -1343,7 +2237,8 @@ function showFocusNotification(message) {
     font-size:14px;font-weight:500;z-index:1000000;pointer-events:none;
     animation:aitoolsFadeInOut 2s ease-in-out;
   `;
-  n.innerHTML = message;
+  n.innerHTML = '';
+  n.textContent = message; // Bug #9 Fix: textContent instead of innerHTML
   if (!document.getElementById('aitools-focus-anim')) {
     const s = document.createElement('style');
     s.id = 'aitools-focus-anim';

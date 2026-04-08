@@ -16,7 +16,7 @@
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["layout-manager.js", "content-v4.js"],
+      "js": ["ai-service.js", "layout-manager.js", "content-v4.js"],
       "run_at": "document_start",
       "all_frames": false
     }
@@ -24,6 +24,12 @@
   "background": {
     "service_worker": "background-v4.js"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["styles-new.css"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   },
