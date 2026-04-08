@@ -1183,105 +1183,189 @@ async function generateSummaryWithAI(text, length = 35) {
   }
 }
 
-// Sidebar panel for summary (more practical than modal)
+// Sidebar panel for summary (simple toast-like display)
 function showSummaryPanel(summary) {
-  const existingPanel = document.getElementById('aitools-summary-panel');
-  if (existingPanel) existingPanel.remove();
+  if (!summary || summary.trim().length === 0) {
+    alert('❌ Impossible de générer un résumé pour cette page');
+    return;
+  }
 
-  // Create panel container
-  const panel = document.createElement('div');
-  panel.id = 'aitools-summary-panel';
-  panel.style.cssText = `
+  const existing = document.getElementById('aitools-summary-panel');
+  if (existing) existing.remove();
+
+  // Simple toast container
+  const toast = document.createElement('div');
+  toast.id = 'aitools-summary-panel';
+  toast.style.cssText = `
     position: fixed;
-    top: 0;
-    right: -400px;
-    width: 400px;
-    height: 100vh;
+    bottom: 20px;
+    right: 20px;
+    width: 350px;
     background: white;
-    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
     z-index: 10000;
-    display: flex;
-    flex-direction: column;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    transition: right 0.3s ease;
-    animation: aitools-slide-in 0.3s ease forwards;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #333;
+    max-height: 300px;
+    overflow-y: auto;
+    animation: aitools-toast-slide 0.3s ease forwards;
   `;
 
-  // Header
-  const header = document.createElement('div');
-  header.style.cssText = `
-    padding: 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-  `;
-  const title = document.createElement('h3');
-  title.textContent = '📋 Résumé';
-  title.style.cssText = 'margin: 0; font-size: 18px; flex: 1; min-width: 100px;';
+  const lines = summary.split('\n');
+  lines.forEach((line, i) => {
+    if (i > 0) {
+      const br = document.createElement('br');
+      toast.appendChild(br);
+    }
+    if (line.trim()) {
+      const text = document.createTextNode(line);
+      toast.appendChild(text);
+    }
+  });
 
+  // Close button
   const closeBtn = document.createElement('button');
-  closeBtn.textContent = '✕';
+  closeBtn.innerHTML = '&times;';
   closeBtn.style.cssText = `
-    background: rgba(255,255,255,0.3);
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
     border: none;
-    color: white;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
+    font-size: 24px;
+    color: #999;
     cursor: pointer;
-    font-size: 18px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.2s;
   `;
-  closeBtn.addEventListener('mouseover', () => { closeBtn.style.background = 'rgba(255,255,255,0.5)'; });
-  closeBtn.addEventListener('mouseout', () => { closeBtn.style.background = 'rgba(255,255,255,0.3)'; });
   closeBtn.addEventListener('click', () => {
-    panel.style.animation = 'aitools-slide-out 0.3s ease forwards';
-    setTimeout(() => panel.remove(), 300);
+    toast.style.animation = 'aitools-toast-slide-out 0.3s ease forwards';
+    setTimeout(() => toast.remove(), 300);
   });
+  toast.appendChild(closeBtn);
 
-  header.appendChild(title);
-  header.appendChild(closeBtn);
-  panel.appendChild(header);
+  // Add animation if not exists
+  if (!document.getElementById('aitools-toast-animations')) {
+    const style = document.createElement('style');
+    style.id = 'aitools-toast-animations';
+    style.textContent = `
+      @keyframes aitools-toast-slide {
+        from { 
+          transform: translateX(400px); 
+          opacity: 0; 
+        }
+        to { 
+          transform: translateX(0); 
+          opacity: 1; 
+        }
+      }
+      @keyframes aitools-toast-slide-out {
+        from { 
+          transform: translateX(0); 
+          opacity: 1; 
+        }
+        to { 
+          transform: translateX(400px); 
+          opacity: 0; 
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
 
-  // Content
-  const content = document.createElement('div');
-  content.style.cssText = `
-    flex: 1;
-    overflow-y: auto;
+  document.body.appendChild(toast);
+
+  // Auto-hide after 10 seconds
+  setTimeout(() => {
+    if (toast.isConnected) {
+      toast.style.animation = 'aitools-toast-slide-out 0.3s ease forwards';
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, 10000);
+}
+
+// ============================================================================
+// SIMPLE TRANSLATOR — Direct translation display
+// ============================================================================
+async function generateTranslationWithAI(text, sourceLang, targetLang) {
+  if (!window.aiService) return null;
+
+  try {
+    const isAvailable = await window.aiService.checkAvailability();
+    if (!isAvailable) return null;
+
+    const textForAI = text.substring(0, 2000);
+    const result = await window.aiService.translate(textForAI, targetLang);
+    
+    if (result && result.success === false) return null;
+    return typeof result === 'string' ? result : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+// Simple popup-like translation display
+function showTranslationPanel(original, translated, sourceLang, targetLang) {
+  const langNames = {
+    fr: 'Français', en: 'Anglais', es: 'Espagnol', de: 'Allemand',
+    it: 'Italien', pt: 'Portugais', ja: 'Japonais', zh: 'Chinois'
+  };
+
+  const existing = document.getElementById('aitools-translation-panel');
+  if (existing) existing.remove();
+
+  // Simple popup instead of full panel
+  const popup = document.createElement('div');
+  popup.id = 'aitools-translation-panel';
+  popup.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border-radius: 8px;
     padding: 20px;
-    font-size: 14px;
-    line-height: 1.8;
-    color: #333;
+    max-width: 500px;
+    width: 90%;
+    max-height: 70vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    z-index: 10000;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    animation: aitools-popup-in 0.3s ease;
   `;
-  
-  // Split by newlines and render safely
-  const lines = summary.split('\n');
+
+  // Header
+  const title = document.createElement('h3');
+  title.textContent = '🌐 ' + (langNames[targetLang] || targetLang);
+  title.style.cssText = 'margin: 0 0 15px; color: #333; font-size: 16px;';
+  popup.appendChild(title);
+
+  // Translation content
+  const content = document.createElement('p');
+  content.style.cssText = 'margin: 0 0 15px; color: #555; line-height: 1.6; font-size: 14px;';
+  const lines = translated.split('\n');
   lines.forEach((line, i) => {
     if (i > 0) {
       const br = document.createElement('br');
       content.appendChild(br);
     }
-    const textNode = document.createTextNode(line);
-    content.appendChild(textNode);
+    const text = document.createTextNode(line);
+    content.appendChild(text);
   });
-  
-  panel.appendChild(content);
+  popup.appendChild(content);
 
-  // Footer with buttons
-  const footer = document.createElement('div');
-  footer.style.cssText = `
-    padding: 15px 20px;
-    border-top: 1px solid #eee;
-    display: flex;
-    gap: 10px;
-  `;
+  // Buttons
+  const buttonDiv = document.createElement('div');
+  buttonDiv.style.cssText = 'display: flex; gap: 10px;';
 
   const copyBtn = document.createElement('button');
   copyBtn.textContent = '📋 Copier';
@@ -1295,20 +1379,16 @@ function showSummaryPanel(summary) {
     cursor: pointer;
     font-weight: 600;
     font-size: 12px;
-    transition: background 0.2s;
   `;
-  copyBtn.addEventListener('mouseover', () => { copyBtn.style.background = '#059669'; });
-  copyBtn.addEventListener('mouseout', () => { copyBtn.style.background = '#10b981'; });
   copyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(summary).then(() => {
-      copyBtn.textContent = '✅ Copié!';
-      setTimeout(() => { copyBtn.textContent = '📋 Copier'; }, 2000);
-    });
+    navigator.clipboard.writeText(translated);
+    copyBtn.textContent = '✅ Copié!';
+    setTimeout(() => { copyBtn.textContent = '📋 Copier'; }, 2000);
   });
 
-  const regenerateBtn = document.createElement('button');
-  regenerateBtn.textContent = '🔄 Régénérer';
-  regenerateBtn.style.cssText = `
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = 'Fermer';
+  closeBtn.style.cssText = `
     flex: 1;
     padding: 10px;
     background: #667eea;
@@ -1318,249 +1398,69 @@ function showSummaryPanel(summary) {
     cursor: pointer;
     font-weight: 600;
     font-size: 12px;
-    transition: background 0.2s;
   `;
-  regenerateBtn.addEventListener('mouseover', () => { regenerateBtn.style.background = '#5568d3'; });
-  regenerateBtn.addEventListener('mouseout', () => { regenerateBtn.style.background = '#667eea'; });
+  closeBtn.addEventListener('click', () => {
+    popup.style.animation = 'aitools-popup-out 0.3s ease';
+    setTimeout(() => { 
+      popup.remove(); 
+      if (backdrop) backdrop.remove(); 
+    }, 300);
+  });
 
-  footer.appendChild(copyBtn);
-  footer.appendChild(regenerateBtn);
-  panel.appendChild(footer);
+  buttonDiv.appendChild(copyBtn);
+  buttonDiv.appendChild(closeBtn);
+  popup.appendChild(buttonDiv);
 
-  // Add slide animation
-  if (!document.getElementById('aitools-panel-animations')) {
+  // Add animation style
+  if (!document.getElementById('aitools-popup-animations')) {
     const style = document.createElement('style');
-    style.id = 'aitools-panel-animations';
+    style.id = 'aitools-popup-animations';
     style.textContent = `
-      @keyframes aitools-slide-in {
-        from { right: -400px; opacity: 0; }
-        to { right: 0; opacity: 1; }
+      @keyframes aitools-popup-in {
+        from { 
+          transform: translate(-50%, -50%) scale(0.9);
+          opacity: 0;
+        }
+        to { 
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+        }
       }
-      @keyframes aitools-slide-out {
-        from { right: 0; opacity: 1; }
-        to { right: -400px; opacity: 0; }
+      @keyframes aitools-popup-out {
+        from { 
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 1;
+        }
+        to { 
+          transform: translate(-50%, -50%) scale(0.9);
+          opacity: 0;
+        }
       }
     `;
     document.head.appendChild(style);
   }
 
-  document.body.appendChild(panel);
-}
-
-// ============================================================================
-// IMPROVED TRANSLATOR — Using Gemini Nano for better results
-// ============================================================================
-async function generateTranslationWithAI(text, sourceLang, targetLang) {
-  if (!window.aiService) {
-    console.warn('[Translator] AIService not available');
-    return null;
-  }
-
-  try {
-    const isAvailable = await window.aiService.checkAvailability();
-    if (!isAvailable) {
-      console.warn('[Translator] AI API not available');
-      return null;
-    }
-
-    const textForAI = text.substring(0, 2000);
-    const result = await window.aiService.translate(textForAI, targetLang);
-    
-    if (result && result.success === false) {
-      console.warn('[Translator] AI error:', result.error);
-      return null;
-    }
-    
-    return typeof result === 'string' ? result : null;
-  } catch (err) {
-    console.warn('[Translator] AI error:', err.message);
-    return null;
-  }
-}
-
-// Sidebar panel for translation (more practical than modal)
-function showTranslationPanel(original, translated, sourceLang, targetLang) {
-  const langNames = {
-    fr: 'Français', en: 'Anglais', es: 'Espagnol', de: 'Allemand',
-    it: 'Italien', pt: 'Portugais', ja: 'Japonais', zh: 'Chinois'
-  };
-
-  const existingPanel = document.getElementById('aitools-translation-panel');
-  if (existingPanel) existingPanel.remove();
-
-  // Create panel container
-  const panel = document.createElement('div');
-  panel.id = 'aitools-translation-panel';
-  panel.style.cssText = `
+  // Backdrop (click to close)
+  const backdrop = document.createElement('div');
+  backdrop.style.cssText = `
     position: fixed;
     top: 0;
-    right: -400px;
-    width: 400px;
-    height: 100vh;
-    background: white;
-    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
-    z-index: 10000;
-    display: flex;
-    flex-direction: column;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    transition: right 0.3s ease;
-    animation: aitools-slide-in 0.3s ease forwards;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 9999;
   `;
-
-  // Header
-  const header = document.createElement('div');
-  header.style.cssText = `
-    padding: 20px;
-    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
-    color: white;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  `;
-  const title = document.createElement('h3');
-  title.textContent = '🌐 Traduction';
-  title.style.cssText = 'margin: 0; font-size: 18px;';
-
-  const closeBtn = document.createElement('button');
-  closeBtn.textContent = '✕';
-  closeBtn.style.cssText = `
-    background: rgba(255,255,255,0.3);
-    border: none;
-    color: white;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 18px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-  `;
-  closeBtn.addEventListener('mouseover', () => { closeBtn.style.background = 'rgba(255,255,255,0.5)'; });
-  closeBtn.addEventListener('mouseout', () => { closeBtn.style.background = 'rgba(255,255,255,0.3)'; });
-  closeBtn.addEventListener('click', () => {
-    panel.style.animation = 'aitools-slide-out 0.3s ease forwards';
-    setTimeout(() => panel.remove(), 300);
+  backdrop.addEventListener('click', () => {
+    popup.style.animation = 'aitools-popup-out 0.3s ease';
+    setTimeout(() => { 
+      popup.remove(); 
+      backdrop.remove(); 
+    }, 300);
   });
 
-  header.appendChild(title);
-  header.appendChild(closeBtn);
-  panel.appendChild(header);
-
-  // Content with two columns
-  const content = document.createElement('div');
-  content.style.cssText = `
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 15px;
-  `;
-
-  // Original text column
-  const origCol = document.createElement('div');
-  const origLabel = document.createElement('p');
-  origLabel.style.cssText = 'margin: 0 0 10px; font-weight: 600; font-size: 12px; color: #666;';
-  origLabel.textContent = '📄 ' + (langNames[sourceLang] || sourceLang);
-  const origBox = document.createElement('div');
-  origBox.style.cssText = `
-    background: #f5f5f5;
-    padding: 12px;
-    border-radius: 8px;
-    font-size: 13px;
-    line-height: 1.6;
-    color: #555;
-    max-height: 300px;
-    overflow-y: auto;
-    border: 1px solid #e0e0e0;
-  `;
-  
-  const origLines = original.split('\n');
-  origLines.forEach((line, i) => {
-    if (i > 0) {
-      const br = document.createElement('br');
-      origBox.appendChild(br);
-    }
-    const textNode = document.createTextNode(line);
-    origBox.appendChild(textNode);
-  });
-
-  origCol.appendChild(origLabel);
-  origCol.appendChild(origBox);
-  content.appendChild(origCol);
-
-  // Translated text column
-  const transCol = document.createElement('div');
-  const transLabel = document.createElement('p');
-  transLabel.style.cssText = 'margin: 0 0 10px; font-weight: 600; font-size: 12px; color: #666;';
-  transLabel.textContent = '✅ ' + (langNames[targetLang] || targetLang);
-  const transBox = document.createElement('div');
-  transBox.style.cssText = `
-    background: #e8f5e9;
-    padding: 12px;
-    border-radius: 8px;
-    font-size: 13px;
-    line-height: 1.6;
-    color: #333;
-    max-height: 300px;
-    overflow-y: auto;
-    border: 1px solid #c8e6c9;
-  `;
-  
-  const transLines = translated.split('\n');
-  transLines.forEach((line, i) => {
-    if (i > 0) {
-      const br = document.createElement('br');
-      transBox.appendChild(br);
-    }
-    const textNode = document.createTextNode(line);
-    transBox.appendChild(textNode);
-  });
-
-  transCol.appendChild(transLabel);
-  transCol.appendChild(transBox);
-  content.appendChild(transCol);
-
-  panel.appendChild(content);
-
-  // Footer with buttons
-  const footer = document.createElement('div');
-  footer.style.cssText = `
-    padding: 15px 20px;
-    border-top: 1px solid #eee;
-    display: flex;
-    gap: 10px;
-  `;
-
-  const copyBtn = document.createElement('button');
-  copyBtn.textContent = '📋 Copier';
-  copyBtn.style.cssText = `
-    flex: 1;
-    padding: 10px;
-    background: #4CAF50;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 12px;
-    transition: background 0.2s;
-  `;
-  copyBtn.addEventListener('mouseover', () => { copyBtn.style.background = '#388e3c'; });
-  copyBtn.addEventListener('mouseout', () => { copyBtn.style.background = '#4CAF50'; });
-  copyBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(translated).then(() => {
-      copyBtn.textContent = '✅ Copié!';
-      setTimeout(() => { copyBtn.textContent = '📋 Copier'; }, 2000);
-    });
-  });
-
-  footer.appendChild(copyBtn);
-  panel.appendChild(footer);
-
-  document.body.appendChild(panel);
+  document.body.appendChild(backdrop);
+  document.body.appendChild(popup);
 }
 
 // Bug #6 fix: subtree:false + throttle to prevent mutation loop
