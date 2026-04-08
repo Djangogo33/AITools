@@ -3,6 +3,31 @@
 
 const DEBUG = false;
 
+// ============================================================================
+// INJECT PAGE SCRIPT FOR PROMPT API ACCESS
+// ============================================================================
+
+function injectPageScript() {
+  try {
+    const script = document.createElement('script');
+    script.src = chrome.runtime.getURL('ai-injected.js');
+    script.onload = function() {
+      this.remove();
+    };
+    (document.head || document.documentElement).appendChild(script);
+    console.log('[Content] ✅ Page script injected successfully');
+  } catch (error) {
+    console.error('[Content] ❌ Failed to inject page script:', error);
+  }
+}
+
+// Inject immediately on page load
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', injectPageScript);
+} else {
+  injectPageScript();
+}
+
 let extensionEnabled = true;
 let darkModeEnabled = false;
 let highlighterEnabled = true;
@@ -1308,25 +1333,18 @@ async function generateSummaryWithAI(text, length = 35) {
   }
 
   try {
-    // D'abord vérifier la disponibilité
-    const isAvailable = await window.aiService.checkAvailability();
-    if (!isAvailable) {
-      console.warn('[Summarizer] AI API not available, using fallback');
-      return betterSummarize(text, length);
-    }
-
     // Limiter le texte à 3000 caractères pour l'API
     const textForAI = text.substring(0, 3000);
     const result = await window.aiService.summarize(textForAI, length);
     
-    // Vérifier si c'est un objet error
-    if (result && result.success === false) {
-      console.warn('[Summarizer] AI error:', result.error);
+    // Result is either a string or null
+    if (!result) {
+      console.warn('[Summarizer] AI returned null, using fallback');
       return betterSummarize(text, length);
     }
     
-    // Retourner le résultat
-    return typeof result === 'string' ? result : betterSummarize(text, length);
+    // Return formatted result
+    return formatSummary(result);
   } catch (err) {
     console.warn('[Summarizer] AI error, using fallback:', err.message);
     return betterSummarize(text, length);
@@ -1554,15 +1572,13 @@ async function generateTranslationWithAI(text, sourceLang, targetLang) {
   if (!window.aiService) return null;
 
   try {
-    const isAvailable = await window.aiService.checkAvailability();
-    if (!isAvailable) return null;
-
     const textForAI = text.substring(0, 2000);
     const result = await window.aiService.translate(textForAI, targetLang);
     
-    if (result && result.success === false) return null;
-    return typeof result === 'string' ? result : null;
+    // Result is either a string or null
+    return result || null;
   } catch (err) {
+    console.error('Translation error:', err);
     return null;
   }
 }
