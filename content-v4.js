@@ -1327,14 +1327,48 @@ function betterSummarize(text, length = 35) {
   const scored = sentences.map((sentence, idx) => {
     let score = 1;
     const words = sentence.toLowerCase().split(/\s+/);
-    if (idx === 0) score += 5;
-    if (idx === sentences.length - 1) score += 4;
-    if (idx === sentences.length - 2) score += 2;
-    words.forEach(w => { if (wordFreq[w] > 1 && !stopWords.has(w)) score += Math.log(wordFreq[w] + 1); });
-    if (/\d+%/.test(sentence)) score += 6;
-    else if (/\d+/.test(sentence)) score += 2;
     const wc = words.length;
-    if (wc >= 15 && wc <= 50) score += 4;
+    
+    // Position scoring (introduction + conclusion matter more)
+    if (idx === 0) score += 8;  // Increased: intro is key
+    if (idx === sentences.length - 1) score += 6;  // Conclusion
+    if (idx === 1) score += 2;  // Early context
+    if (idx === sentences.length - 2) score += 2;  // Pre-conclusion
+    
+    // Word frequency scoring (repeated important words = key idea)
+    let importantWordCount = 0;
+    words.forEach(w => { 
+      if (wordFreq[w] && wordFreq[w] > 1 && !stopWords.has(w)) {
+        score += Math.log(wordFreq[w] + 1) * 1.5;  // Boosted
+        importantWordCount++;
+      }
+    });
+    
+    // Density of important words (sentences packed with key terms are important)
+    if (importantWordCount > 0) {
+      const density = importantWordCount / wc;
+      if (density > 0.15) score += 5;  // High density = important
+    }
+    
+    // Numerical data (stats, percentages, dates = important)
+    if (/\d+%|\$\d+|\d{4}|:\d{2}/.test(sentence)) score += 8;
+    else if (/\d+/.test(sentence)) score += 3;
+    
+    // Action words and verbs (indicate what actually happens)
+    if (/\b(found|discovered|revealed|showed|proved|created|developed|launched|announced|reported|said|explained|demonstrated)\b/i.test(sentence)) {
+      score += 6;
+    }
+    
+    // Question sentences (often signal key info)
+    if (/\?$/.test(sentence)) score += 4;
+    
+    // Length scoring (too short = incomplete, too long = padded)
+    if (wc >= 12 && wc <= 40) score += 3;  // Optimal length
+    else if (wc >= 40 && wc <= 60) score += 1;
+    
+    // Avoid pure data/metadata sentences
+    if (/^(copyright|all rights|published|updated|written|author|source)/i.test(sentence)) score -= 100;
+    
     return { sentence, score, index: idx };
   });
 
@@ -1392,28 +1426,34 @@ function formatSummary(rawSummary) {
 
 // Generate contextual section titles based on content
 function generateSectionTitle(sentences, sectionNumber) {
-  if (!sentences || sentences.length === 0) return `Section ${sectionNumber}`;
+  if (!sentences || sentences.length === 0) return `Point ${sectionNumber}`;
 
-  const firstSentence = sentences[0].toLowerCase();
+  const text = sentences.join(' ').toLowerCase();
   
-  // Detect common patterns
-  if (/^(la|le|le) france|^france|^la républ|^un état|^un pays/i.test(firstSentence)) {
-    return ['Définition', 'Présentation générale', 'Mise en contexte', 'Vue d\'ensemble'][sectionNumber % 4];
+  // Detect keywords to generate smart titles
+  const patterns = [
+    { regex: /^(la|le|les)\s+(france|chine|états|russie|inde|japon|allemagne|italie|espagne|brésil|canada|mexique|australie|royaume|suède|belgique|pays-bas|afrique|asie|europe|amérique)/i, titles: ['Présentation générale', 'Vue d\'ensemble', 'Introduction', 'Contexte'] },
+    { regex: /histoire|passé|ancien|avant|siècle|période|origines|fondation|établissement|création/i, titles: ['Historique', 'Contexte historique', 'Évolution', 'Origines'] },
+    { regex: /territoire|superficie|géogr|zone|région|climat|météo|nature|environnement|paysage|montagne|rivière|océan/i, titles: ['Géographie', 'Environnement', 'Caractéristiques géographiques', 'Localisation'] },
+    { regex: /économ|pib|industri|commerce|ressourc|produit|marché|finance|monnaie|prix|export|import/i, titles: ['Économie', 'Situation économique', 'Développement économique', 'Commerce'] },
+    { regex: /populat|habitant|démo|person|citoyen|socié|culture|langue|religion|tradition|coutume/i, titles: ['Population & Culture', 'Démographie', 'Sociologie', 'Vie culturelle'] },
+    { regex: /gouvern|régime|politiq|État|instit|admin|loi|constitution|pouvoir|président|ministre/i, titles: ['Gouvernance', 'Système politique', 'Administration', 'Cadre institutionnel'] },
+    { regex: /éducat|école|université|science|recherche|technolog|innovat|informatiq|ia|apprentissage/i, titles: ['Éducation & Science', 'Technologie', 'Recherche', 'Innovation'] },
+    { regex: /santé|médecin|maladie|hôpital|pharmacie|virus|épidémie|vaccin|traitement|bien-être/i, titles: ['Santé', 'Services médicaux', 'Bien-être', 'Épidémiologie'] },
+    { regex: /sport|jeu|compétition|olymp|athlète|victoire|match|équipe|champion|football|tennis/i, titles: ['Sports', 'Compétitions', 'Événements sportifs', 'Performance'] },
+    { regex: /guerre|conflit|militaire|armée|bataille|violence|paix|accord|traité|diplomati|alliance/i, titles: ['Contexte politique', 'Enjeux géopolitiques', 'Diplomatie', 'Sécurité'] },
+    { regex: /résult|découvert|prouvé|montré|révélé|annoncé|rapporté|constat|conclusion|preuve/i, titles: ['Constats', 'Résultats clés', 'Conclusions', 'Découvertes principales'] },
+  ];
+  
+  for (let pattern of patterns) {
+    if (pattern.regex.test(text)) {
+      return pattern.titles[sectionNumber % pattern.titles.length];
+    }
   }
-  if (/histoire|passé|ancien|avant|siècle|période/i.test(firstSentence)) {
-    return ['Historique', 'Contexte historique', 'Évolution', 'Antécédents'][sectionNumber % 4];
-  }
-  if (/territoire|superficie|géogr|zone|région|climat/i.test(firstSentence)) {
-    return ['Géographie', 'Localisation', 'Caractéristiques géographiques', 'Environnement'][sectionNumber % 4];
-  }
-  if (/économ|pib|industri|commerce|ressourc|produit/i.test(firstSentence)) {
-    return ['Économie', 'Situation économique', 'Ressources', 'Développement'][sectionNumber % 4];
-  }
-  if (/populat|habitant|démo|person|citoyen|socié/i.test(firstSentence)) {
-    return ['Population', 'Démographie', 'Sociologie', 'Statistiques'][sectionNumber % 4];
-  }
-  if (/gouvern|régime|politiq|État|instit|admin/i.test(firstSentence)) {
-    return ['Gouvernance', 'Système politique', 'Administration', 'Organisation institutionnelle'][sectionNumber % 4];
+  
+  // Fallback generic titles
+  const genericTitles = ['Point clé', 'Information importante', 'Détails', 'Aspect essentiel', 'Élément central'];
+  return genericTitles[sectionNumber % genericTitles.length];
   }
   if (/cultur|art|traditi|langue|littér|science/i.test(firstSentence)) {
     return ['Culture', 'Arts et traditions', 'Patrimoine', 'Vie culturelle'][sectionNumber % 4];
@@ -1433,25 +1473,38 @@ function generateSectionTitle(sentences, sectionNumber) {
 async function generateSummaryWithAI(text, length = 35) {
   // Vérifier que AIService est disponible
   if (!window.aiService) {
-    console.warn('[Summarizer] AIService not available, using fallback');
+    console.warn('[Summarizer] ⚠️ AIService not available, using heuristic fallback');
+    console.log('[Summarizer] 💡 Fallback will extract ~' + length + '% of original content');
     return betterSummarize(text, length);
   }
 
   try {
     // Limiter le texte à 3000 caractères pour l'API
     const textForAI = text.substring(0, 3000);
+    console.log('[Summarizer] 📡 Attempting Prompt API (Gemini Nano)...');
+    
+    const isApiAvailable = await window.aiService.checkAvailability();
+    if (!isApiAvailable) {
+      console.warn('[Summarizer] ⚠️ Prompt API not available, using heuristic fallback');
+      console.log('[Summarizer] 💡 See DIAGNOSTIC_PROMPT_API.md for activation steps');
+      return betterSummarize(text, length);
+    }
+    
+    console.log('[Summarizer] ✅ Prompt API available, sending request...');
     const result = await window.aiService.summarize(textForAI, length);
     
     // Result is either a string or null
     if (!result) {
-      console.warn('[Summarizer] AI returned null, using fallback');
+      console.warn('[Summarizer] ⚠️ API returned null, switching to fallback');
       return betterSummarize(text, length);
     }
     
+    console.log('[Summarizer] ✅ Gemini Nano summary generated successfully');
     // Return formatted result
     return formatSummary(result);
   } catch (err) {
-    console.warn('[Summarizer] AI error, using fallback:', err.message);
+    console.warn('[Summarizer] ❌ Prompt API error:', err.message);
+    console.log('[Summarizer] 💡 Using heuristic fallback, quality ~70% of original AI');
     return betterSummarize(text, length);
   }
 }
@@ -1689,16 +1742,35 @@ function parseSummaryIntoSections(summary) {
 // SIMPLE TRANSLATOR — Direct translation display
 // ============================================================================
 async function generateTranslationWithAI(text, sourceLang, targetLang) {
-  if (!window.aiService) return null;
+  if (!window.aiService) {
+    console.warn('[Translator] ⚠️ AIService not available, translation not possible');
+    console.log('[Translator] 💡 Prompt API (Gemini Nano) required for translation - see DIAGNOSTIC_PROMPT_API.md');
+    return null;
+  }
 
   try {
     const textForAI = text.substring(0, 2000);
+    console.log('[Translator] 📡 Requesting translation ' + sourceLang.toUpperCase() + ' → ' + targetLang.toUpperCase() + '...');
+    
+    const isApiAvailable = await window.aiService.checkAvailability();
+    if (!isApiAvailable) {
+      console.warn('[Translator] ⚠️ Prompt API not available');
+      console.log('[Translator] 💡 Traduction not supported sans Prompt API. Activez: chrome://flags → Prompt API for Gemini Nano');
+      return null;
+    }
+    
     const result = await window.aiService.translate(textForAI, targetLang);
     
-    // Result is either a string or null
-    return result || null;
+    if (result) {
+      console.log('[Translator] ✅ Traduction successful via Gemini Nano');
+      return result;
+    } else {
+      console.warn('[Translator] ⚠️ Translation API returned empty');
+      return null;
+    }
   } catch (err) {
-    console.error('Translation error:', err);
+    console.error('[Translator] ❌ Translation error:', err.message);
+    console.log('[Translator] 💡 Ensure Prompt API is enabled (chrome://flags)');
     return null;
   }
 }
@@ -2841,6 +2913,18 @@ function showFocusNotification(message) {
 // MESSAGE LISTENER
 // ============================================================================
 chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
+  if (req.action === 'checkPromptAPI') {
+    // Check if AIService thinks the API is available
+    const apiAvailable = window.aiService && window.aiService.isAvailable;
+    console.log('[Diagnostic] API check requested - Available:', apiAvailable);
+    
+    sendResponse({
+      apiAvailable: apiAvailable,
+      reason: apiAvailable ? 'API accessible' : 'API requires chrome://flags activation'
+    });
+    return true;
+  }
+  
   if (req.action === 'resetPositions' || req.action === 'resetButtonPositions') {
     chrome.storage.local.get(null, (data) => {
       const keys = Object.keys(data).filter(k => k.includes('-pos') && k.includes('aitools'));

@@ -446,6 +446,77 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('resetBtn').addEventListener('click', resetExtension);
 
+  // ============================================================================
+  // DIAGNOSTIC TAB - Prompt API Status Check
+  // ============================================================================
+  async function updateDiagnosticStatus() {
+    console.log('[Diagnostic] Checking Prompt API status...');
+    
+    const apiStatusEl = document.getElementById('apiStatus');
+    const geminiStatusEl = document.getElementById('geminiStatus');
+    const chromeVersionEl = document.getElementById('chromeVersion');
+    
+    // Get Chrome version from navigator
+    const chromeMatch = navigator.userAgent.match(/Chrome\/(\d+)/);
+    const chromeVersion = chromeMatch ? parseInt(chromeMatch[1]) : 'Unknown';
+    chromeVersionEl.textContent = chromeVersion >= 129 ? `✅ ${chromeVersion}` : `❌ ${chromeVersion} (besoin 129+)`;
+    
+    // Check if AIService is available and API is working
+    const activeTab = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTab.length > 0) {
+      try {
+        const response = await chrome.tabs.sendMessage(activeTab[0].id, {
+          action: 'checkPromptAPI'
+        });
+        
+        if (response && response.apiAvailable) {
+          apiStatusEl.textContent = '✅ Disponible';
+          geminiStatusEl.textContent = '✅ Accessible';
+        } else {
+          apiStatusEl.textContent = '❌ Indisponible';
+          geminiStatusEl.textContent = response?.reason || '⚠️ Vérifiez chrome://flags';
+        }
+      } catch (err) {
+        console.warn('[Diagnostic] Message to content script failed:', err.message);
+        apiStatusEl.textContent = '❓ Impossible à vérifier';
+        geminiStatusEl.textContent = '❓ Rafraîchissez la page';
+      }
+    }
+  }
+  
+  // Initial diagnostic check
+  updateDiagnosticStatus();
+  
+  // Refresh button
+  const refreshBtn = document.getElementById('refreshDiagnosticBtn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '🔄 Vérification...';
+      updateDiagnosticStatus();
+      setTimeout(() => {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '🔄 Vérifier maintenant';
+      }, 2000);
+    });
+  }
+  
+  // Open Chrome version
+  const versionBtn = document.getElementById('openChromeVersionBtn');
+  if (versionBtn) {
+    versionBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: 'chrome://version' });
+    });
+  }
+  
+  // Open Chrome flags
+  const flagsBtn = document.getElementById('openChromeUrlsBtn');
+  if (flagsBtn) {
+    flagsBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: 'chrome://flags#prompt-api-for-gemini-nano' });
+    });
+  }
+
   // Load notes
   chrome.storage.local.get('notes', (data) => {
     if (data.notes) state.notes = data.notes;
