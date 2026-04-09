@@ -49,6 +49,10 @@
       <span class="nav-icon">⚙️</span>
       <span class="nav-label">Config</span>
     </button>
+    <button class="nav-btn" data-tab="diagnostic">
+      <span class="nav-icon">🔍</span>
+      <span class="nav-label">API</span>
+    </button>
   </nav>
 
   <!-- Content -->
@@ -591,6 +595,49 @@
 
       <div class="footer">
         <p>AITools Pro v4.0 — Données stockées localement</p>
+      </div>
+    </section>
+
+    <!-- ===================== DIAGNOSTIC TAB ===================== -->
+    <section class="tab" id="diagnostic">
+      <div class="section-title">🔍 Diagnostic Prompt API</div>
+      
+      <div class="config-section">
+        <div class="config-section-title">État Actuel</div>
+        
+        <div id="apiStatusBox" style="background: var(--section-bg); padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 12px; line-height: 1.6;">
+          <div><strong>Prompt API:</strong> <span id="apiStatus">🔍 Vérification...</span></div>
+          <div><strong>Gemini Nano:</strong> <span id="geminiStatus">🔍 Vérification...</span></div>
+          <div><strong>Version Chrome:</strong> <span id="chromeVersion">🔍 Vérification...</span></div>
+          <div><strong>Page Script:</strong> <span id="pageScriptStatus">✅ Chargé</span></div>
+        </div>
+
+        <hr class="separator">
+
+        <div style="background: var(--section-bg); padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 11px; line-height: 1.6; color: var(--text-light);">
+          <strong>Comment activer Prompt API:</strong>
+          <ol style="margin: 8px 0; padding-left: 20px;">
+            <li>Ouvre <code style="background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 2px;">chrome://version</code> → Vérif version 129+</li>
+            <li>Ouvre <code style="background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 2px;">chrome://flags</code></li>
+            <li>Cherche "Prompt API for Gemini Nano"</li>
+            <li>Change "Default" → <strong>"Enabled"</strong></li>
+            <li>Redémarre le navigateur</li>
+            <li>Reviens ici, le status devrait changer ✅</li>
+          </ol>
+        </div>
+
+        <hr class="separator">
+
+        <button id="refreshDiagnosticBtn" class="btn btn-sm" style="width: 100%; margin-bottom: 8px;">🔄 Vérifier maintenant</button>
+        <button id="openChromeVersionBtn" class="btn btn-sm" style="width: 100%; margin-bottom: 8px;">📋 Vérifier version Chrome</button>
+        <button id="openChromeUrlsBtn" class="btn btn-sm" style="width: 100%;">📖 Ouvrir chrome://flags</button>
+
+        <hr class="separator" style="margin-top: 12px;">
+
+        <div style="font-size: 10px; color: var(--text-light); text-align: center; padding: 8px;">
+          Vérifiez la Console (F12) pour les logs détaillés<br/>
+          [AIinjected] et [AIService]
+        </div>
       </div>
     </section>
   </main>

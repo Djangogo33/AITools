@@ -4,9 +4,26 @@
 
 console.log('[AIinjected] ✅ Injected script loaded');
 
-// Check if API is available
-const API_AVAILABLE = !!(window.ai && window.ai.canCreateTextSession);
-console.log('[AIinjected] window.ai available:', API_AVAILABLE);
+// Retry detection - check if API becomes available later
+let API_AVAILABLE = !!(window.ai && window.ai.canCreateTextSession);
+console.log('[AIinjected] window.ai available (initial):', API_AVAILABLE);
+
+// Retry detection every 2 seconds (max 10 retries = 20 seconds)
+if (!API_AVAILABLE) {
+  let retries = 0;
+  const retryInterval = setInterval(() => {
+    if (window.ai && window.ai.canCreateTextSession) {
+      API_AVAILABLE = true;
+      console.log('[AIinjected] ✅ Prompt API became available on retry #' + retries);
+      clearInterval(retryInterval);
+    }
+    retries++;
+    if (retries > 10) {
+      console.log('[AIinjected] ⚠️ Prompt API still unavailable after 10 retries, using fallback');
+      clearInterval(retryInterval);
+    }
+  }, 2000);
+}
 
 // Listen for messages from content script
 window.addEventListener('message', async (event) => {

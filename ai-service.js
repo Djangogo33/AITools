@@ -71,25 +71,63 @@ function sendMessageToInjectedScript(type, data, timeout = 30000) {
 class AIService {
   constructor() {
     this.session = null;
-    this.isAvailable = true;
+    this.isAvailable = false;
+    this.retryCount = 0;
+    this.maxRetries = 3;
     setupMessageListener();
+    
+    // Auto-detect API availability
+    this.detectAvailability();
     console.log('[AIService] ✅ Initialized with injected script communication');
+  }
+
+  /**
+   * Auto-detect API availability with smart retry
+   */
+  async detectAvailability() {
+    // Timeout rapide pour détection (5 secondes)
+    try {
+      const success = await Promise.race([
+        this.testSummarize(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Detection timeout')), 5000)
+        )
+      ]);
+      
+      if (success) {
+        this.isAvailable = true;
+        console.log('[AIService] ✅ Prompt API is available!');
+      } else {
+        this.isAvailable = false;
+        console.log('[AIService] ⚠️ Prompt API not available, using fallback');
+      }
+    } catch (error) {
+      this.isAvailable = false;
+      console.log('[AIService] ⚠️ Prompt API unavailable:', error.message);
+    }
+  }
+
+  /**
+   * Test if Prompt API is really working
+   */
+  async testSummarize() {
+    try {
+      const result = await sendMessageToInjectedScript('AITOOLS_SUMMARIZE', {
+        text: 'Test the API',
+        length: 50
+      }, 5000);  // 5 second timeout for testing
+      
+      return !!result;
+    } catch (err) {
+      return false;
+    }
   }
 
   /**
    * Vérifier la disponibilité de l'API
    */
   async checkAvailability() {
-    try {
-      await this.summarize('test', 50);
-      this.isAvailable = true;
-      console.log('[AIService] ✅ Prompt API is available');
-      return true;
-    } catch (error) {
-      console.warn('[AIService] ⚠️ Prompt API not available:', error.message);
-      this.isAvailable = false;
-      return false;
-    }
+    return this.isAvailable;
   }
 
 
