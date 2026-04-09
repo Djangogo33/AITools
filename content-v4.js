@@ -65,6 +65,58 @@ let buttonVisibility = {
 };
 
 // ============================================================================
+// BUTTON POSITIONING SYSTEM - Smart responsive layout
+// ============================================================================
+
+const ButtonManager = {
+  buttons: [],
+  isSmallScreen: () => window.innerWidth < 768,
+  
+  registerButton(id, element) {
+    this.buttons.push({ id, element });
+    this.updatePositions();
+    window.addEventListener('resize', () => this.updatePositions());
+  },
+  
+  updatePositions() {
+    const isSmall = this.isSmallScreen();
+    const baseRight = isSmall ? '15px' : '20px';
+    const baseLeft = isSmall ? 'auto' : 'auto';
+    const baseBottom = isSmall ? '20px' : 'auto';
+    const baseTop = isSmall ? 'auto' : '20px';
+    
+    // Stack buttons vertically on mobile at bottom, desktop at top-right
+    this.buttons.forEach((btn, idx) => {
+      if (btn.element && !btn.element.parentElement) return; // element removed
+      
+      const spacing = 50; // 40px button + 10px gap
+      const positionValue = isSmall ? (idx * spacing) : (idx * spacing);
+      
+      let css = `position: fixed; z-index: ${9999 - idx}; box-shadow: 0 4px 12px rgba(0,0,0,0.15); transition: all 0.3s ease;`;
+      
+      if (isSmall) {
+        // Mobile: stack at bottom-left
+        css += `bottom: ${baseBottom}; left: 15px; top: auto; right: auto; margin-bottom: ${positionValue}px;`;
+      } else {
+        // Desktop: stack at top-right
+        css += `top: ${20 + positionValue}px; right: ${baseRight}; bottom: auto; left: auto;`;
+      }
+      
+      if (btn.element.style.cssText && btn.element.style.cssText.includes('position:fixed')) {
+        // Preserve existing styles, just update position
+        const existing = btn.element.getAttribute('data-original-css') || btn.element.style.cssText;
+        btn.element.setAttribute('data-original-css', existing);
+        btn.element.style.cssText = css;
+      }
+    });
+  },
+  
+  removeButton(id) {
+    this.buttons = this.buttons.filter(b => b.id !== id);
+  }
+};
+
+// ============================================================================
 // UTILITIES: Bug Fixes #10-16 (Memory Leaks, XSS, Storage, Observers)
 // ============================================================================
 
@@ -226,6 +278,59 @@ window.addEventListener('beforeunload', () => {
     if (!extensionEnabled) return;
 
     console.log('[AITools] ✅ Initialization complete', { extensionEnabled, darkModeEnabled });
+
+    // Inject global animations
+    if (!document.getElementById('aitools-global-animations')) {
+      const style = document.createElement('style');
+      style.id = 'aitools-global-animations';
+      style.textContent = `
+        @keyframes aitools-slide-in {
+          from { 
+            transform: translateY(20px); 
+            opacity: 0; 
+          }
+          to { 
+            transform: translateY(0); 
+            opacity: 1; 
+          }
+        }
+        @keyframes aitools-slide-out {
+          from { 
+            transform: translateY(0); 
+            opacity: 1; 
+          }
+          to { 
+            transform: translateY(20px); 
+            opacity: 0; 
+          }
+        }
+        @keyframes aitools-fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes aitools-slide-up {
+          from { 
+            transform: translate(-50%, -40%);
+            opacity: 0;
+          }
+          to { 
+            transform: translate(-50%, -50%);
+            opacity: 1;
+          }
+        }
+        @keyframes aitools-slide-down {
+          from { 
+            transform: translate(-50%, -50%);
+            opacity: 1;
+          }
+          to { 
+            transform: translate(-50%, -40%);
+            opacity: 0;
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    }
 
     // Initialiser tous les modules dans l'ordre correct
     if (darkModeEnabled) enableDarkMode();
@@ -1361,23 +1466,34 @@ function showSummaryPanel(summary) {
   const existing = document.getElementById('aitools-summary-panel');
   if (existing) existing.remove();
 
+  // Detect small screen
+  const isSmallScreen = window.innerWidth < 768;
+
   // Container with better sizing
   const toast = document.createElement('div');
   toast.id = 'aitools-summary-panel';
+  
+  const width = isSmallScreen ? 'calc(100vw - 30px)' : '420px';
+  const bottom = isSmallScreen ? '10px' : '20px';
+  const right = isSmallScreen ? '15px' : '20px';
+  const maxHeight = isSmallScreen ? '60vh' : '500px';
+  const borderRadius = isSmallScreen ? '12px' : '10px';
+  
   toast.style.cssText = `
     position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 420px;
+    bottom: ${bottom};
+    right: ${right};
+    width: ${width};
+    max-width: 500px;
     background: white;
-    border-radius: 10px;
+    border-radius: ${borderRadius};
     padding: 0;
     box-shadow: 0 8px 30px rgba(0,0,0,0.15);
     z-index: 10000;
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     display: flex;
     flex-direction: column;
-    max-height: 500px;
+    max-height: ${maxHeight};
     animation: aitools-toast-slide 0.3s ease forwards;
   `;
 
@@ -1387,38 +1503,41 @@ function showSummaryPanel(summary) {
     padding: 16px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    border-radius: 10px 10px 0 0;
+    border-radius: ${borderRadius} ${borderRadius} 0 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
   `;
 
   const title = document.createElement('h3');
-  title.style.cssText = 'margin: 0; font-size: 15px; font-weight: 600;';
+  title.style.cssText = 'margin: 0; font-size: 15px; font-weight: 600; flex-grow: 1;';
   title.textContent = '📋 Résumé';
   header.appendChild(title);
 
   // Copy button
   const copyBtn = document.createElement('button');
-  copyBtn.textContent = '📋 Copier';
+  copyBtn.textContent = isSmallScreen ? '📋' : '📋 Copier';
   copyBtn.style.cssText = `
     background: rgba(255,255,255,0.2);
     border: none;
     color: white;
-    padding: 6px 12px;
+    padding: 6px ${isSmallScreen ? '8px' : '12px'};
     border-radius: 5px;
     cursor: pointer;
     font-size: 11px;
     font-weight: 600;
-    transition: background 0.2s;
+    transition: all 0.2s;
+    white-space: nowrap;
   `;
   copyBtn.addEventListener('mouseover', () => { copyBtn.style.background = 'rgba(255,255,255,0.3)'; });
   copyBtn.addEventListener('mouseout', () => { copyBtn.style.background = 'rgba(255,255,255,0.2)'; });
   copyBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(summary);
-    copyBtn.textContent = '✅ Copié!';
-    setTimeout(() => { copyBtn.textContent = '📋 Copier'; }, 2000);
+    const origText = isSmallScreen ? '📋' : '📋 Copier';
+    copyBtn.textContent = '✅';
+    setTimeout(() => { copyBtn.textContent = origText; }, 2000);
   });
   header.appendChild(copyBtn);
 
@@ -1437,7 +1556,8 @@ function showSummaryPanel(summary) {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.2s;
+    transition: all 0.2s;
+    flex-shrink: 0;
   `;
   closeBtn.addEventListener('mouseover', () => { closeBtn.style.background = 'rgba(255,255,255,0.3)'; });
   closeBtn.addEventListener('mouseout', () => { closeBtn.style.background = 'rgba(255,255,255,0.2)'; });
@@ -1454,8 +1574,8 @@ function showSummaryPanel(summary) {
   content.style.cssText = `
     flex: 1;
     overflow-y: auto;
-    padding: 16px;
-    font-size: 13px;
+    padding: ${isSmallScreen ? '12px' : '16px'};
+    font-size: ${isSmallScreen ? '12px' : '13px'};
     line-height: 1.7;
     color: #333;
   `;
@@ -1467,8 +1587,8 @@ function showSummaryPanel(summary) {
     // Section title
     const sectionTitle = document.createElement('h4');
     sectionTitle.style.cssText = `
-      margin: ${idx === 0 ? '0 0 8px 0' : '16px 0 8px 0'};
-      font-size: 13px;
+      margin: ${idx === 0 ? '0 0 8px 0' : '14px 0 8px 0'};
+      font-size: ${isSmallScreen ? '11px' : '13px'};
       font-weight: 700;
       color: #667eea;
       text-transform: uppercase;
@@ -1483,7 +1603,7 @@ function showSummaryPanel(summary) {
       margin: 0 0 12px 0;
       padding-left: 12px;
       border-left: 3px solid #667eea;
-      font-size: 12.5px;
+      font-size: ${isSmallScreen ? '11px' : '12.5px'};
       line-height: 1.6;
       color: #555;
     `;
@@ -1806,13 +1926,14 @@ function showTranslationPanel(original, translated, sourceLang, targetLang) {
   header.appendChild(closeBtn);
   modal.appendChild(header);
 
-  // Content area (two columns)
+  // Content area (two columns on desktop, one on mobile)
+  const isSmallScreen = window.innerWidth < 768;
   const contentWrapper = document.createElement('div');
   contentWrapper.style.cssText = `
     flex: 1;
     overflow-y: auto;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: ${isSmallScreen ? '1fr' : '1fr 1fr'};
     gap: 0;
     min-height: 300px;
   `;
@@ -1820,31 +1941,32 @@ function showTranslationPanel(original, translated, sourceLang, targetLang) {
   // Original text column
   const originalCol = document.createElement('div');
   originalCol.style.cssText = `
-    padding: 20px;
-    border-right: 1px solid #e5e7eb;
+    padding: ${isSmallScreen ? '16px' : '20px'};
+    border-right: ${isSmallScreen ? 'none' : '1px solid #e5e7eb'};
+    border-bottom: ${isSmallScreen ? '1px solid #e5e7eb' : 'none'};
     overflow-y: auto;
   `;
   const originalLabel = document.createElement('div');
-  originalLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: #999; text-transform: uppercase; margin-bottom: 10px;';
+  originalLabel.style.cssText = `font-size: 11px; font-weight: 600; color: #999; text-transform: uppercase; margin-bottom: 12px;`;
   originalLabel.textContent = '📄 Texte original';
   originalCol.appendChild(originalLabel);
   
   const originalText = document.createElement('div');
-  originalText.style.cssText = 'color: #333; line-height: 1.7; font-size: 14px; white-space: pre-wrap; word-break: break-word;';
+  originalText.style.cssText = `color: #333; line-height: 1.7; font-size: ${isSmallScreen ? '13px' : '14px'}; white-space: pre-wrap; word-break: break-word;`;
   originalText.textContent = original;
   originalCol.appendChild(originalText);
   contentWrapper.appendChild(originalCol);
 
   // Translated text column
   const translatedCol = document.createElement('div');
-  translatedCol.style.cssText = 'padding: 20px; overflow-y: auto;';
+  translatedCol.style.cssText = `padding: ${isSmallScreen ? '16px' : '20px'}; overflow-y: auto;`;
   const translatedLabel = document.createElement('div');
-  translatedLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; margin-bottom: 10px;';
+  translatedLabel.style.cssText = `font-size: 11px; font-weight: 600; color: #667eea; text-transform: uppercase; margin-bottom: 12px;`;
   translatedLabel.textContent = '✨ Traduction';
   translatedCol.appendChild(translatedLabel);
   
   const translatedText = document.createElement('div');
-  translatedText.style.cssText = 'color: #333; line-height: 1.7; font-size: 14px; white-space: pre-wrap; word-break: break-word;';
+  translatedText.style.cssText = `color: #333; line-height: 1.7; font-size: ${isSmallScreen ? '13px' : '14px'}; white-space: pre-wrap; word-break: break-word;`;
   translatedText.textContent = translated;
   translatedCol.appendChild(translatedText);
   contentWrapper.appendChild(translatedCol);
@@ -1854,18 +1976,19 @@ function showTranslationPanel(original, translated, sourceLang, targetLang) {
   // Footer with buttons
   const footer = document.createElement('div');
   footer.style.cssText = `
-    padding: 15px 20px;
+    padding: 12px ${isSmallScreen ? '12px' : '20px'};
     background: #f9fafb;
     border-top: 1px solid #e5e7eb;
     display: flex;
-    gap: 10px;
-    justify-content: flex-end;
+    gap: ${isSmallScreen ? '8px' : '10px'};
+    justify-content: ${isSmallScreen ? 'stretch' : 'flex-end'};
+    flex-wrap: wrap;
   `;
 
   const copyBtn = document.createElement('button');
-  copyBtn.innerHTML = '📋 Copier traduction';
+  copyBtn.innerHTML = isSmallScreen ? '📋' : '📋 Copier traduction';
   copyBtn.style.cssText = `
-    padding: 10px 16px;
+    padding: 10px ${isSmallScreen ? '10px' : '16px'};
     background: #10b981;
     color: white;
     border: none;
@@ -1874,12 +1997,15 @@ function showTranslationPanel(original, translated, sourceLang, targetLang) {
     font-weight: 500;
     font-size: 13px;
     transition: all 0.2s;
+    flex: ${isSmallScreen ? '1' : 'auto'};
+    white-space: nowrap;
   `;
   copyBtn.onmouseover = () => copyBtn.style.background = '#059669';
   copyBtn.onmouseout = () => copyBtn.style.background = '#10b981';
   copyBtn.addEventListener('click', () => {
     navigator.clipboard.writeText(translated).then(() => {
-      copyBtn.innerHTML = '✅ Copié!';
+      const origText = isSmallScreen ? '📋' : '📋 Copier traduction';
+      copyBtn.innerHTML = '✅';
       copyBtn.style.background = '#34d399';
       setTimeout(() => {
         copyBtn.innerHTML = '📋 Copier traduction';
@@ -2022,13 +2148,15 @@ function addSummarizerButton() {
   const btn = document.createElement('button');
   btn.id = 'aitools-summarize-btn';
   btn.style.cssText = `
-    position: fixed; top: 20px; right: 100px;
+    position: fixed; top: 20px; right: 20px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white; border: none; padding: 10px 14px; border-radius: 6px;
+    color: white; border: none; padding: 10px 14px; border-radius: 8px;
     font-size: 12px; font-weight: 600; cursor: grab; z-index: 9999;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     font-family: -apple-system, BlinkMacSystemFont, sans-serif;
     display: flex; align-items: center; gap: 8px; user-select: none;
+    transition: all 0.3s ease; animation: aitools-slide-in 0.4s ease;
+    hover: { transform: translateY(-2px), box-shadow: 0 6px 16px rgba(102, 126, 234, 0.3) }
   `;
 
   const textSpan = document.createElement('span');
@@ -2037,33 +2165,51 @@ function addSummarizerButton() {
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'aitools-close-btn';
-  closeBtn.textContent = '✕'; // Bug #9 Fix: textContent instead of innerHTML
+  closeBtn.textContent = '✕';
   closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;
-    border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
+    border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;transition:all 0.2s;`;
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     elementVisibility.summarizerBtn = false;
     chrome.storage.local.set({ 'aitools-visibility': elementVisibility });
-    btn.remove();
+    btn.style.animation = 'aitools-slide-out 0.3s ease';
+    setTimeout(() => { btn.remove(); ButtonManager.removeButton('summarizer'); }, 300);
   });
+  
+  closeBtn.addEventListener('mouseover', () => closeBtn.style.background = 'rgba(255,255,255,0.5)');
+  closeBtn.addEventListener('mouseout', () => closeBtn.style.background = 'rgba(255,255,255,0.3)');
 
   btn.appendChild(textSpan);
   btn.appendChild(closeBtn);
 
   btn.addEventListener('click', async (e) => {
-    if (!e.target.closest('.aitools-close-btn')) {
+    if (!e.target.closest('.aitools-close-btn') && !e.target.closest('.aitools-close-btn')) {
       textSpan.textContent = '⏳ Résumé...';
       btn.disabled = true;
+      btn.style.opacity = '0.7';
+      
       const rawText = summarizePage();
-      // Try to use AI first, fallback to old method if unavailable
       const summary = await generateSummaryWithAI(rawText, extensionSettings.summarizerLength || 35);
+      
       showSummaryPanel(summary);
       textSpan.textContent = '✂️ Résumer';
       btn.disabled = false;
+      btn.style.opacity = '1';
     }
+  });
+  
+  btn.addEventListener('mouseover', () => {
+    btn.style.transform = 'translateY(-2px)';
+    btn.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.3)';
+  });
+  
+  btn.addEventListener('mouseout', () => {
+    btn.style.transform = 'translateY(0)';
+    btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
   });
 
   document.body.appendChild(btn);
+  ButtonManager.registerButton('summarizer', btn);
 
   if (window.layoutManager) {
     window.layoutManager.registerElement('aitools-summarizer-btn', btn, { width: 140, height: 40, priority: 2, draggable: true });
@@ -2195,12 +2341,13 @@ function addTranslatorButton(sourceLang, targetLang) {
   const btn = document.createElement('button');
   btn.id = 'aitools-translator-btn';
   btn.style.cssText = `
-    position:fixed;top:60px;right:100px;
-    background:linear-gradient(135deg,#4CAF50 0%,#45a049 100%);
-    color:white;border:none;padding:10px 14px;border-radius:6px;font-size:12px;font-weight:600;
-    cursor:grab;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.15);
-    font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-    display:flex;align-items:center;gap:8px;user-select:none;
+    position: fixed; top: 70px; right: 20px;
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: white; border: none; padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    cursor: grab; z-index: 9998; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    display: flex; align-items: center; gap: 8px; user-select: none;
+    transition: all 0.3s ease; animation: aitools-slide-in 0.4s ease 0.1s both;
   `;
 
   const textSpan = document.createElement('span');
@@ -2209,23 +2356,28 @@ function addTranslatorButton(sourceLang, targetLang) {
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'aitools-close-btn';
-  closeBtn.textContent = '✕'; // Bug #9 Fix: textContent instead of innerHTML
+  closeBtn.textContent = '✕';
   closeBtn.style.cssText = `background:rgba(255,255,255,0.3);border:none;color:white;width:18px;height:18px;
-    border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;`;
-  closeBtn.addEventListener('click', (e) => { e.stopPropagation(); btn.style.display = 'none'; });
+    border-radius:3px;cursor:pointer;font-size:12px;padding:0;display:flex;align-items:center;justify-content:center;transition:all 0.2s;`;
+  closeBtn.addEventListener('click', (e) => { 
+    e.stopPropagation(); 
+    btn.style.animation = 'aitools-slide-out 0.3s ease';
+    setTimeout(() => { btn.remove(); ButtonManager.removeButton('translator'); }, 300);
+  });
+  
+  closeBtn.addEventListener('mouseover', () => closeBtn.style.background = 'rgba(255,255,255,0.5)');
+  closeBtn.addEventListener('mouseout', () => closeBtn.style.background = 'rgba(255,255,255,0.3)');
 
   btn.appendChild(textSpan);
   btn.appendChild(closeBtn);
 
-  // Bug #9 fix: use extractRelevantPageText() instead of document.body.innerText
   btn.addEventListener('click', async (e) => {
     if (!e.target.closest('.aitools-close-btn')) {
       textSpan.textContent = '⏳ Traduction...';
       btn.disabled = true;
+      btn.style.opacity = '0.7';
       
       const relevantText = extractRelevantPageText(3000);
-      
-      // Use AI for better translation
       const translated = await generateTranslationWithAI(relevantText, sourceLang, targetLang);
       
       if (translated && translated.trim().length > 0) {
@@ -2233,16 +2385,27 @@ function addTranslatorButton(sourceLang, targetLang) {
         showTranslationPanel(relevantText.substring(0, 2000), translated, sourceLang, targetLang);
       } else {
         console.warn('[Translator] ⚠️ Translation failed or empty, showing error');
-        // Show error message
         showTranslationError(sourceLang, targetLang);
       }
       
       textSpan.textContent = '🌐 Traduire';
       btn.disabled = false;
+      btn.style.opacity = '1';
     }
+  });
+  
+  btn.addEventListener('mouseover', () => {
+    btn.style.transform = 'translateY(-2px)';
+    btn.style.boxShadow = '0 6px 16px rgba(76, 175, 80, 0.3)';
+  });
+  
+  btn.addEventListener('mouseout', () => {
+    btn.style.transform = 'translateY(0)';
+    btn.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
   });
 
   document.body.appendChild(btn);
+  ButtonManager.registerButton('translator', btn);
 
   if (window.layoutManager) {
     window.layoutManager.registerElement('aitools-translator-btn', btn, { width: 130, height: 40, priority: 3, draggable: true });
