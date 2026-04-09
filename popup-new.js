@@ -347,8 +347,9 @@ document.addEventListener('DOMContentLoaded', () => {
     notifyContentScript({ action: 'updateSettings', settings: { summarizerLang: v } });
   });
 
-  setupSlider('aiDetectorSensitivity', 'aiSensValue', 'aiDetectorSensitivity');
-  setupSlider('summarizerLength', 'sumLenValue', 'summarizerLength');
+  // New AI Settings
+  setupSlider('summarizerLength', 'summarizerLengthValue', 'summarizerLength');
+  setupSlider('aiDetectorSensitivity', 'aiDetectorSensitivityValue', 'aiDetectorSensitivity');
 
   // ---- SETTINGS TAB ----
   const layoutSelect = document.getElementById('layoutSelect');

@@ -1,49 +1,65 @@
 # AITools Pro v4.0 - TODO Prochaine Session
 
-**Date**: 8 avril 2026  
-**État**: Extension fonctionnelle avec fallback intelligent  
-**Prochaine priorité**: TESTER réellement + polish final
+**Date**: 9 avril 2026  
+**État**: Extension HIGH-POLISH avec Settings avancés  
+**Prochaine priorité**: TESTER réellement avant déploiement
 
 ---
 
-## 🔴 BLOQUANTS
+## ✅ COMPLÉTÉ CETTE SESSION
 
-### 1. TESTER VRAIE PROMPT API
-- ✅ Architecture ready (page script injecté)
-- ❌ Indisponible actuellement: `window.ai available: false`
-- **Test requis**: Chrome 129+ avec flag "Prompt API for Gemini Nano" activé
+### UX Complètement Polie
+- ✅ ButtonManager - positionnement intelligent desktop/mobile
+- ✅ Animations slide-in/out avec stagger delays
+- ✅ Hover effects smooth (translateY + shadow)
+- ✅ Panels responsive (résumé 60vh mobile, 500px desktop)
+- ✅ Traduction colonnes stacking sur mobile
+- ✅ Animations globales injected au boot
 
-### 2. TESTER SUR PLUSIEURS PAGES
+### Settings Panel Avancé
+- ✅ Slider "Longueur résumé" (15-80%)
+- ✅ Select "Langue traduction" (FR, EN, ES, DE, IT, PT, JA, ZH)
+- ✅ Slider "Sensibilité détecteur IA" (20-100%)
+- ✅ Select "Langue résumé" (FR, EN, Auto)
+
+---
+
+## 🔴 BLOQUANTS (À FAIRE ASAP)
+
+### 1. TESTER VRAIE PROMPT API ⚠️
+- Architecture prête (page script injecté)
+- Mais `window.ai available: false` sur ta machine
+- **BESOIN**: Chrome 129+ + `chrome://flags` → "Prompt API for Gemini Nano" = Enabled
+- Puis tester résumé + traduction
+
+### 2. TESTER SUR PLUSIEURS SITES
 - [ ] Wikipedia ✅ (déjà testé)
-- [ ] Reddit, Medium, News sites
-- [ ] Vérifier résumé + traduction
-- [ ] Chercher dégradation UX/perf
+- [ ] Reddit, Medium, News articles
+- [ ] Forums (Quora, Stack Overflow)
+- [ ] Vérifier résumé + traduction OK
+- [ ] Checker pas de bugs/crashes
 
 ---
 
-## 🟡 IMPORTANT
+## 🟡 IMPORTANT (avant production)
 
-### 3. PEAUFINER UX
-- [ ] Boutons résumé/traduction: positions, visibilité
-- [ ] Summary panel: copier, fermer, animations
-- [ ] Translation panel: colonnes responsive
-- [ ] Focus Mode, Cookie blocker: test réel
+### 3. VÉRIFIER PERFORMANCE
+- [ ] Memory leaks? (cleanup code ✅ en place)
+- [ ] Sessions longues (30+ min) → stable?
+- [ ] DevTools Memory profiler test
 
-### 4. PERFORMANCE
-- [ ] Memory leaks? (cleanup code ✅)
-- [ ] Sessions longues (30+ min)
-- [ ] DevTools Memory profiler
-
-### 5. LANGUE
-- [ ] Détection texte mélangé, court, caractères spéciaux
+### 4. DÉTECTION LANGUE
+- [ ] Texte mélangé (EN + FR) → correct?
+- [ ] Texte court (< 100 chars) → détecté?
+- [ ] Caractères spéciaux (日本語, العربية)
 
 ---
 
-## 🟢 OPTIONNEL
+## 🟢 OPTIONNEL (nice-to-have)
 
-- [ ] Settings panel (utilisateur change options)
-- [ ] Améliorer fallback résumé
-- [ ] Icon badge count
+- [ ] Améliorer heuristique résumé (fallback)
+- [ ] Icon badge count (nb notes)
+- [ ] Animations plus avancées (parallax?)
 
 ---
 
@@ -54,26 +70,34 @@
 | Page script injection | ✅ |
 | IPC messaging | ✅ |
 | Résumé fallback | ✅ |
-| Traduction (Prompt API) | ⚠️ Indisponible |
+| Traduction (Prompt API) | ⚠️ Pas accès |
 | Memory cleanup | ✅ |
 | XSS prevention | ✅ |
+| **Settings Panel** | ✅ |
+| **Animations** | ✅ |
+| **Responsiveness** | ✅ |
 
 ---
 
-## 🚀 AVANT DÉPLOIEMENT
+## 🚀 CHECKLIST AVANT DÉPLOIEMENT
 
 1. ✅ Bugs fixés
 2. ✅ Architecture robuste
-3. ❌ Tester Prompt API réelle
-4. ❌ Tester 5-10 sites différents
-5. ❌ Vérifier perf machine réelle
+3. ✅ UX polie + animations
+4. ✅ Settings configurables
+5. ❌ Tester Prompt API réelle
+6. ❌ Tester 5-10 sites différents
+7. ❌ Vérifier perf machine réelle
+8. ❌ Test final complet
 
-**Tempo estimée**: 2-3h
+**Tempo estimée**: 2-3h testing
 
 ---
 
-## 💡 NOTES
+## 💡 NOTES IMPORTANTES
 
-- Prompt API absence = normal, fallback heuristique OK
-- Page script = bonne approche pour window.ai access
-- Prêt à déployer après tests
+- Prompt API unavailable = expected, fallback OK (heuristique)
+- Page script architecture = correct pour window.ai access
+- Extension complètement prête sauf testing réel
+- 0 erreurs JavaScript connus
+

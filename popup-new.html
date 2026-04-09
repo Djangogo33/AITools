@@ -498,6 +498,56 @@
         </label>
       </div>
 
+      <!-- PARAMÈTRES IA -->
+      <div class="config-section">
+        <div class="config-section-title">🧠 Paramètres IA</div>
+        
+        <!-- Longueur Résumé -->
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;">
+          📋 Longueur résumé: <span id="summarizerLengthValue">35</span>%
+        </label>
+        <input type="range" id="summarizerLength" min="15" max="80" value="35" style="width:100%;cursor:pointer;margin-bottom:12px;">
+        <p style="font-size:10px;color:var(--text-light);margin-bottom:12px;">15% = très court | 50% = moyen | 80% = détaillé</p>
+
+        <hr class="separator">
+
+        <!-- Langue Traduction -->
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;">
+          🌐 Langue cible pour traduction:
+        </label>
+        <select id="translatorTargetLang" style="width:100%;padding:7px;margin-bottom:12px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--section-bg);color:var(--text);">
+          <option value="fr">🇫🇷 Français</option>
+          <option value="en">🇬🇧 Anglais</option>
+          <option value="es">🇪🇸 Espagnol</option>
+          <option value="de">🇩🇪 Allemand</option>
+          <option value="it">🇮🇹 Italien</option>
+          <option value="pt">🇵🇹 Portugais</option>
+          <option value="ja">🇯🇵 Japonais</option>
+          <option value="zh">🇨🇳 Chinois</option>
+        </select>
+
+        <hr class="separator">
+
+        <!-- Sensibilité Détecteur IA -->
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;">
+          🔍 Sensibilité détecteur IA: <span id="aiDetectorSensitivityValue">60</span>%
+        </label>
+        <input type="range" id="aiDetectorSensitivity" min="20" max="100" value="60" style="width:100%;cursor:pointer;margin-bottom:12px;">
+        <p style="font-size:10px;color:var(--text-light);margin-bottom:12px;">20% = strict (peu de faux positifs) | 60% = équilibré | 100% = sensible (plus de détections)</p>
+
+        <hr class="separator">
+
+        <!-- Langue Résumé -->
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;">
+          📝 Langue résumé:
+        </label>
+        <select id="summarizerLang" style="width:100%;padding:7px;margin-bottom:12px;font-size:12px;border:1px solid var(--border);border-radius:4px;background:var(--section-bg);color:var(--text);">
+          <option value="fr">🇫🇷 Français</option>
+          <option value="en">🇬🇧 Anglais</option>
+          <option value="auto">🔄 Auto-détecté</option>
+        </select>
+      </div>
+
       <!-- SYSTÈME -->
       <div class="config-section">
         <div class="config-section-title">⚙️ Système</div>
