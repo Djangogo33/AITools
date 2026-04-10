@@ -2,10 +2,10 @@
 // v4.1.0 - Supports both Prompt API (Nano) and OpenAI API
 
 // ============================================================================
-// CONFIGURATION - Add your OpenAI API key here
+// CONFIGURATION - OpenAI API Integration
 // ============================================================================
-const OPENAI_API_KEY = 'sk-proj-YOUR_KEY_HERE'; // Replace with your key from platform.openai.com
-const OPENAI_MODEL = 'gpt-4o-mini'; // Fast and cheap alternative
+const OPENAI_API_KEY = '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';
+const OPENAI_MODEL = 'gpt-4o-mini'; // Fast and cheap
 
 // Internal message listener setup
 let messageResponseHandlers = new Map();
