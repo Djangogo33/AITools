@@ -1,11 +1,17 @@
-// AITools AI Service - OpenAI ChatGPT Integration
-// v4.1.0 - Supports both Prompt API (Nano) and OpenAI API
+// AITools AI Service - Gemini Nano + OpenAI Fallback
+// v4.0.0 - Supports Prompt API (Nano) and OpenAI via Background Service Worker
 
 // ============================================================================
 // CONFIGURATION - OpenAI API Integration
 // ============================================================================
 const OPENAI_API_KEY = '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';
-const OPENAI_MODEL = 'gpt-4o-mini'; // Fast and cheap
+const OPENAI_MODEL = 'gpt-4o-mini';
+
+// ============================================================================
+// USER MODE PREFERENCE
+// ============================================================================
+let AI_MODE = 'free'; // 'free' (gratuit) ou 'smart' (IA)
+// Charges depuis chrome.storage au démarrage
 
 // Internal message listener setup
 let messageResponseHandlers = new Map();
@@ -81,6 +87,12 @@ class AIService {
     this.retryCount = 0;
     this.maxRetries = 3;
     setupMessageListener();
+    
+    // Load user's mode preference
+    chrome.storage.local.get('aiMode', (data) => {
+      AI_MODE = data.aiMode || 'free';
+      console.log('[AIService] 📌 Mode chargé:', AI_MODE === 'free' ? '💰 Gratuit' : '🧠 IA Smart');
+    });
     
     // Auto-detect API availability
     this.detectAvailability();
@@ -246,7 +258,47 @@ class AIService {
   }
 
   /**
-   * OpenAI API Call - Fallback when Prompt API unavailable
+   * LibreTranslate API - Free translation, no auth needed
+   * @param {string} text - Text to translate
+   * @param {string} targetLang - Target language code (fr, en, es, etc)
+   */
+  async callLibreTranslate(text, targetLang = 'fr') {
+    try {
+      console.log(`[AIService] 🌍 Calling LibreTranslate for ${targetLang}...`);
+      
+      const response = await fetch('https://api.libretranslate.de/translate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          q: text.substring(0, 5000),
+          source: 'auto',
+          target: targetLang
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.translatedText) {
+        console.log(`[AIService] ✅ Translation via LibreTranslate successful`);
+        return data.translatedText;
+      } else {
+        throw new Error('Empty translation result');
+      }
+
+    } catch (error) {
+      console.error('[AIService] ⚠️ LibreTranslate failed:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * OpenAI API Call via Background Service Worker (NO CORS ISSUES)
    * @param {string} text - Text to process
    * @param {string} task - 'summarize' or 'translate'
    * @param {number} length - Summary length %
@@ -254,80 +306,31 @@ class AIService {
    */
   async callOpenAI(text, task = 'summarize', length = 35, targetLang = 'fr') {
     try {
-      if (OPENAI_API_KEY === 'sk-proj-YOUR_KEY_HERE') {
-        console.warn('[AIService] ⚠️ OpenAI API key not configured. Add your key to ai-service.js');
-        return null;
-      }
-
-      const systemPrompt = task === 'summarize' 
-        ? `You are a professional summarizer. Summarize the text to about ${length}% of its original length. Keep key information. Return ONLY the summary, no explanations.`
-        : `You are a professional translator. Translate the text to ${targetLang}. Return ONLY the translation, no explanations or comments.`;
-
-      // Retry logic for rate limits
-      let retries = 3;
-      let lastError = null;
+      console.log(`[AIService] 📡 Sending ${task} request to Background Worker...`);
       
-      while (retries > 0) {
-        try {
-          const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${OPENAI_API_KEY}`
-            },
-            body: JSON.stringify({
-              model: OPENAI_MODEL,
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: text.substring(0, 3000) }
-              ],
-              temperature: 0.7,
-              max_tokens: 1000
-            })
-          });
-
-          // Handle rate limit (429)
-          if (response.status === 429) {
-            retries--;
-            if (retries > 0) {
-              const waitTime = Math.pow(2, 3 - retries) * 2500; // 5s, 10s, 20s
-              console.warn(`[AIService] ⏱️ Rate limit, retrying in ${waitTime/1000}s (${retries} left)...`);
-              await new Promise(resolve => setTimeout(resolve, waitTime));
-              continue;
+      // Use chrome.runtime.sendMessage to avoid CORS issues
+      return new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            action: 'callOpenAI',
+            text,
+            task,
+            length,
+            targetLang
+          },
+          (response) => {
+            if (response && response.success) {
+              console.log(`[AIService] ✅ ${task} via OpenAI successful`);
+              resolve(response.result);
+            } else {
+              console.warn(`[AIService] ⚠️ OpenAI failed:`, response?.error);
+              reject(new Error(response?.error || 'OpenAI request failed'));
             }
-            throw new Error('Rate limited - max retries reached');
           }
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-
-          const data = await response.json();
-          const result = data.choices?.[0]?.message?.content;
-          
-          if (result) {
-            console.log(`[AIService] ✅ ${task} via OpenAI successful`);
-            return result;
-          } else {
-            throw new Error('No content in response');
-          }
-
-        } catch (err) {
-          lastError = err;
-          retries--;
-          if (retries > 0) {
-            const waitTime = Math.pow(2, 3 - retries) * 2500;
-            console.warn(`[AIService] ⏱️ Error: ${err.message}, retrying in ${waitTime/1000}s...`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-          }
-        }
-      }
-
-      console.error('[AIService] ❌ OpenAI request failed after retries:', lastError?.message);
-      return null;
-
+        );
+      });
     } catch (error) {
-      console.error('[AIService] ❌ OpenAI request failed:', error.message);
+      console.error('[AIService] ❌ OpenAI call failed:', error.message);
       return null;
     }
   }
@@ -348,18 +351,53 @@ class AIService {
   }
 
   /**
-   * Traduire avec fallback OpenAI
+   * Traduire avec fallback basé sur le mode
+   * Mode 'free': LibreTranslate (gratuit) → null
+   * Mode 'smart': Nano → OpenAI → null
    */
   async translateWithFallback(text, targetLang = 'fr') {
-    // Try Prompt API first
+    // Try Prompt API first (always)
     if (this.isAvailable) {
       const result = await this.translate(text, targetLang);
       if (result) return result;
     }
     
-    // Fallback to OpenAI
-    console.log('[AIService] 📡 Falling back to OpenAI for translation');
-    return this.callOpenAI(text, 'translate', 35, targetLang);
+    // Mode-specific fallback
+    if (AI_MODE === 'free') {
+      // FREE MODE: Use LibreTranslate (no cost, no auth)
+      console.log('[AIService] 💰 Mode Gratuit: Utilisant LibreTranslate');
+      return this.callLibreTranslate(text, targetLang);
+    } else {
+      // SMART MODE: Try OpenAI
+      console.log('[AIService] 🧠 Mode IA: Utilisant OpenAI');
+      return this.callOpenAI(text, 'translate', 35, targetLang);
+    }
+  }
+
+  /**
+   * Terminer la session proprement
+   */
+  async destroy() {
+    try {
+      this.session = null;
+      console.log('[AIService] ✅ Session cleaned up');
+    } catch (error) {
+      console.error('[AIService] Error during cleanup:', error);
+    }
+  }
+
+  /**
+   * Changer les préférences - NOT USED (kept for compatibility)
+   */
+  static setPreferences(prefs) {
+    console.log('[AIService] Note: Direct AI provider selection not implemented');
+  }
+
+  /**
+   * Obtenir les préférences - NOT USED (kept for compatibility)
+   */
+  static getPreferences() {
+    return { fallbackOnly: true };
   }
 
   /**

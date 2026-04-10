@@ -159,4 +159,98 @@ chrome.runtime.onInstalled.addListener((details) => {
       }
     });
   }
+
+  // ============================================================================
+  // CALL OPENAI API - NO CORS RESTRICTIONS IN BACKGROUND
+  // ============================================================================
+  if (message.action === 'callOpenAI') {
+    const OPENAI_API_KEY = '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';
+    const OPENAI_MODEL = 'gpt-4o-mini';
+    
+    const { text, task = 'summarize', length = 35, targetLang = 'fr' } = message;
+
+    (async () => {
+      try {
+        if (OPENAI_API_KEY === 'sk-proj-YOUR_KEY_HERE') {
+          console.warn('[Background] ⚠️ OpenAI API key not configured');
+          sendResponse({ success: false, error: 'OpenAI API key not configured' });
+          return;
+        }
+
+        const systemPrompt = task === 'summarize'
+          ? `You are a professional summarizer. Summarize the text to about ${length}% of its original length. Keep key information. Return ONLY the summary, no explanations.`
+          : `You are a professional translator. Translate the text to ${targetLang}. Return ONLY the translation, no explanations or comments.`;
+
+        // Retry logic for rate limits
+        let retries = 3;
+        let lastError = null;
+        
+        while (retries > 0) {
+          try {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+              },
+              body: JSON.stringify({
+                model: OPENAI_MODEL,
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'user', content: text.substring(0, 3000) }
+                ],
+                temperature: 0.7,
+                max_tokens: 1000
+              })
+            });
+
+            // Handle rate limit (429)
+            if (response.status === 429) {
+              retries--;
+              if (retries > 0) {
+                const waitTime = Math.pow(2, 3 - retries) * 2500; // 5s, 10s, 20s
+                console.warn(`[Background] ⏱️ Rate limit, retrying in ${waitTime/1000}s...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+                continue;
+              }
+              throw new Error('Rate limited - max retries reached');
+            }
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            const result = data.choices?.[0]?.message?.content;
+
+            if (result) {
+              console.log(`[Background] ✅ ${task} via OpenAI successful`);
+              sendResponse({ success: true, result });
+              return;
+            } else {
+              throw new Error('No content in response');
+            }
+
+          } catch (err) {
+            lastError = err;
+            retries--;
+            if (retries > 0) {
+              const waitTime = Math.pow(2, 3 - retries) * 2500;
+              console.warn(`[Background] ⏱️ Error: ${err.message}, retrying in ${waitTime/1000}s...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+          }
+        }
+
+        console.error('[Background] ❌ OpenAI request failed after retries:', lastError?.message);
+        sendResponse({ success: false, error: lastError?.message || 'OpenAI request failed' });
+
+      } catch (error) {
+        console.error('[Background] ❌ OpenAI call failed:', error.message);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+
+    return true; // Keep listener alive for async response
+  }
 });

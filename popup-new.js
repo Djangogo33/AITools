@@ -347,6 +347,12 @@ document.addEventListener('DOMContentLoaded', () => {
     notifyContentScript({ action: 'updateSettings', settings: { summarizerLang: v } });
   });
 
+  // AI Mode Selection
+  setupSelectSync('aiMode', 'aiMode', (v) => {
+    const modeName = v === 'free' ? '💰 Gratuit' : '🧠 IA Smart';
+    showToast(`Mode: ${modeName}`);
+  });
+
   // New AI Settings
   setupSlider('summarizerLength', 'summarizerLengthValue', 'summarizerLength');
   setupSlider('aiDetectorSensitivity', 'aiDetectorSensitivityValue', 'aiDetectorSensitivity');
