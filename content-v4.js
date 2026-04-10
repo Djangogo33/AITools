@@ -1454,17 +1454,6 @@ function generateSectionTitle(sentences, sectionNumber) {
   // Fallback generic titles
   const genericTitles = ['Point clé', 'Information importante', 'Détails', 'Aspect essentiel', 'Élément central'];
   return genericTitles[sectionNumber % genericTitles.length];
-  }
-  if (/cultur|art|traditi|langue|littér|science/i.test(firstSentence)) {
-    return ['Culture', 'Arts et traditions', 'Patrimoine', 'Vie culturelle'][sectionNumber % 4];
-  }
-  if (/membre|organis|inter|union|traité|accord/i.test(firstSentence)) {
-    return ['Relations internationales', 'Engagements', 'Organisations', 'Partenariats'][sectionNumber % 4];
-  }
-
-  // Fallback: extract first few significant words
-  const words = firstSentence.split(/\s+/).slice(0, 4).join(' ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 // ============================================================================
