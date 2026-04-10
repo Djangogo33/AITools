@@ -26,10 +26,13 @@ body {
   background: var(--bg);
   color: var(--text);
   width: 420px;
-  max-height: 640px;
+  height: 640px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 /* ============================================================
@@ -280,6 +283,8 @@ body.extension-disabled .header {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
 }
 
 .content::-webkit-scrollbar { width: 5px; }
@@ -295,6 +300,7 @@ body.dark-mode .content::-webkit-scrollbar-thumb { background: #334155; }
   display: none;
   padding: 10px 14px;
   animation: fadeInTab 0.15s ease;
+  box-sizing: border-box;
 }
 
 .tab.active { display: block; }
