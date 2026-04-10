@@ -94,7 +94,7 @@ F12 → Console → Tape: `navigator.userAgent`
 ```
 [À remplir: Chrome version = _____]
 ```
-
+Pas trouvé mais normalement >129
 Doit être ≥129
 
 ---
@@ -103,10 +103,10 @@ Doit être ≥129
 
 - [ ] Connecté à Google (Gmail affiché coin supérieur droit Chrome)
 - [ ] Pas connecté (avatar anonyme)
-- [ ] Plusieurs comptes (lequel est actif?)
+- [X] Plusieurs comptes (lequel est actif?)
 
 **Quel compte?**
-connecté
+paul.ardant@gmail.com
 ---
 
 ### 6. Redémarrage Chrome
@@ -114,7 +114,7 @@ connecté
 Après avoir **complètement fermé et relancé Chrome**:
 
 - [ ] Refait entièrement (arrêt processus + relance)
-- [ ] Juste refresh de page (F5)
+- [X] Juste refresh de page (F5)
 - [ ] Pas redémarré depuis activation flag
 
 **Quand as-tu redémarré?**
@@ -187,9 +187,9 @@ Exemples:
 ## 🎯 CHECKLIST AVANT SIGNATURE
 
 - [X] J'ai rempli toutes les sections
-- [ ] J'ai copié/collé les vraies valeurs (pas d'inventions)
-- [ ] J'ai redémarré Chrome COMPLÈTEMENT
-- [ ] J'ai testé `window.ai` en F12
+- [X] J'ai copié/collé les vraies valeurs (pas d'inventions)
+- [X] J'ai redémarré Chrome COMPLÈTEMENT
+- [X] J'ai testé `window.ai` en F12
 
 ---
 
