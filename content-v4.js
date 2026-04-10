@@ -1457,11 +1457,32 @@ function generateSectionTitle(sentences, sectionNumber) {
 }
 
 // ============================================================================
+// Helper function to wait for AIService to be available
+async function waitForAIService(maxWaitMs = 5000) {
+  console.log('[Content] ⏳ Waiting for AIService to be available...');
+  const startTime = Date.now();
+  
+  while (!window.aiService && (Date.now() - startTime) < maxWaitMs) {
+    console.log('[Content] 🔄 AIService not ready, checking in 100ms...');
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  if (window.aiService) {
+    console.log('[Content] ✅ AIService is now available');
+    return true;
+  } else {
+    console.error('[Content] ❌ AIService never became available after', maxWaitMs, 'ms');
+    return false;
+  }
+}
+
 // IMPROVED SUMMARIZER — Using Gemini Nano for better results
 // ============================================================================
 async function generateSummaryWithAI(text, length = 35) {
   // Vérifier que AIService est disponible
-  if (!window.aiService) {
+  const aiServiceReady = window.aiService || await waitForAIService(2000);
+  
+  if (!aiServiceReady) {
     console.warn('[Summarizer] ⚠️ AIService not available, using heuristic fallback');
     console.log('[Summarizer] 💡 Fallback will extract ~' + length + '% of original content');
     return betterSummarize(text, length);
@@ -1725,7 +1746,9 @@ function parseSummaryIntoSections(summary) {
 // SIMPLE TRANSLATOR — Direct translation display
 // ============================================================================
 async function generateTranslationWithAI(text, sourceLang, targetLang) {
-  if (!window.aiService) {
+  const aiServiceReady = window.aiService || await waitForAIService(2000);
+  
+  if (!aiServiceReady) {
     console.warn('[Translator] ⚠️ AIService not available, translation not possible');
     console.log('[Translator] 💡 Activate Gemini Nano or add OpenAI API key to ai-service.js');
     return null;

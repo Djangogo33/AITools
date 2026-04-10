@@ -290,7 +290,7 @@ class AIService {
           if (response.status === 429) {
             retries--;
             if (retries > 0) {
-              const waitTime = Math.pow(2, 3 - retries) * 1000; // 2s, 4s, 8s
+              const waitTime = Math.pow(2, 3 - retries) * 2500; // 5s, 10s, 20s
               console.warn(`[AIService] ⏱️ Rate limit, retrying in ${waitTime/1000}s (${retries} left)...`);
               await new Promise(resolve => setTimeout(resolve, waitTime));
               continue;
@@ -316,7 +316,7 @@ class AIService {
           lastError = err;
           retries--;
           if (retries > 0) {
-            const waitTime = Math.pow(2, 3 - retries) * 1000;
+            const waitTime = Math.pow(2, 3 - retries) * 2500;
             console.warn(`[AIService] ⏱️ Error: ${err.message}, retrying in ${waitTime/1000}s...`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
           }
@@ -376,6 +376,17 @@ class AIService {
 }
 
 // Export singleton instance
-const aiService = new AIService();
-window.aiService = aiService;
-console.log('[AIService] Singleton instance created');
+try {
+  console.log('[AIService] 🔧 About to create singleton instance...');
+  const aiService = new AIService();
+  console.log('[AIService] ✅ AIService instance created successfully');
+  
+  window.aiService = aiService;
+  console.log('[AIService] 🌍 Assigned to window.aiService');
+  console.log('[AIService] ✓ window.aiService exists:', typeof window.aiService);
+  console.log('[AIService] ✓ window.aiService truthy:', !!window.aiService);
+  console.log('[AIService] Singleton instance created');
+} catch (error) {
+  console.error('[AIService] ❌ FATAL: Failed to create singleton:', error);
+  console.error('[AIService] Error stack:', error.stack);
+}
