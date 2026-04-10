@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 // AI Injected Script - Page context for Prompt API access
 // This runs in the page's context, not the content script's context
 // Allows direct access to window.ai (Gemini Nano)
@@ -166,10 +165,6 @@ ${message.text.substring(0, 2000)}`;
 });
 
 console.log('[AIinjected] Message listener ready');
-=======
-// AI Injected Script - Page context for Prompt API access
-// This runs in the page's context, not the content script's context
-// Allows direct access to window.ai (Gemini Nano)
 
 console.log('[AIinjected] ✅ Injected script loaded');
 

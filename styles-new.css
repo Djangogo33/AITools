@@ -26,7 +26,8 @@ body {
   background: var(--bg);
   color: var(--text);
   width: 420px;
-  height: 640px;
+  min-height: 600px;
+  max-height: 700px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -301,6 +302,7 @@ body.dark-mode .content::-webkit-scrollbar-thumb { background: #334155; }
   padding: 10px 14px;
   animation: fadeInTab 0.15s ease;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .tab.active { display: block; }
