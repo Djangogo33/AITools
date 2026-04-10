@@ -263,38 +263,68 @@ class AIService {
         ? `You are a professional summarizer. Summarize the text to about ${length}% of its original length. Keep key information. Return ONLY the summary, no explanations.`
         : `You are a professional translator. Translate the text to ${targetLang}. Return ONLY the translation, no explanations or comments.`;
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENAI_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: OPENAI_MODEL,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: text.substring(0, 3000) }
-          ],
-          temperature: 0.7,
-          max_tokens: 1000
-        })
-      });
-
-      if (!response.ok) {
-        console.error('[AIService] ❌ OpenAI API error:', response.status);
-        return null;
-      }
-
-      const data = await response.json();
-      const result = data.choices?.[0]?.message?.content;
+      // Retry logic for rate limits
+      let retries = 3;
+      let lastError = null;
       
-      if (result) {
-        console.log(`[AIService] ✅ ${task} via OpenAI successful`);
-        return result;
-      } else {
-        console.error('[AIService] ❌ No content in OpenAI response');
-        return null;
+      while (retries > 0) {
+        try {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: OPENAI_MODEL,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: text.substring(0, 3000) }
+              ],
+              temperature: 0.7,
+              max_tokens: 1000
+            })
+          });
+
+          // Handle rate limit (429)
+          if (response.status === 429) {
+            retries--;
+            if (retries > 0) {
+              const waitTime = Math.pow(2, 3 - retries) * 1000; // 2s, 4s, 8s
+              console.warn(`[AIService] ⏱️ Rate limit, retrying in ${waitTime/1000}s (${retries} left)...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              continue;
+            }
+            throw new Error('Rate limited - max retries reached');
+          }
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          const result = data.choices?.[0]?.message?.content;
+          
+          if (result) {
+            console.log(`[AIService] ✅ ${task} via OpenAI successful`);
+            return result;
+          } else {
+            throw new Error('No content in response');
+          }
+
+        } catch (err) {
+          lastError = err;
+          retries--;
+          if (retries > 0) {
+            const waitTime = Math.pow(2, 3 - retries) * 1000;
+            console.warn(`[AIService] ⏱️ Error: ${err.message}, retrying in ${waitTime/1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+        }
       }
+
+      console.error('[AIService] ❌ OpenAI request failed after retries:', lastError?.message);
+      return null;
 
     } catch (error) {
       console.error('[AIService] ❌ OpenAI request failed:', error.message);
