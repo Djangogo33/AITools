@@ -1470,30 +1470,24 @@ async function generateSummaryWithAI(text, length = 35) {
   try {
     // Limiter le texte à 3000 caractères pour l'API
     const textForAI = text.substring(0, 3000);
-    console.log('[Summarizer] 📡 Attempting Prompt API (Gemini Nano)...');
+    console.log('[Summarizer] 📡 Attempting AI summarization (Nano → OpenAI fallback)...');
     
-    const isApiAvailable = await window.aiService.checkAvailability();
-    if (!isApiAvailable) {
-      console.warn('[Summarizer] ⚠️ Prompt API not available, using heuristic fallback');
-      console.log('[Summarizer] 💡 See DIAGNOSTIC_PROMPT_API.md for activation steps');
-      return betterSummarize(text, length);
-    }
-    
-    console.log('[Summarizer] ✅ Prompt API available, sending request...');
-    const result = await window.aiService.summarize(textForAI, length);
+    // Try Gemini Nano first, fallback to OpenAI
+    const result = await window.aiService.summarizeWithFallback(textForAI, length);
     
     // Result is either a string or null
     if (!result) {
-      console.warn('[Summarizer] ⚠️ API returned null, switching to fallback');
+      console.warn('[Summarizer] ⚠️ All AI APIs failed, switching to heuristic fallback');
+      console.log('[Summarizer] 💡 Activate Gemini Nano (chrome://flags) or add OpenAI API key to ai-service.js');
       return betterSummarize(text, length);
     }
     
-    console.log('[Summarizer] ✅ Gemini Nano summary generated successfully');
+    console.log('[Summarizer] ✅ AI summary generated successfully');
     // Return formatted result
     return formatSummary(result);
   } catch (err) {
-    console.warn('[Summarizer] ❌ Prompt API error:', err.message);
-    console.log('[Summarizer] 💡 Using heuristic fallback, quality ~70% of original AI');
+    console.warn('[Summarizer] ❌ AI error:', err.message);
+    console.log('[Summarizer] 💡 Using heuristic fallback');
     return betterSummarize(text, length);
   }
 }
@@ -1733,7 +1727,7 @@ function parseSummaryIntoSections(summary) {
 async function generateTranslationWithAI(text, sourceLang, targetLang) {
   if (!window.aiService) {
     console.warn('[Translator] ⚠️ AIService not available, translation not possible');
-    console.log('[Translator] 💡 Prompt API (Gemini Nano) required for translation - see DIAGNOSTIC_PROMPT_API.md');
+    console.log('[Translator] 💡 Activate Gemini Nano or add OpenAI API key to ai-service.js');
     return null;
   }
 
@@ -1741,25 +1735,19 @@ async function generateTranslationWithAI(text, sourceLang, targetLang) {
     const textForAI = text.substring(0, 2000);
     console.log('[Translator] 📡 Requesting translation ' + sourceLang.toUpperCase() + ' → ' + targetLang.toUpperCase() + '...');
     
-    const isApiAvailable = await window.aiService.checkAvailability();
-    if (!isApiAvailable) {
-      console.warn('[Translator] ⚠️ Prompt API not available');
-      console.log('[Translator] 💡 Traduction not supported sans Prompt API. Activez: chrome://flags → Prompt API for Gemini Nano');
-      return null;
-    }
-    
-    const result = await window.aiService.translate(textForAI, targetLang);
+    // Try Gemini Nano first, fallback to OpenAI
+    const result = await window.aiService.translateWithFallback(textForAI, targetLang);
     
     if (result) {
-      console.log('[Translator] ✅ Traduction successful via Gemini Nano');
+      console.log('[Translator] ✅ Translation successful');
       return result;
     } else {
-      console.warn('[Translator] ⚠️ Translation API returned empty');
+      console.warn('[Translator] ⚠️ All translation APIs failed');
+      console.log('[Translator] 💡 Activate Gemini Nano (chrome://flags) or add OpenAI API key');
       return null;
     }
   } catch (err) {
     console.error('[Translator] ❌ Translation error:', err.message);
-    console.log('[Translator] 💡 Ensure Prompt API is enabled (chrome://flags)');
     return null;
   }
 }

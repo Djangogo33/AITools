@@ -1,5 +1,11 @@
-// AITools AI Service - Gemini Nano Prompt API Integration via Injected Script
-// v4.0.0
+// AITools AI Service - OpenAI ChatGPT Integration
+// v4.1.0 - Supports both Prompt API (Nano) and OpenAI API
+
+// ============================================================================
+// CONFIGURATION - Add your OpenAI API key here
+// ============================================================================
+const OPENAI_API_KEY = 'sk-proj-YOUR_KEY_HERE'; // Replace with your key from platform.openai.com
+const OPENAI_MODEL = 'gpt-4o-mini'; // Fast and cheap alternative
 
 // Internal message listener setup
 let messageResponseHandlers = new Map();
@@ -237,6 +243,93 @@ class AIService {
       console.error('[AIService] ❌ Generation failed:', error.message);
       return null;
     }
+  }
+
+  /**
+   * OpenAI API Call - Fallback when Prompt API unavailable
+   * @param {string} text - Text to process
+   * @param {string} task - 'summarize' or 'translate'
+   * @param {number} length - Summary length %
+   * @param {string} targetLang - Target language for translation
+   */
+  async callOpenAI(text, task = 'summarize', length = 35, targetLang = 'fr') {
+    try {
+      if (OPENAI_API_KEY === 'sk-proj-YOUR_KEY_HERE') {
+        console.warn('[AIService] ⚠️ OpenAI API key not configured. Add your key to ai-service.js');
+        return null;
+      }
+
+      const systemPrompt = task === 'summarize' 
+        ? `You are a professional summarizer. Summarize the text to about ${length}% of its original length. Keep key information. Return ONLY the summary, no explanations.`
+        : `You are a professional translator. Translate the text to ${targetLang}. Return ONLY the translation, no explanations or comments.`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: text.substring(0, 3000) }
+          ],
+          temperature: 0.7,
+          max_tokens: 1000
+        })
+      });
+
+      if (!response.ok) {
+        console.error('[AIService] ❌ OpenAI API error:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+      const result = data.choices?.[0]?.message?.content;
+      
+      if (result) {
+        console.log(`[AIService] ✅ ${task} via OpenAI successful`);
+        return result;
+      } else {
+        console.error('[AIService] ❌ No content in OpenAI response');
+        return null;
+      }
+
+    } catch (error) {
+      console.error('[AIService] ❌ OpenAI request failed:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Résumer avec fallback OpenAI
+   */
+  async summarizeWithFallback(text, length = 35) {
+    // Try Prompt API first
+    if (this.isAvailable) {
+      const result = await this.summarize(text, length);
+      if (result) return result;
+    }
+    
+    // Fallback to OpenAI
+    console.log('[AIService] 📡 Falling back to OpenAI for summarization');
+    return this.callOpenAI(text, 'summarize', length);
+  }
+
+  /**
+   * Traduire avec fallback OpenAI
+   */
+  async translateWithFallback(text, targetLang = 'fr') {
+    // Try Prompt API first
+    if (this.isAvailable) {
+      const result = await this.translate(text, targetLang);
+      if (result) return result;
+    }
+    
+    // Fallback to OpenAI
+    console.log('[AIService] 📡 Falling back to OpenAI for translation');
+    return this.callOpenAI(text, 'translate', 35, targetLang);
   }
 
   /**
