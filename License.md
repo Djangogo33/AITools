@@ -1,4 +1,4 @@
-Copyright (c) 2025 Djangogo33
+Copyright (c) 2025-2026 Djangogo33
 
 Tous droits réservés.
 
