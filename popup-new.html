@@ -33,6 +33,10 @@
       <span class="nav-icon">⚡</span>
       <span class="nav-label">Accès</span>
     </button>
+    <button class="nav-btn" data-tab="profile">
+      <span class="nav-icon">👤</span>
+      <span class="nav-label">Profil</span>
+    </button>
     <button class="nav-btn" data-tab="google">
       <span class="nav-icon">🔍</span>
       <span class="nav-label">Google</span>
@@ -97,6 +101,72 @@
             <span class="slider"></span>
           </label>
         </label>
+      </div>
+    </section>
+
+    <!-- ===================== PROFILE TAB ===================== -->
+    <section class="tab" id="profile">
+      <div class="section-title">👤 Mon Profil</div>
+      
+      <!-- Auth Status -->
+      <div id="auth-status" class="section">
+        <!-- Sera rempli par JS -->
+      </div>
+
+      <!-- Connected User Section -->
+      <div id="user-connected-section" style="display: none;">
+        <div class="section">
+          <div class="profile-card">
+            <div class="profile-avatar" id="profile-avatar">👤</div>
+            <div class="profile-info">
+              <div class="profile-name" id="profile-name">Utilisateur</div>
+              <div class="profile-email" id="profile-email">email@example.com</div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="separator">
+
+        <!-- Plan Section -->
+        <div class="section">
+          <div class="plan-section">
+            <div class="plan-header">📊 Plan Actuel</div>
+            <div class="plan-badge" id="plan-badge">FREE</div>
+            <div class="plan-expiry" id="plan-expiry"></div>
+          </div>
+        </div>
+
+        <hr class="separator">
+
+        <!-- Upgrade Buttons -->
+        <div id="upgrade-buttons" class="section">
+          <!-- Sera rempli par JS selon le plan -->
+        </div>
+
+        <hr class="separator">
+
+        <!-- Promo Code -->
+        <div class="section">
+          <div class="input-wrapper">
+            <input 
+              type="text" 
+              id="promo-code-input" 
+              placeholder="Code promo (optionnel)..."
+              class="input-field"
+            >
+            <button id="apply-promo-btn" class="input-search-btn" title="Appliquer le code">✓</button>
+          </div>
+          <div id="promo-message" style="font-size:11px;margin-top:6px;color:var(--text-light);"></div>
+        </div>
+
+        <hr class="separator">
+
+        <!-- Logout Button -->
+        <div class="section">
+          <button id="logout-btn" class="btn btn-full" style="background:#ff4444;border-color:#ff4444;">
+            🚪 Se déconnecter
+          </button>
+        </div>
       </div>
     </section>
 

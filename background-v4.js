@@ -1,7 +1,282 @@
 // AITools Background Service Worker v4.0
 console.log('[AITools] Background worker initialized');
 
+// Import du module d'authentification Supabase
+// Note: Les imports en MV3 se font différemment. On charge le script separément
+// et on utilise chrome.storage pour la communication inter-modules
+
+// ============================================================================
+// AUTHENTIFICATION ET GESTION DU PLAN UTILISATEUR
+// ============================================================================
+
+// Créer une alarme de vérification du plan toutes les 24h au démarrage
+chrome.runtime.onStartup.addListener(() => {
+  console.log('[AITools] Runtime startup - creating verification alarm');
+  chrome.alarms.create('verify-user-plan', { periodInMinutes: 24 * 60 });
+});
+
+// Listener pour les alarmes (toutes les 24h, vérifier le plan de l'utilisateur)
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'verify-user-plan') {
+    console.log('[AITools] ⏰ Alarm triggered: verifying user plan...');
+    
+    try {
+      // Récupérer l'utilisateur stocké
+      const storage = await chrome.storage.local.get(['user']);
+      
+      if (!storage.user) {
+        console.log('[AITools] No user logged in, skipping verification');
+        return;
+      }
+
+      // Vérifier le plan via Supabase
+      const planData = await verifyUserPlanOffline();
+      console.log('[AITools] ✅ Plan verification successful:', planData.plan);
+      
+      // Mettre à jour le stockage avec le nouveau plan
+      await chrome.storage.local.set({
+        userPlan: planData,
+        lastVerificationTime: new Date().toISOString(),
+        isOffline: false
+      });
+
+    } catch (error) {
+      console.error('[AITools] ❌ Plan verification failed:', error.message);
+      
+      // Fallback: Utiliser le plan mis en cache
+      const storage = await chrome.storage.local.get(['userPlan']);
+      if (storage.userPlan) {
+        console.log('[AITools] ⚠️ Using cached plan (offline mode)');
+        await chrome.storage.local.set({ isOffline: true });
+      } else {
+        console.log('[AITools] No cached plan, defaulting to FREE');
+        await chrome.storage.local.set({
+          userPlan: { plan: 'FREE', features: [], isActive: false },
+          isOffline: true
+        });
+      }
+    }
+  }
+});
+
+// Fonction de vérification du plan (version offline-safe)
+async function verifyUserPlanOffline() {
+  const SUPABASE_URL = 'https://yvtukwaepqqsvacbbyou.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2dHVrd2FlcHFxc3ZhY2JieW91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjkxNDcsImV4cCI6MjA5NDg0NTE0N30.V_09OsFejHBTQ9ihlj9y6rDhDTLLkVGI9bPBIWmIUlc';
+  
+  try {
+    const storage = await chrome.storage.local.get(['user']);
+    
+    if (!storage.user) {
+      return { plan: 'FREE', features: [], isActive: false };
+    }
+
+    const userId = storage.user.id;
+
+    // Récupérer le plan depuis Supabase
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/subscriptions?user_id=eq.${userId}&select=*`,
+      {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const subscriptions = await response.json();
+    
+    if (!subscriptions || subscriptions.length === 0) {
+      return { plan: 'FREE', features: [], isActive: false };
+    }
+
+    const subscription = subscriptions[0];
+    const expiryDate = new Date(subscription.expiry_date);
+    const now = new Date();
+    const isActive = expiryDate > now;
+
+    if (!isActive) {
+      return { plan: 'FREE', features: [], isActive: false };
+    }
+
+    const planFeatures = {
+      'FREE': ['dark_mode', 'reading_time'],
+      'PRO': ['dark_mode', 'reading_time', 'advanced_search', 'note_sync', 'custom_shortcuts'],
+      'MAX': ['dark_mode', 'reading_time', 'advanced_search', 'note_sync', 'custom_shortcuts', 'ai_chat', 'priority_support', 'priority_features']
+    };
+
+    return {
+      plan: subscription.plan_type,
+      features: planFeatures[subscription.plan_type] || [],
+      expiryDate: subscription.expiry_date,
+      stripeCustomerId: subscription.stripe_customer_id,
+      isActive: true
+    };
+  } catch (error) {
+    console.error('[AITools] Error verifying plan:', error.message);
+    throw error;
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // ============================================================================
+  // AUTH: LOGIN WITH GOOGLE
+  // ============================================================================
+  if (message.action === 'auth-login-google') {
+    (async () => {
+      try {
+        // Dynamiquement charger et exécuter le code d'auth
+        const authScript = await (await fetch(chrome.runtime.getURL('auth-supabase.js'))).text();
+        eval(authScript);
+        
+        const user = await loginWithGoogle();
+        
+        // Créer l'alarme de vérification immédiatement après connexion
+        chrome.alarms.create('verify-user-plan', { periodInMinutes: 24 * 60 });
+        
+        // Vérifier le plan immédiatement
+        const planData = await verifyUserPlanOffline();
+        await chrome.storage.local.set({
+          userPlan: planData,
+          isOffline: false
+        });
+        
+        sendResponse({ success: true, user, plan: planData });
+      } catch (error) {
+        console.error('[AITools] Login error:', error.message);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // ============================================================================
+  // AUTH: LOGOUT
+  // ============================================================================
+  if (message.action === 'auth-logout') {
+    (async () => {
+      try {
+        await chrome.storage.local.remove(['user', 'accessToken', 'lastLogin', 'userPlan', 'lastPromoApplied']);
+        console.log('[AITools] User logged out');
+        sendResponse({ success: true });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // ============================================================================
+  // AUTH: GET CURRENT USER
+  // ============================================================================
+  if (message.action === 'auth-get-user') {
+    (async () => {
+      try {
+        const storage = await chrome.storage.local.get(['user', 'userPlan', 'isOffline']);
+        sendResponse({
+          success: true,
+          user: storage.user || null,
+          plan: storage.userPlan || { plan: 'FREE', features: [], isActive: false },
+          isOffline: storage.isOffline || false
+        });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // ============================================================================
+  // AUTH: APPLY PROMO CODE
+  // ============================================================================
+  if (message.action === 'auth-apply-promo') {
+    (async () => {
+      try {
+        const { promoCode } = message;
+        
+        if (!promoCode || promoCode.trim().length === 0) {
+          sendResponse({ success: false, error: 'Code promo vide' });
+          return;
+        }
+
+        const storage = await chrome.storage.local.get(['user']);
+        if (!storage.user) {
+          sendResponse({ success: false, error: 'Utilisateur non connecté' });
+          return;
+        }
+
+        const userId = storage.user.id;
+        const SUPABASE_URL = 'https://yvtukwaepqqsvacbbyou.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2dHVrd2FlcHFxc3ZhY2JieW91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjkxNDcsImV4cCI6MjA5NDg0NTE0N30.V_09OsFejHBTQ9ihlj9y6rDhDTLLkVGI9bPBIWmIUlc';
+
+        // Valider le code promo via Supabase RPC
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/validate_promo_code`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            p_user_id: userId,
+            p_code: promoCode.toUpperCase()
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Code promo invalide');
+        }
+
+        const result = await response.json();
+
+        // Mettre à jour le stockage
+        await chrome.storage.local.set({
+          lastPromoApplied: promoCode.toUpperCase(),
+          lastPromoTimestamp: new Date().toISOString()
+        });
+
+        // Vérifier le nouveau plan
+        const planData = await verifyUserPlanOffline();
+        await chrome.storage.local.set({ userPlan: planData });
+
+        console.log('[AITools] ✅ Promo code applied:', promoCode);
+        sendResponse({ success: true, result, newPlan: planData });
+      } catch (error) {
+        console.error('[AITools] Promo code error:', error.message);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // ============================================================================
+  // AUTH: CHECK IF FEATURE AUTHORIZED
+  // ============================================================================
+  if (message.action === 'auth-check-feature') {
+    (async () => {
+      try {
+        const { feature } = message;
+        const storage = await chrome.storage.local.get(['userPlan']);
+        const features = storage.userPlan?.features || [];
+        const isAuthorized = features.includes(feature);
+        
+        console.log(`[AITools] Feature check: ${feature} = ${isAuthorized}`);
+        sendResponse({ success: true, isAuthorized, feature });
+      } catch (error) {
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true;
+  }
+
+  // Existing message listeners continue below...
+
+
   // ============================================================================
   // ADD NOTE
   // ============================================================================

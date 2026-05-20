@@ -81,6 +81,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Header status
   updateHeaderStatus();
+  
+  // Load user profile (ÉTAPE 4 - Authentication)
+  loadUserProfile();
+  
+  // Initialize feature locks (ÉTAPE 5 - Guardrails)
+  initializeFeatureLocks();
 
   // ---- TAB NAVIGATION ----
   document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -1110,4 +1116,402 @@ function summarizeText(text) {
   const keepCount = Math.max(2, Math.ceil(sentences.length * 0.35));
   return scored.sort((a, b) => b.score - a.score).slice(0, keepCount)
     .sort((a, b) => a.i - b.i).map(x => x.s).join(' ');
+}
+
+// ============================================================================
+// AUTHENTICATION - PROFILE TAB
+// ============================================================================
+
+// Charger et afficher le profil utilisateur au démarrage
+async function loadUserProfile() {
+  try {
+    chrome.runtime.sendMessage({ action: 'auth-get-user' }, (response) => {
+      if (response?.user) {
+        displayUserProfile(response.user, response.plan);
+      } else {
+        displayLoginPrompt();
+      }
+    });
+  } catch (error) {
+    console.error('Erreur lors du chargement du profil:', error);
+    displayLoginPrompt();
+  }
+}
+
+// Afficher la section de connexion
+function displayLoginPrompt() {
+  const authStatus = document.getElementById('auth-status');
+  authStatus.innerHTML = `
+    <div style="text-align: center;">
+      <div style="margin-bottom: 12px; font-size: 14px; font-weight: 600;">
+        Connectez-vous pour débloquer les fonctionnalités PRO
+      </div>
+      <button id="login-google-btn" class="login-btn">
+        🔑 Se connecter avec Google
+      </button>
+    </div>
+  `;
+  
+  document.getElementById('user-connected-section').style.display = 'none';
+  
+  // Attacher l'événement au bouton de connexion
+  const loginBtn = document.getElementById('login-google-btn');
+  if (loginBtn) {
+    loginBtn.addEventListener('click', () => {
+      loginWithGoogle();
+    });
+  }
+}
+
+// Afficher le profil utilisateur
+function displayUserProfile(user, plan) {
+  // Remplir les infos du profil
+  document.getElementById('profile-name').textContent = user.name || 'Utilisateur';
+  document.getElementById('profile-email').textContent = user.email || 'email@example.com';
+  
+  // Mettre à jour le badge du plan
+  const planBadge = document.getElementById('plan-badge');
+  const planLower = (plan.plan || 'FREE').toLowerCase();
+  planBadge.textContent = plan.plan || 'FREE';
+  planBadge.className = `plan-badge ${planLower}`;
+  
+  // Afficher la date d'expiration si active
+  const expiryDiv = document.getElementById('plan-expiry');
+  if (plan.expiryDate) {
+    const expiryDate = new Date(plan.expiryDate);
+    const days = Math.floor((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
+    if (days > 0) {
+      expiryDiv.textContent = `Expire dans ${days} jour${days > 1 ? 's' : ''}`;
+    } else if (days === 0) {
+      expiryDiv.textContent = 'Expire aujourd\'hui';
+    }
+  }
+  
+  // Afficher les boutons d'upgrade selon le plan
+  const upgradeDiv = document.getElementById('upgrade-buttons');
+  upgradeDiv.innerHTML = '';
+  
+  if (plan.plan === 'FREE') {
+    upgradeDiv.innerHTML = `
+      <button class="upgrade-btn upgrade-btn-pro" onclick="openStripeCheckout('pro', '${user.id}')">
+        ⭐ Upgrade PRO - 4.99€/mois
+      </button>
+      <button class="upgrade-btn upgrade-btn-max" onclick="openStripeCheckout('max', '${user.id}')">
+        👑 Upgrade MAX - 9.99€/mois
+      </button>
+    `;
+  } else if (plan.plan === 'PRO') {
+    upgradeDiv.innerHTML = `
+      <button class="upgrade-btn upgrade-btn-max" onclick="openStripeCheckout('max', '${user.id}')">
+        👑 Upgrade MAX - 9.99€/mois
+      </button>
+      <button class="manage-btn" onclick="manageSubscription()">
+        💳 Gérer l'abonnement
+      </button>
+    `;
+  } else if (plan.plan === 'MAX') {
+    upgradeDiv.innerHTML = `
+      <button class="manage-btn" onclick="manageSubscription()">
+        💳 Gérer l'abonnement
+      </button>
+    `;
+  }
+  
+  // Afficher la section utilisateur connecté
+  document.getElementById('user-connected-section').style.display = 'block';
+  document.getElementById('auth-status').innerHTML = '';
+  
+  // Attacher les événements
+  setupProfileEventListeners();
+}
+
+// Configurer les événements de la section profil
+function setupProfileEventListeners() {
+  // Bouton appliquer code promo
+  const applyPromoBtn = document.getElementById('apply-promo-btn');
+  if (applyPromoBtn) {
+    applyPromoBtn.addEventListener('click', applyPromoCode);
+  }
+  
+  // Bouton logout
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', logoutUser);
+  }
+  
+  // Entrée code promo - touche Entrée
+  const promoInput = document.getElementById('promo-code-input');
+  if (promoInput) {
+    promoInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        applyPromoCode();
+      }
+    });
+  }
+}
+
+// Connexion avec Google
+function loginWithGoogle() {
+  const loginBtn = document.getElementById('login-google-btn');
+  if (loginBtn) {
+    loginBtn.disabled = true;
+    loginBtn.textContent = '⏳ Connexion en cours...';
+  }
+  
+  chrome.runtime.sendMessage({ action: 'auth-login-google' }, (response) => {
+    if (response?.success) {
+      showToast('✅ Connexion réussie!', 'success');
+      loadUserProfile();
+    } else {
+      showToast(`❌ Erreur: ${response?.error || 'Connexion échouée'}`, 'error');
+      if (loginBtn) {
+        loginBtn.disabled = false;
+        loginBtn.textContent = '🔑 Se connecter avec Google';
+      }
+    }
+  });
+}
+
+// Appliquer un code promo
+function applyPromoCode() {
+  const promoInput = document.getElementById('promo-code-input');
+  const promoCode = promoInput?.value?.trim();
+  const promoMessage = document.getElementById('promo-message');
+  
+  if (!promoCode) {
+    showToast('⚠️ Entrez un code promo', 'error');
+    return;
+  }
+  
+  const applyBtn = document.getElementById('apply-promo-btn');
+  applyBtn.disabled = true;
+  applyBtn.textContent = '...';
+  
+  chrome.runtime.sendMessage({ 
+    action: 'auth-apply-promo',
+    promoCode: promoCode
+  }, (response) => {
+    applyBtn.disabled = false;
+    applyBtn.textContent = '✓';
+    
+    if (response?.success) {
+      showToast('✅ Code promo appliqué!', 'success');
+      promoInput.value = '';
+      if (promoMessage) {
+        promoMessage.textContent = `Code appliqué: ${promoCode}`;
+        promoMessage.style.color = 'var(--success)';
+      }
+      // Recharger le profil après 1s
+      setTimeout(loadUserProfile, 1000);
+    } else {
+      showToast(`❌ ${response?.error || 'Code invalide'}`, 'error');
+      if (promoMessage) {
+        promoMessage.textContent = response?.error || 'Code promo invalide ou expiré';
+        promoMessage.style.color = 'var(--danger)';
+      }
+    }
+  });
+}
+
+// Déconnexion
+function logoutUser() {
+  if (confirm('Êtes-vous sûr de vouloir vous déconnecter?')) {
+    chrome.runtime.sendMessage({ action: 'auth-logout' }, (response) => {
+      if (response?.success) {
+        showToast('✅ Déconnexion réussie', 'success');
+        setTimeout(() => {
+          displayLoginPrompt();
+        }, 500);
+      } else {
+        showToast('❌ Erreur lors de la déconnexion', 'error');
+      }
+    });
+  }
+}
+
+// Ouvrir Stripe Checkout
+function openStripeCheckout(plan, userId) {
+  // À remplacer par l'URL réelle de Stripe Checkout
+  const stripeUrl = `https://aitools-admin.netlify.app/checkout?plan=${plan}&customer=${userId}`;
+  chrome.tabs.create({ url: stripeUrl });
+}
+
+// Gérer l'abonnement (redirection vers Stripe portal)
+function manageSubscription() {
+  const manageUrl = 'https://billing.stripe.com/p/login/00g';
+  chrome.tabs.create({ url: manageUrl });
+}
+
+// Charger le profil au démarrage
+// (Dans le listener DOMContentLoaded existant)
+
+// ============================================================================
+// GUARDRAILS - FEATURE LOCKING SYSTEM
+// ============================================================================
+
+let currentUserPlan = 'FREE';
+let featureAccessMap = {};
+
+// Initialiser le système de verrous
+async function initializeFeatureLocks() {
+  try {
+    chrome.runtime.sendMessage({ action: 'auth-get-user' }, async (response) => {
+      if (response?.user) {
+        currentUserPlan = response.plan?.plan || 'FREE';
+        await applyFeatureLocks();
+      }
+    });
+  } catch (error) {
+    console.error('Erreur initialisation verrous:', error);
+  }
+}
+
+// Appliquer les verrous sur les éléments
+async function applyFeatureLocks() {
+  // Mapping des éléments à leurs features requises
+  const elementFeatureMap = {
+    'blockSponsored': 'remove_ads',
+    'tabCleanerToggle': 'advanced_search',
+    'summarizeBtn': 'ai_summarizer',
+    'notesViewBtn': 'note_sync',
+    'anonymizeBtn': 'ai_summarizer',
+    'aiDetectorEnabled': 'ai_summarizer',
+    'translatorEnabled': 'ai_translator'
+  };
+  
+  // Vérifier chaque élément
+  for (const [elementId, feature] of Object.entries(elementFeatureMap)) {
+    const element = document.getElementById(elementId);
+    if (!element) continue;
+    
+    const isAllowed = await isFeatureAllowed(feature);
+    
+    if (!isAllowed) {
+      lockElement(element, feature);
+    }
+  }
+}
+
+// Vérifier si une feature est autorisée
+async function isFeatureAllowed(feature) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ 
+      action: 'auth-check-feature',
+      feature: feature 
+    }, (response) => {
+      resolve(response?.isAuthorized || false);
+    });
+  });
+}
+
+// Verrouiller un élément
+function lockElement(element, feature) {
+  if (element.classList.contains('btn') || element.tagName === 'BUTTON') {
+    // C'est un bouton
+    element.classList.add('locked');
+    element.disabled = true;
+    
+    // Ajouter l'événement pour afficher la modal
+    element.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showUpgradeModal(feature, currentUserPlan);
+    });
+    
+  } else if (element.tagName === 'INPUT' && element.type === 'checkbox') {
+    // C'est un checkbox
+    const row = element.closest('.switch-row');
+    if (row) {
+      row.classList.add('locked');
+    }
+    element.disabled = true;
+    
+    element.addEventListener('change', (e) => {
+      e.preventDefault();
+      showUpgradeModal(feature, currentUserPlan);
+      element.checked = false;
+    });
+  }
+}
+
+// Afficher la modal d'upgrade
+function showUpgradeModal(feature, currentPlan) {
+  // Créer la modal s'il elle n'existe pas
+  let modal = document.getElementById('upgrade-feature-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'upgrade-feature-modal';
+    modal.className = 'upgrade-modal hidden';
+    document.body.appendChild(modal);
+  }
+  
+  // Déterminer le plan cible
+  const targetPlan = (feature === 'ai_chat' || feature === 'priority_features') ? 'MAX' : 'PRO';
+  const targetPrice = targetPlan === 'MAX' ? '9.99€' : '4.99€';
+  
+  // Messages
+  const featureNames = {
+    'remove_ads': '🚫 Bloquer les publicités',
+    'note_sync': '📝 Synchroniser les notes',
+    'advanced_search': '🔍 Recherche avancée',
+    'ai_summarizer': '✂️ Résumé IA',
+    'ai_translator': '🌐 Traducteur IA',
+    'custom_shortcuts': '⌨️ Raccourcis personnalisés',
+    'ai_chat': '💬 Chat IA',
+    'priority_features': '⭐ Fonctionnalités prioritaires',
+    'priority_support': '📞 Support prioritaire'
+  };
+  
+  const featureName = featureNames[feature] || 'cette fonctionnalité';
+  const icon = targetPlan === 'MAX' ? '👑' : '⭐';
+  
+  // Remplir le contenu
+  modal.innerHTML = `
+    <div class="upgrade-modal-content">
+      <div class="upgrade-modal-icon">${icon}</div>
+      <div class="upgrade-modal-title">Upgrade ${targetPlan}</div>
+      <div class="upgrade-modal-message">
+        ${featureName} est disponible avec le plan ${targetPlan}<br>
+        <strong>${targetPrice}/mois</strong>
+      </div>
+      <div class="upgrade-modal-buttons">
+        <button class="upgrade-modal-btn primary" onclick="upgradeNow('${targetPlan}')">
+          ✨ Upgrade ${targetPlan}
+        </button>
+        <button class="upgrade-modal-btn secondary" onclick="closeUpgradeModal()">
+          Plus tard
+        </button>
+      </div>
+    </div>
+  `;
+  
+  modal.classList.remove('hidden');
+  
+  // Fermer au clic en dehors
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeUpgradeModal();
+    }
+  });
+}
+
+// Fermer la modal d'upgrade
+function closeUpgradeModal() {
+  const modal = document.getElementById('upgrade-feature-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+// Ouvrir Stripe pour upgrade
+function upgradeNow(plan) {
+  // Récupérer l'ID utilisateur
+  chrome.runtime.sendMessage({ action: 'auth-get-user' }, (response) => {
+    if (response?.user?.id) {
+      openStripeCheckout(plan.toLowerCase(), response.user.id);
+      closeUpgradeModal();
+    } else {
+      showToast('❌ Veuillez vous connecter d\'abord', 'error');
+    }
+  });
 }

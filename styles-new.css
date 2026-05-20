@@ -837,6 +837,433 @@ body.dark-mode .modal-content {
 }
 
 /* ============================================================
+   PROFILE TAB
+   ============================================================ */
+
+/* Profile Card */
+.profile-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  background: var(--section-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.profile-avatar {
+  font-size: 32px;
+  min-width: 40px;
+  text-align: center;
+}
+
+.profile-info {
+  flex: 1;
+}
+
+.profile-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.profile-email {
+  font-size: 12px;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
+/* Plan Section */
+.plan-section {
+  padding: 12px;
+  background: var(--section-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plan-header {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-light);
+  text-transform: uppercase;
+}
+
+.plan-badge {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+  width: 100%;
+}
+
+.plan-badge.free {
+  background: #e0e7ff;
+  color: #4f46e5;
+  border: 1px solid #c7d2fe;
+}
+
+.plan-badge.pro {
+  background: #dbeafe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.plan-badge.max {
+  background: #fed7aa;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+}
+
+body.dark-mode .plan-badge.free {
+  background: #312e81;
+  color: #a5b4fc;
+  border-color: #4f46e5;
+}
+
+body.dark-mode .plan-badge.pro {
+  background: #0c2d48;
+  color: #06b6d4;
+  border-color: #0284c7;
+}
+
+body.dark-mode .plan-badge.max {
+  background: #541c04;
+  color: #fbbf24;
+  border-color: #f59e0b;
+}
+
+.plan-expiry {
+  font-size: 11px;
+  color: var(--text-light);
+  text-align: center;
+}
+
+/* Upgrade Buttons */
+#upgrade-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upgrade-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upgrade-btn-pro {
+  background: #0369a1;
+  color: white;
+  border: 1px solid #0284c7;
+}
+
+.upgrade-btn-pro:hover {
+  background: #0284c7;
+  transform: translateY(-1px);
+}
+
+.upgrade-btn-max {
+  background: #b45309;
+  color: white;
+  border: 1px solid #d97706;
+}
+
+.upgrade-btn-max:hover {
+  background: #d97706;
+  transform: translateY(-1px);
+}
+
+.manage-btn {
+  background: #64748b;
+  color: white;
+  border: 1px solid #475569;
+}
+
+.manage-btn:hover {
+  background: #475569;
+  transform: translateY(-1px);
+}
+
+body.dark-mode .upgrade-btn-pro {
+  background: #06b6d4;
+  color: #0c2d48;
+}
+
+body.dark-mode .upgrade-btn-pro:hover {
+  background: #06d6ff;
+}
+
+body.dark-mode .upgrade-btn-max {
+  background: #fbbf24;
+  color: #541c04;
+}
+
+body.dark-mode .upgrade-btn-max:hover {
+  background: #fcd34d;
+}
+
+/* Auth Status */
+#auth-status {
+  padding: 12px;
+  background: var(--primary-light);
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.login-btn {
+  padding: 10px 20px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.login-btn:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+/* Promo Input */
+#promo-code-input {
+  padding: 8px 12px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--section-bg);
+  color: var(--text);
+}
+
+#promo-code-input::placeholder {
+  color: var(--text-light);
+}
+
+#apply-promo-btn {
+  padding: 8px 12px;
+  background: var(--primary);
+  color: white;
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+#apply-promo-btn:hover {
+  background: var(--primary-dark);
+}
+
+/* Full Width Button */
+.btn-full {
+  width: 100%;
+}
+
+body.dark-mode .profile-card,
+body.dark-mode .plan-section {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+body.dark-mode #auth-status {
+  background: rgba(102, 126, 234, 0.15);
+  border-color: rgba(102, 126, 234, 0.3);
+}
+
+body.dark-mode #promo-code-input {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: #475569;
+}
+
+/* ============================================================
+   FEATURE LOCKS (GUARDRAILS)
+   ============================================================ */
+
+/* Locked Button */
+.btn.locked {
+  opacity: 0.6;
+  cursor: not-allowed !important;
+  position: relative;
+}
+
+.btn.locked::after {
+  content: '🔒';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+}
+
+.btn.locked:hover {
+  transform: none !important;
+  background: inherit;
+}
+
+/* Locked Card */
+.card.locked {
+  opacity: 0.7;
+  position: relative;
+}
+
+.card.locked::before {
+  content: '🔒 PRO';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: var(--primary);
+  color: white;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 700;
+  z-index: 10;
+}
+
+.card.locked .card-action {
+  opacity: 0.5;
+}
+
+/* Switch Row Locked */
+.switch-row.locked {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.switch-row.locked label:not(.switch) {
+  cursor: not-allowed;
+}
+
+/* Feature Lock Badge */
+.feature-lock-badge {
+  display: inline-block;
+  background: var(--primary);
+  color: white;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 700;
+  margin-left: 6px;
+}
+
+/* Upgrade Modal */
+.upgrade-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeInTab 0.25s ease;
+}
+
+.upgrade-modal.hidden {
+  display: none;
+}
+
+.upgrade-modal-content {
+  background: var(--section-bg);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 280px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.upgrade-modal-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.upgrade-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.upgrade-modal-message {
+  font-size: 13px;
+  color: var(--text-light);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.upgrade-modal-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upgrade-modal-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upgrade-modal-btn.primary {
+  background: var(--primary);
+  color: white;
+  border: 1px solid var(--primary);
+}
+
+.upgrade-modal-btn.primary:hover {
+  background: var(--primary-dark);
+  transform: translateY(-1px);
+}
+
+.upgrade-modal-btn.secondary {
+  background: transparent;
+  color: var(--text-light);
+  border: 1px solid var(--border);
+}
+
+.upgrade-modal-btn.secondary:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+body.dark-mode .upgrade-modal-content {
+  background: #1e293b;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+/* ============================================================
    FOOTER
    ============================================================ */
 .footer {
