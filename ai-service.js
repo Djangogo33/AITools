@@ -2,10 +2,12 @@
 // v4.0.0 - Supports Prompt API (Nano) and OpenAI via Background Service Worker
 
 // ============================================================================
-// CONFIGURATION - OpenAI API Integration
+// CONFIGURATION - OpenAI API Integration (via Background Service Worker)
 // ============================================================================
-const OPENAI_API_KEY = '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';
-const OPENAI_MODEL = 'gpt-4o-mini';
+// NOTE: OpenAI key should NOT be stored in content scripts.
+// All OpenAI calls are proxied through the background service worker.
+const OPENAI_API_KEY = ''; // Disabled - use background worker proxy
+const OPENAI_MODEL = 'gpt-4o-mini'; // For reference only
 
 // ============================================================================
 // USER MODE PREFERENCE

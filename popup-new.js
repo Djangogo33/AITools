@@ -363,6 +363,16 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSlider('summarizerLength', 'summarizerLengthValue', 'summarizerLength');
   setupSlider('aiDetectorSensitivity', 'aiDetectorSensitivityValue', 'aiDetectorSensitivity');
 
+  // Settings Tab - Same configuration but with different IDs
+  setupSlider('summarizerLength-settings', 'summarizerLengthValue', 'summarizerLength');
+  setupSlider('aiDetectorSensitivity-settings', 'aiDetectorSensitivityValue', 'aiDetectorSensitivity');
+  setupSelectSync('translatorTargetLang-settings', 'translatorTargetLang', (v) => {
+    notifyContentScript({ action: 'updateSettings', settings: { translatorTargetLang: v } });
+  });
+  setupSelectSync('summarizerLang-settings', 'summarizerLang', (v) => {
+    notifyContentScript({ action: 'updateSettings', settings: { summarizerLang: v } });
+  });
+
   // ---- SETTINGS TAB ----
   const layoutSelect = document.getElementById('layoutSelect');
   chrome.storage.local.get('aitools-layout', (data) => {
@@ -1171,8 +1181,8 @@ function displayUserProfile(user, plan) {
   
   // Mettre à jour le badge du plan
   const planBadge = document.getElementById('plan-badge');
-  const planLower = (plan.plan || 'FREE').toLowerCase();
-  planBadge.textContent = plan.plan || 'FREE';
+  const planLower = (plan.plan || 'free').toLowerCase();
+  planBadge.textContent = plan.plan || 'free';
   planBadge.className = `plan-badge ${planLower}`;
   
   // Afficher la date d'expiration si active
@@ -1191,7 +1201,7 @@ function displayUserProfile(user, plan) {
   const upgradeDiv = document.getElementById('upgrade-buttons');
   upgradeDiv.innerHTML = '';
   
-  if (plan.plan === 'FREE') {
+  if (plan.plan === 'free') {
     upgradeDiv.innerHTML = `
       <button class="upgrade-btn upgrade-btn-pro" onclick="openStripeCheckout('pro', '${user.id}')">
         ⭐ Upgrade PRO - 4.99€/mois
@@ -1200,7 +1210,7 @@ function displayUserProfile(user, plan) {
         👑 Upgrade MAX - 9.99€/mois
       </button>
     `;
-  } else if (plan.plan === 'PRO') {
+  } else if (plan.plan === 'pro') {
     upgradeDiv.innerHTML = `
       <button class="upgrade-btn upgrade-btn-max" onclick="openStripeCheckout('max', '${user.id}')">
         👑 Upgrade MAX - 9.99€/mois

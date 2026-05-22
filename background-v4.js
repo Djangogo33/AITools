@@ -1,9 +1,10 @@
 // AITools Background Service Worker v4.0
+importScripts('auth-supabase.js');
+
 console.log('[AITools] Background worker initialized');
 
-// Import du module d'authentification Supabase
-// Note: Les imports en MV3 se font différemment. On charge le script separément
-// et on utilise chrome.storage pour la communication inter-modules
+// Import du module d'authentification Supabase via importScripts
+// Cela permet d'appeler directement loginWithGoogle(), verifyUserPlan(), etc.
 
 // ============================================================================
 // AUTHENTIFICATION ET GESTION DU PLAN UTILISATEUR
@@ -49,9 +50,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
         console.log('[AITools] ⚠️ Using cached plan (offline mode)');
         await chrome.storage.local.set({ isOffline: true });
       } else {
-        console.log('[AITools] No cached plan, defaulting to FREE');
+        console.log('[AITools] No cached plan, defaulting to free');
         await chrome.storage.local.set({
-          userPlan: { plan: 'FREE', features: [], isActive: false },
+          userPlan: { plan: 'free', features: [], isActive: false },
           isOffline: true
         });
       }
@@ -68,10 +69,10 @@ async function verifyUserPlanOffline() {
     const storage = await chrome.storage.local.get(['user']);
     
     if (!storage.user) {
-      return { plan: 'FREE', features: [], isActive: false };
+      return { plan: 'free', features: [], isActive: false };
     }
 
-    const userId = storage.user.id;
+    const userId = storage.user.google_id || storage.user.id;
 
     // Récupérer le plan depuis Supabase
     const response = await fetch(
@@ -91,7 +92,7 @@ async function verifyUserPlanOffline() {
     const subscriptions = await response.json();
     
     if (!subscriptions || subscriptions.length === 0) {
-      return { plan: 'FREE', features: [], isActive: false };
+      return { plan: 'free', features: [], isActive: false };
     }
 
     const subscription = subscriptions[0];
@@ -100,13 +101,13 @@ async function verifyUserPlanOffline() {
     const isActive = expiryDate > now;
 
     if (!isActive) {
-      return { plan: 'FREE', features: [], isActive: false };
+      return { plan: 'free', features: [], isActive: false };
     }
 
     const planFeatures = {
-      'FREE': ['dark_mode', 'reading_time'],
-      'PRO': ['dark_mode', 'reading_time', 'advanced_search', 'note_sync', 'custom_shortcuts'],
-      'MAX': ['dark_mode', 'reading_time', 'advanced_search', 'note_sync', 'custom_shortcuts', 'ai_chat', 'priority_support', 'priority_features']
+      'free': ['dark_mode', 'reading_time'],
+      'pro': ['dark_mode', 'reading_time', 'advanced_search', 'note_sync', 'custom_shortcuts'],
+      'max': ['dark_mode', 'reading_time', 'advanced_search', 'note_sync', 'custom_shortcuts', 'ai_chat', 'priority_support', 'priority_features']
     };
 
     return {
@@ -129,10 +130,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'auth-login-google') {
     (async () => {
       try {
-        // Dynamiquement charger et exécuter le code d'auth
-        const authScript = await (await fetch(chrome.runtime.getURL('auth-supabase.js'))).text();
-        eval(authScript);
-        
+        // Appeler directement loginWithGoogle() depuis le module chargé par importScripts
         const user = await loginWithGoogle();
         
         // Créer l'alarme de vérification immédiatement après connexion

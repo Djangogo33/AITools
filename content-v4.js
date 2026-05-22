@@ -730,8 +730,8 @@ function debugDOM() {
   }
 }
 
-// Call debug on load
-setTimeout(() => debugDOM(), 2000);
+// DEBUG: Disabled in production - uncomment only for troubleshooting
+// setTimeout(() => debugDOM(), 2000);
 
 // Simple, robust extraction - NO FALLBACKS
 function extractRelevantPageText() {

@@ -4,7 +4,7 @@
 
 const SUPABASE_URL = 'https://yvtukwaepqqsvacbbyou.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2dHVrd2FlcHFxc3ZhY2JieW91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjkxNDcsImV4cCI6MjA5NDg0NTE0N30.V_09OsFejHBTQ9ihlj9y6rDhDTLLkVGI9bPBIWmIUlc';
-const GOOGLE_CLIENT_ID = '277196877247-sleq8im8phkhs4kqorflcpm448ki1f5i.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '277196877247-tvo7onn2fundrdpgsd34ilae5l7sskhm.apps.googleusercontent.com';
 const REDIRECT_URL = chrome.identity.getRedirectURL();
 
 /**
@@ -102,7 +102,7 @@ async function exchangeTokenWithSupabase(googleAccessToken) {
         google_id: googleUser.id,
         name: googleUser.name,
         picture: googleUser.picture,
-        plan: 'FREE',
+        plan: 'free',
         created_at: new Date().toISOString()
       })
     });
@@ -129,7 +129,7 @@ async function verifyUserPlan() {
     const storage = await chrome.storage.local.get(['user']);
     
     if (!storage.user) {
-      return { plan: 'FREE', features: [], isActive: false };
+      return { plan: 'free', features: [], isActive: false };
     }
 
     const userId = storage.user.id;
@@ -146,14 +146,14 @@ async function verifyUserPlan() {
     );
 
     if (!response.ok) {
-      console.warn('Impossible de vérifier le plan, fallback FREE');
-      return { plan: 'FREE', features: [], isActive: false };
+      console.warn('Impossible de vérifier le plan, fallback free');
+      return { plan: 'free', features: [], isActive: false };
     }
 
     const subscriptions = await response.json();
     
     if (!subscriptions || subscriptions.length === 0) {
-      return { plan: 'FREE', features: [], isActive: false };
+      return { plan: 'free', features: [], isActive: false };
     }
 
     const subscription = subscriptions[0];
@@ -164,14 +164,14 @@ async function verifyUserPlan() {
     const isActive = expiryDate > now;
 
     if (!isActive) {
-      return { plan: 'FREE', features: [], isActive: false };
+      return { plan: 'free', features: [], isActive: false };
     }
 
     // Retourner le plan avec les features activées
     const planFeatures = {
-      'FREE': ['dark_mode', 'reading_time'],
-      'PRO': ['dark_mode', 'reading_time', 'advanced_search', 'note_sync', 'custom_shortcuts'],
-      'MAX': ['dark_mode', 'reading_time', 'advanced_search', 'note_sync', 'custom_shortcuts', 'ai_chat', 'priority_support', 'priority_features']
+      'free': ['dark_mode', 'reading_time'],
+      'pro': ['dark_mode', 'reading_time', 'advanced_search', 'note_sync', 'custom_shortcuts'],
+      'max': ['dark_mode', 'reading_time', 'advanced_search', 'note_sync', 'custom_shortcuts', 'ai_chat', 'priority_support', 'priority_features']
     };
 
     return {
@@ -184,7 +184,7 @@ async function verifyUserPlan() {
   } catch (error) {
     console.error('Erreur lors de la vérification du plan:', error);
     // En cas d'erreur, retourner FREE pour éviter les blocages
-    return { plan: 'FREE', features: [], isActive: false };
+    return { plan: 'free', features: [], isActive: false };
   }
 }
 
@@ -328,8 +328,8 @@ async function getFeatureAccessMap() {
     'priority_support': planData.plan !== 'FREE',
     
     // MAX only
-    'ai_chat': planData.plan === 'MAX',
-    'priority_features': planData.plan === 'MAX'
+    'ai_chat': planData.plan === 'max',
+    'priority_features': planData.plan === 'max'
   };
   
   return {
@@ -343,15 +343,15 @@ async function getFeatureAccessMap() {
  * Obtient le message de déverrouillage pour une feature
  */function getFeatureUpgradeMessage(featureName, currentPlan) {
   const messages = {
-    'remove_ads': 'Upgrade PRO pour bloquer les publicités (4.99€/mois)',
-    'note_sync': 'Upgrade PRO pour synchroniser vos notes (4.99€/mois)',
-    'advanced_search': 'Upgrade PRO pour la recherche avancée (4.99€/mois)',
-    'ai_summarizer': 'Upgrade PRO pour utiliser l\'IA Summarizer (4.99€/mois)',
-    'ai_translator': 'Upgrade PRO pour utiliser l\'IA Translator (4.99€/mois)',
-    'custom_shortcuts': 'Upgrade PRO pour les raccourcis personnalisés (4.99€/mois)',
-    'ai_chat': 'Upgrade MAX pour accéder à l\'IA Chat (9.99€/mois)',
-    'priority_features': 'Upgrade MAX pour les fonctionnalités prioritaires (9.99€/mois)',
-    'priority_support': 'Upgrade PRO pour le support prioritaire (4.99€/mois)'
+    'remove_ads': 'Upgrade PRO pour bloquer les publicités (3,99€/mois)',
+    'note_sync': 'Upgrade PRO pour synchroniser vos notes (3,99€/mois)',
+    'advanced_search': 'Upgrade PRO pour la recherche avancée (3,99€/mois)',
+    'ai_summarizer': 'Upgrade PRO pour utiliser l\'IA Summarizer (3,99€/mois)',
+    'ai_translator': 'Upgrade PRO pour utiliser l\'IA Translator (3,99€/mois)',
+    'custom_shortcuts': 'Upgrade PRO pour les raccourcis personnalisés (3,99€/mois)',
+    'ai_chat': 'Upgrade MAX pour accéder à l\'IA Chat (7,99€/mois)',
+    'priority_features': 'Upgrade MAX pour les fonctionnalités prioritaires (7,99€/mois)',
+    'priority_support': 'Upgrade PRO pour le support prioritaire (3,99€/mois)'
   };
   
   const targetPlan = featureName === 'ai_chat' || featureName === 'priority_features' ? 'MAX' : 'PRO';
