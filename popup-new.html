@@ -114,7 +114,7 @@
       </div>
 
       <!-- Connected User Section -->
-      <div id="user-connected-section" style="display: none;">
+      <div id="user-connected-section" class="is-hidden">
         <div class="section">
           <div class="profile-card">
             <div class="profile-avatar" id="profile-avatar">👤</div>
@@ -154,16 +154,16 @@
               placeholder="Code promo (optionnel)..."
               class="input-field"
             >
-            <button id="apply-promo-btn" class="input-search-btn" title="Appliquer le code">✓</button>
+            <button type="button" id="apply-promo-btn" class="input-search-btn" title="Appliquer le code">✓</button>
           </div>
-          <div id="promo-message" style="font-size:11px;margin-top:6px;color:var(--text-light);"></div>
+          <div id="promo-message" class="promo-message"></div>
         </div>
 
         <hr class="separator">
 
         <!-- Logout Button -->
         <div class="section">
-          <button id="logout-btn" class="btn btn-full" style="background:#ff4444;border-color:#ff4444;">
+          <button id="logout-btn" class="btn btn-full btn-logout">
             🚪 Se déconnecter
           </button>
         </div>
@@ -760,3 +760,4 @@
   <script src="popup-new.js"></script>
 </body>
 </html>
+

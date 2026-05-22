@@ -1072,6 +1072,43 @@ body.dark-mode .upgrade-btn-max:hover {
   width: 100%;
 }
 
+.btn-logout {
+  background: #ff4444;
+  border-color: #ff4444;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+.is-visible {
+  display: block !important;
+}
+
+.promo-message {
+  font-size: 11px;
+  margin-top: 6px;
+  color: var(--text-light);
+}
+
+.promo-message-success {
+  color: var(--success);
+}
+
+.promo-message-error {
+  color: var(--danger);
+}
+
+.auth-login-wrap {
+  text-align: center;
+}
+
+.auth-login-title {
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 body.dark-mode .profile-card,
 body.dark-mode .plan-section {
   background: #1e293b;

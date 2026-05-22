@@ -72,7 +72,16 @@ async function verifyUserPlanOffline() {
       return { plan: 'free', features: [], isActive: false };
     }
 
-    const userId = storage.user.google_id || storage.user.id;
+    const userId = String(storage.user.id || storage.user.google_id || '').trim();
+    const invalidUserId =
+      !userId ||
+      userId.toLowerCase() === 'undefined' ||
+      userId.toLowerCase() === 'null';
+
+    if (invalidUserId) {
+      console.warn('[AITools] verifyUserPlanOffline: user.id manquant, fallback free');
+      return { plan: 'free', features: [], isActive: false };
+    }
 
     // Récupérer le plan depuis Supabase
     const response = await fetch(
@@ -123,6 +132,95 @@ async function verifyUserPlanOffline() {
   }
 }
 
+// Exécute la validation du code promo hors du listener principal.
+async function executePromoValidation(promoCode, sendResponse) {
+  const normalizedPromoCode = String(promoCode || '').trim().toUpperCase();
+
+  try {
+    if (!normalizedPromoCode) {
+      sendResponse({ success: false, error: 'Code promo vide' });
+      return;
+    }
+
+    const storage = await chrome.storage.local.get(['user']);
+    if (!storage.user) {
+      sendResponse({ success: false, error: 'Utilisateur non connecté' });
+      return;
+    }
+
+    const userId = String(storage.user.id || storage.user.google_id || '');
+    if (!userId) {
+      sendResponse({ success: false, error: 'Identifiant utilisateur introuvable' });
+      return;
+    }
+
+    const SUPABASE_URL = 'https://yvtukwaepqqsvacbbyou.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2dHVrd2FlcHFxc3ZhY2JieW91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjkxNDcsImV4cCI6MjA5NDg0NTE0N30.V_09OsFejHBTQ9ihlj9y6rDhDTLLkVGI9bPBIWmIUlc';
+
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/validate_promo_code`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({
+        p_user_id: userId,
+        p_code: normalizedPromoCode
+      })
+    });
+
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      const rpcError =
+        result?.message ||
+        result?.error_description ||
+        result?.error ||
+        'Code promo invalide';
+      throw new Error(rpcError);
+    }
+
+    // Après avoir reçu `result` de l'appel RPC, forcer immédiatement la synchro locale.
+    if (result && (result.success || result.new_plan === 'pro')) {
+      // 1) Mettre à jour manuellement l'objet utilisateur local
+      const userStorage = await chrome.storage.local.get(['user']);
+      if (userStorage.user) {
+        userStorage.user.plan = 'pro';
+        await chrome.storage.local.set({ user: userStorage.user });
+      }
+
+      // 2) Forcer la structure `userPlan` attendue par l'interface
+      const newPlanData = {
+        plan: 'pro',
+        features: ['dark_mode', 'reading_time', 'advanced_search', 'note_sync', 'custom_shortcuts'],
+        isActive: true,
+        expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      };
+
+      await chrome.storage.local.set({
+        userPlan: newPlanData,
+        lastPromoApplied: normalizedPromoCode,
+        lastPromoTimestamp: new Date().toISOString(),
+        isOffline: false
+      });
+
+      chrome.runtime.sendMessage({ action: 'ui-refresh-status', newPlan: 'pro' }).catch(() => {
+        // On ignore l'erreur si la popup est fermée au moment de l'envoi
+      });
+
+      // 3) Répondre immédiatement avec les données forcées côté UI
+      console.log('[AITools] ✅ Promo code applied (forced local sync):', normalizedPromoCode);
+      sendResponse({ success: true, result, newPlan: newPlanData });
+      return;
+    }
+
+    sendResponse({ success: false, error: 'Code promo appliqué mais plan non confirmé' });
+  } catch (error) {
+    console.error('[AITools] Promo code error:', error.message);
+    sendResponse({ success: false, error: error.message || 'Erreur inconnue' });
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // ============================================================================
   // AUTH: LOGIN WITH GOOGLE
@@ -133,11 +231,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Appeler directement loginWithGoogle() depuis le module chargé par importScripts
         const user = await loginWithGoogle();
         
+        // 1) Persister immédiatement l'objet utilisateur complet.
+        await chrome.storage.local.set({
+          user: user,
+          lastLogin: new Date().toISOString()
+        });
+
+        // 2) Laisser le temps aux écritures/initialisations côté Supabase.
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        
         // Créer l'alarme de vérification immédiatement après connexion
         chrome.alarms.create('verify-user-plan', { periodInMinutes: 24 * 60 });
         
         // Vérifier le plan immédiatement
-        const planData = await verifyUserPlanOffline();
+        let planData = await verifyUserPlanOffline();
+
+        // 3) Fallback intelligent au tout premier login si la subscription n'est pas encore visible.
+        const currentPlan = String(planData?.plan || '').toLowerCase();
+        const planIsMissing = !planData || !planData.plan;
+        const planIsImmediateFree = currentPlan === 'free';
+        if (planIsMissing || planIsImmediateFree) {
+          planData = {
+            plan: user.plan || 'free',
+            isActive: true,
+            features: ['dark_mode', 'reading_time']
+          };
+        }
+
         await chrome.storage.local.set({
           userPlan: planData,
           isOffline: false
@@ -191,64 +311,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // ============================================================================
   // AUTH: APPLY PROMO CODE
   // ============================================================================
-  if (message.action === 'auth-apply-promo') {
-    (async () => {
-      try {
-        const { promoCode } = message;
-        
-        if (!promoCode || promoCode.trim().length === 0) {
-          sendResponse({ success: false, error: 'Code promo vide' });
-          return;
-        }
-
-        const storage = await chrome.storage.local.get(['user']);
-        if (!storage.user) {
-          sendResponse({ success: false, error: 'Utilisateur non connecté' });
-          return;
-        }
-
-        const userId = storage.user.id;
-        const SUPABASE_URL = 'https://yvtukwaepqqsvacbbyou.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2dHVrd2FlcHFxc3ZhY2JieW91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNjkxNDcsImV4cCI6MjA5NDg0NTE0N30.V_09OsFejHBTQ9ihlj9y6rDhDTLLkVGI9bPBIWmIUlc';
-
-        // Valider le code promo via Supabase RPC
-        const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/validate_promo_code`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({
-            p_user_id: userId,
-            p_code: promoCode.toUpperCase()
-          })
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || 'Code promo invalide');
-        }
-
-        const result = await response.json();
-
-        // Mettre à jour le stockage
-        await chrome.storage.local.set({
-          lastPromoApplied: promoCode.toUpperCase(),
-          lastPromoTimestamp: new Date().toISOString()
-        });
-
-        // Vérifier le nouveau plan
-        const planData = await verifyUserPlanOffline();
-        await chrome.storage.local.set({ userPlan: planData });
-
-        console.log('[AITools] ✅ Promo code applied:', promoCode);
-        sendResponse({ success: true, result, newPlan: planData });
-      } catch (error) {
-        console.error('[AITools] Promo code error:', error.message);
-        sendResponse({ success: false, error: error.message });
-      }
-    })();
+  if (message.action === 'auth-apply-promo' || message.action === 'apply-promo') {
+    const incomingCode = message.code || message.promoCode;
+    executePromoValidation(incomingCode, sendResponse);
     return true;
   }
 
@@ -528,3 +593,5 @@ chrome.runtime.onInstalled.addListener((details) => {
     });
   }
 });
+
+

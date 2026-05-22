@@ -64,6 +64,20 @@ function notifyActiveTab(message) {
   });
 }
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'ui-refresh-status') {
+    console.log('[Popup] Statut mis à jour détecté, rafraîchissement de l\'interface...');
+    if (typeof loadUserProfile === 'function') {
+      loadUserProfile();
+      if (typeof initializeFeatureLocks === 'function') {
+        initializeFeatureLocks();
+      }
+    } else {
+      window.location.reload();
+    }
+  }
+});
+
 // ============================================================================
 // INITIALIZATION
 // ============================================================================
@@ -1152,8 +1166,8 @@ async function loadUserProfile() {
 function displayLoginPrompt() {
   const authStatus = document.getElementById('auth-status');
   authStatus.innerHTML = `
-    <div style="text-align: center;">
-      <div style="margin-bottom: 12px; font-size: 14px; font-weight: 600;">
+    <div class="auth-login-wrap">
+      <div class="auth-login-title">
         Connectez-vous pour débloquer les fonctionnalités PRO
       </div>
       <button id="login-google-btn" class="login-btn">
@@ -1162,7 +1176,9 @@ function displayLoginPrompt() {
     </div>
   `;
   
-  document.getElementById('user-connected-section').style.display = 'none';
+  const connectedSection = document.getElementById('user-connected-section');
+  connectedSection?.classList.add('is-hidden');
+  connectedSection?.classList.remove('is-visible');
   
   // Attacher l'événement au bouton de connexion
   const loginBtn = document.getElementById('login-google-btn');
@@ -1228,7 +1244,9 @@ function displayUserProfile(user, plan) {
   }
   
   // Afficher la section utilisateur connecté
-  document.getElementById('user-connected-section').style.display = 'block';
+  const connectedSection = document.getElementById('user-connected-section');
+  connectedSection?.classList.remove('is-hidden');
+  connectedSection?.classList.add('is-visible');
   document.getElementById('auth-status').innerHTML = '';
   
   // Attacher les événements
@@ -1287,9 +1305,16 @@ function applyPromoCode() {
   const promoInput = document.getElementById('promo-code-input');
   const promoCode = promoInput?.value?.trim();
   const promoMessage = document.getElementById('promo-message');
+  const setPromoState = (stateClass, text) => {
+    if (!promoMessage) return;
+    promoMessage.classList.remove('promo-message-success', 'promo-message-error');
+    if (stateClass) promoMessage.classList.add(stateClass);
+    promoMessage.textContent = text || '';
+  };
   
   if (!promoCode) {
     showToast('⚠️ Entrez un code promo', 'error');
+    setPromoState('promo-message-error', 'Entrez un code promo');
     return;
   }
   
@@ -1297,28 +1322,29 @@ function applyPromoCode() {
   applyBtn.disabled = true;
   applyBtn.textContent = '...';
   
-  chrome.runtime.sendMessage({ 
+  chrome.runtime.sendMessage({
     action: 'auth-apply-promo',
-    promoCode: promoCode
+    code: promoCode
   }, (response) => {
     applyBtn.disabled = false;
     applyBtn.textContent = '✓';
+
+    if (chrome.runtime.lastError) {
+      const channelError = chrome.runtime.lastError.message || 'Erreur de communication';
+      showToast(`❌ ${channelError}`, 'error');
+      setPromoState('promo-message-error', channelError);
+      return;
+    }
     
     if (response?.success) {
       showToast('✅ Code promo appliqué!', 'success');
       promoInput.value = '';
-      if (promoMessage) {
-        promoMessage.textContent = `Code appliqué: ${promoCode}`;
-        promoMessage.style.color = 'var(--success)';
-      }
+      setPromoState('promo-message-success', `Code appliqué: ${promoCode}`);
       // Recharger le profil après 1s
       setTimeout(loadUserProfile, 1000);
     } else {
       showToast(`❌ ${response?.error || 'Code invalide'}`, 'error');
-      if (promoMessage) {
-        promoMessage.textContent = response?.error || 'Code promo invalide ou expiré';
-        promoMessage.style.color = 'var(--danger)';
-      }
+      setPromoState('promo-message-error', response?.error || 'Code promo invalide ou expiré');
     }
   });
 }
@@ -1525,3 +1551,4 @@ function upgradeNow(plan) {
     }
   });
 }
+

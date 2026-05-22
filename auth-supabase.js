@@ -49,6 +49,18 @@ async function loginWithGoogle() {
 
     return user;
   } catch (error) {
+    const rawMessage = (error && error.message) ? error.message : String(error || '');
+    const normalizedMessage = rawMessage.toLowerCase();
+    const isUserCancelled =
+      normalizedMessage.includes('did not approve access') ||
+      normalizedMessage.includes('user did not approve') ||
+      normalizedMessage.includes('access_denied');
+
+    if (isUserCancelled) {
+      console.info('Connexion Google annulée par l’utilisateur');
+      throw new Error('Connexion annulée');
+    }
+
     console.error('Erreur lors de la connexion Google:', error);
     throw error;
   }
@@ -132,7 +144,16 @@ async function verifyUserPlan() {
       return { plan: 'free', features: [], isActive: false };
     }
 
-    const userId = storage.user.id;
+    const userId = String(storage.user.id || '').trim();
+    const invalidUserId =
+      !userId ||
+      userId.toLowerCase() === 'undefined' ||
+      userId.toLowerCase() === 'null';
+
+    if (invalidUserId) {
+      console.warn('verifyUserPlan: user.id manquant, fallback free');
+      return { plan: 'free', features: [], isActive: false };
+    }
 
     // Récupérer le plan depuis Supabase
     const response = await fetch(
