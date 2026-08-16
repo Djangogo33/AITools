@@ -1,16 +1,10 @@
 import { MESSAGE_TYPES, STORAGE_KEYS } from '../shared/constants.js';
+import { getAccount, isFeatureAllowed, signInWithGoogle, signOut } from '../shared/auth-client.js';
 
 chrome.runtime.onInstalled.addListener(async () => {
   const current = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.notes]);
   if (!current[STORAGE_KEYS.settings]) {
-    await chrome.storage.local.set({
-      [STORAGE_KEYS.settings]: {
-        theme: 'dark',
-        notifications: true,
-        compactMode: false,
-        quickLinks: []
-      }
-    });
+    await chrome.storage.local.set({ [STORAGE_KEYS.settings]: { theme: 'dark', notifications: true, compactMode: false, quickLinks: [] } });
   }
   if (!current[STORAGE_KEYS.notes]) await chrome.storage.local.set({ [STORAGE_KEYS.notes]: [] });
 });
@@ -23,25 +17,24 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   const next = remaining === 0 ? { ...state, remaining: 0, status: 'done' } : { ...state, remaining };
   await chrome.storage.local.set({ [STORAGE_KEYS.pomodoro]: next });
   if (remaining === 0 && state.notifications !== false) {
-    chrome.notifications?.create({
-      type: 'basic',
-      iconUrl: 'assets/icon-128.png',
-      title: 'Pomodoro terminé',
-      message: 'Votre session est terminée. Prenez quelques minutes de pause.'
-    });
+    chrome.notifications.create({ type: 'basic', iconUrl: 'assets/icon-128.png', title: 'Pomodoro terminé', message: 'Votre session est terminée. Prenez quelques minutes de pause.' });
   }
 });
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type === MESSAGE_TYPES.pomodoroState) {
-    sendResponse({ ok: true });
-    return false;
-  }
-  if (message?.type === 'tabs/close-duplicates') {
-    closeDuplicateTabs().then((closed) => sendResponse({ ok: true, closed }));
-    return true;
-  }
-  return false;
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  const handlers = {
+    'auth/get-account': () => getAccount(),
+    'auth/sign-in-google': () => signInWithGoogle(),
+    'auth/sign-out': () => signOut(),
+    'auth/is-feature-allowed': () => isFeatureAllowed(message.feature),
+    'tabs/close-duplicates': () => closeDuplicateTabs()
+  };
+  const handler = handlers[message?.type];
+  if (!handler) return false;
+  handler()
+    .then((data) => sendResponse({ ok: true, data }))
+    .catch((error) => sendResponse({ ok: false, error: normalizeError(error) }));
+  return true;
 });
 
 async function closeDuplicateTabs() {
@@ -54,5 +47,11 @@ async function closeDuplicateTabs() {
     else seen.add(tab.url);
   }
   if (duplicateIds.length) await chrome.tabs.remove(duplicateIds);
-  return duplicateIds.length;
+  return { closed: duplicateIds.length };
+}
+
+function normalizeError(error) {
+  const message = String(error?.message || error || 'Une erreur inattendue est survenue.');
+  if (/did not approve|access_denied|cancel/i.test(message)) return 'Connexion annulée.';
+  return message;
 }

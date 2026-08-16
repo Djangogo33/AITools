@@ -6,6 +6,7 @@ let settings = { ...DEFAULT_SETTINGS };
 let notes = [];
 let pomodoro = { status: 'idle', remaining: 1500, notifications: true };
 let pomodoroTimer;
+let account = { authenticated: false, user: null, plan: 'free', entitlements: [] };
 
 init();
 
@@ -20,10 +21,12 @@ async function init() {
   renderNotes();
   bindNavigation();
   bindActions();
+  await refreshAccount();
 }
 
 function bindNavigation() {
   $$('.nav-item').forEach((button) => button.addEventListener('click', () => showView(button.dataset.view)));
+  $('#account-shortcut').addEventListener('click', () => showView('settings'));
 }
 
 function showView(view) {
@@ -53,6 +56,57 @@ function bindActions() {
   $('#tool-duplicates').addEventListener('click', closeDuplicates);
   $('#save-note').addEventListener('click', saveNote);
   $('#pomodoro-toggle').addEventListener('click', togglePomodoro);
+  $('#auth-action').addEventListener('click', handleAuthAction);
+  $('#sign-out').addEventListener('click', handleSignOut);
+}
+
+async function refreshAccount() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'auth/get-account' });
+    if (!response?.ok) throw new Error(response?.error || 'Compte indisponible');
+    account = response.data;
+  } catch {
+    account = { authenticated: false, user: null, plan: 'free', entitlements: [] };
+  }
+  renderAccount();
+}
+
+function renderAccount() {
+  const user = account.user;
+  const initial = String(user?.name || 'A').trim().charAt(0).toUpperCase() || 'A';
+  $('#account-name').textContent = user ? user.name : 'Utiliser en mode local';
+  $('#account-email').textContent = user ? user.email : 'Vos outils et notes restent disponibles sans compte.';
+  $('#account-plan').textContent = user ? `PLAN ${String(account.plan || 'free').toUpperCase()}` : 'PLAN LOCAL';
+  $('#account-hint').textContent = user ? `Session sécurisée avec Supabase${account.expiresAt ? ` · accès jusqu’au ${new Date(account.expiresAt).toLocaleDateString('fr-FR')}` : ''}.` : 'Connectez-vous pour synchroniser votre profil et accéder à vos fonctionnalités distantes.';
+  $('#auth-action').textContent = user ? 'Actualiser le compte' : 'Se connecter avec Google';
+  $('#sign-out').classList.toggle('hidden', !user);
+  $('#sidebar-avatar').textContent = initial;
+  $('#account-avatar').textContent = initial;
+  $('#sidebar-account-name').textContent = user ? user.name : 'Mode local';
+  $('#sidebar-account-status').textContent = user ? `Plan ${String(account.plan || 'free').toUpperCase()}` : 'Prêt à travailler';
+  $('#sidebar-account-dot').style.background = user ? 'var(--green)' : 'var(--faint)';
+  [$('#sidebar-avatar'), $('#account-avatar')].forEach((element) => {
+    element.classList.toggle('has-image', Boolean(user?.avatarUrl));
+    element.style.backgroundImage = user?.avatarUrl ? `url(${JSON.stringify(user.avatarUrl)})` : '';
+  });
+}
+
+async function handleAuthAction() {
+  if (account.authenticated) return refreshAccount();
+  const button = $('#auth-action'); const previous = button.textContent;
+  button.disabled = true; button.textContent = 'Connexion en cours…';
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'auth/sign-in-google' });
+    if (!response?.ok) throw new Error(response?.error || 'Connexion impossible.');
+    account = response.data; renderAccount(); showToast('Connexion réussie.');
+  } catch (error) { showToast(error.message || 'Connexion impossible.'); }
+  finally { button.disabled = false; if (!account.authenticated) button.textContent = previous; }
+}
+
+async function handleSignOut() {
+  const response = await chrome.runtime.sendMessage({ type: 'auth/sign-out' });
+  if (!response?.ok) return showToast(response?.error || 'Déconnexion impossible.');
+  account = response.data; renderAccount(); showToast('Vous êtes déconnecté.');
 }
 
 function renderQuickLinks() {
@@ -85,7 +139,7 @@ async function runPageAction(type) {
 
 async function closeDuplicates() {
   const response = await chrome.runtime.sendMessage({ type: 'tabs/close-duplicates' });
-  showToast(`${response.closed || 0} onglet(s) doublon(s) fermé(s)`);
+  showToast(`${response.data?.closed || 0} onglet(s) doublon(s) fermé(s)`);
 }
 
 function runSearch() { const query = $('#search-input').value.trim(); if (query) chrome.tabs.create({ url: `https://www.google.com/search?q=${encodeURIComponent(query)}` }); }

@@ -3,7 +3,8 @@
   "name": "AITools",
   "version": "5.0.0",
   "description": "Un espace de travail rapide pour rechercher, résumer et organiser le web.",
-  "permissions": ["storage", "tabs", "alarms", "scripting", "activeTab", "notifications"],
+  "permissions": ["storage", "tabs", "alarms", "scripting", "activeTab", "notifications", "identity"],
+  "host_permissions": ["https://yvtukwaepqqsvacbbyou.supabase.co/*"],
   "action": {
     "default_title": "AITools",
     "default_popup": "popup/index.html"
