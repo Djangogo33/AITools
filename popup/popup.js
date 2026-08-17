@@ -423,9 +423,10 @@ async function runPageAction(type) {
   if (!tab?.id || tab.url?.startsWith('chrome://')) return showToast('Cette page ne permet pas cette action.');
   try {
     const response = await chrome.tabs.sendMessage(tab.id, { type });
-    if (type === MESSAGE_TYPES.summarizePage) { showView('notes'); $('#note-input').value = response.summary || 'Résumé indisponible.'; showToast('Résumé prêt à être enregistré'); }
+    if (!response?.ok) throw new Error(response?.error || 'Action indisponible.');
+    if (type === MESSAGE_TYPES.summarizePage) { if (!response.summary) throw new Error('Le résumé n’a retourné aucun contenu.'); showView('notes'); $('#note-input').value = response.summary; showToast('Résumé prêt à être enregistré'); }
     else showToast(`${response.count || 0} élément(s) anonymisé(s)`);
-  } catch { showToast('Impossible d’analyser cette page. Rechargez-la puis réessayez.'); }
+  } catch (error) { showToast(error.message || 'Impossible d’analyser cette page. Rechargez-la puis réessayez.'); }
 }
 
 async function runProductivityAction(type) {

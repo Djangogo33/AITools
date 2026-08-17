@@ -3,29 +3,37 @@ const MAX_INPUT = 12_000;
 export async function getAIStatus() {
   const summary = await availabilityOf('Summarizer');
   const translator = await availabilityOf('Translator', { sourceLanguage: 'en', targetLanguage: 'fr' });
-  const detector = typeof globalThis.LanguageDetector === 'undefined' ? 'unavailable' : 'available';
-  const prompt = typeof globalThis.LanguageModel === 'undefined' ? 'unavailable' : await globalThis.LanguageModel.availability().catch(() => 'unavailable');
+  const detector = await availabilityOf('LanguageDetector');
+  const prompt = await availabilityOf('LanguageModel');
   return { summary, translator, detector, prompt, local: summary !== 'unavailable' || translator !== 'unavailable' || prompt !== 'unavailable' };
 }
 
 export async function summarizeWithAI(text, { length = 'medium', outputLanguage = 'fr' } = {}) {
   const source = normalizeInput(text);
   if (!source) throw new Error('Aucun texte lisible à résumer.');
+  let summarizerAvailability = 'unavailable';
   if (typeof globalThis.Summarizer !== 'undefined') {
-    const availability = await globalThis.Summarizer.availability();
-    if (availability !== 'unavailable') {
-      const summarizer = await globalThis.Summarizer.create({ type: 'key-points', format: 'markdown', length, outputLanguage });
-      try { return { text: await summarizer.summarize(source), engine: 'summarizer-api', availability }; } finally { summarizer.destroy?.(); }
+    summarizerAvailability = await availabilityOf('Summarizer');
+    if (summarizerAvailability !== 'unavailable') {
+      try {
+        const summarizer = await globalThis.Summarizer.create({ type: 'key-points', format: 'markdown', length, outputLanguage });
+        try { const output = cleanModelOutput(await summarizer.summarize(source)); if (output) return { text: output, engine: 'summarizer-api', availability: summarizerAvailability }; }
+        finally { summarizer.destroy?.(); }
+      } catch { /* l’API peut être disponible mais non téléchargeable ou échouer à l’initialisation */ }
     }
   }
+  let promptAvailability = 'unavailable';
   if (typeof globalThis.LanguageModel !== 'undefined') {
-    const availability = await globalThis.LanguageModel.availability();
-    if (availability !== 'unavailable') {
-      const session = await globalThis.LanguageModel.create();
-      try { return { text: await session.prompt(`Résume le texte suivant en français en cinq puces claires. Ne rajoute aucun fait non présent.\n\n${source}`), engine: 'prompt-api', availability }; } finally { session.destroy?.(); }
+    promptAvailability = await availabilityOf('LanguageModel');
+    if (promptAvailability !== 'unavailable') {
+      try {
+        const session = await globalThis.LanguageModel.create();
+        try { const output = cleanModelOutput(await session.prompt(`Résume fidèlement le texte suivant en français en cinq points maximum. N’ajoute aucun fait absent du texte. Si le texte est court, conserve toutes ses idées importantes.\n\n${source}`)); if (output) return { text: output, engine: 'prompt-api', availability: promptAvailability }; }
+        finally { session.destroy?.(); }
+      } catch { /* repli extractif */ }
     }
   }
-  return { text: heuristicSummary(source), engine: 'heuristique', availability: 'unavailable' };
+  return { text: heuristicSummary(source), engine: 'heuristique-extractif', availability: summarizerAvailability !== 'unavailable' || promptAvailability !== 'unavailable' ? 'fallback' : 'unavailable' };
 }
 
 export async function translateWithAI(text, targetLanguage = 'fr') {
@@ -34,17 +42,23 @@ export async function translateWithAI(text, targetLanguage = 'fr') {
   const sourceLanguage = await detectLanguage(source);
   if (sourceLanguage === targetLanguage) return { text: source, sourceLanguage, targetLanguage, engine: 'none' };
   if (typeof globalThis.Translator !== 'undefined') {
-    const availability = await globalThis.Translator.availability({ sourceLanguage, targetLanguage });
+    const availability = await availabilityOf('Translator', { sourceLanguage, targetLanguage });
     if (availability !== 'unavailable') {
-      const translator = await globalThis.Translator.create({ sourceLanguage, targetLanguage });
-      try { return { text: await translator.translate(source), sourceLanguage, targetLanguage, engine: 'translator-api', availability }; } finally { translator.destroy?.(); }
+      try {
+        const translator = await globalThis.Translator.create({ sourceLanguage, targetLanguage });
+        try { const output = cleanModelOutput(await translator.translate(source)); if (output) return { text: output, sourceLanguage, targetLanguage, engine: 'translator-api', availability }; }
+        finally { translator.destroy?.(); }
+      } catch { /* essayer le Prompt API puis signaler l’indisponibilité */ }
     }
   }
   if (typeof globalThis.LanguageModel !== 'undefined') {
-    const availability = await globalThis.LanguageModel.availability();
+    const availability = await availabilityOf('LanguageModel');
     if (availability !== 'unavailable') {
-      const session = await globalThis.LanguageModel.create();
-      try { return { text: await session.prompt(`Traduis fidèlement le texte suivant de ${sourceLanguage} vers ${targetLanguage}. Renvoie uniquement la traduction.\n\n${source}`), sourceLanguage, targetLanguage, engine: 'prompt-api', availability }; } finally { session.destroy?.(); }
+      try {
+        const session = await globalThis.LanguageModel.create();
+        try { const output = cleanModelOutput(await session.prompt(`Traduis fidèlement le texte suivant de ${sourceLanguage} vers ${targetLanguage}. Renvoie uniquement la traduction.\n\n${source}`)); if (output) return { text: output, sourceLanguage, targetLanguage, engine: 'prompt-api', availability }; }
+        finally { session.destroy?.(); }
+      } catch { /* message d’indisponibilité ci-dessous */ }
     }
   }
   throw new Error('La traduction locale n’est pas disponible dans ce navigateur.');
@@ -86,5 +100,14 @@ async function availabilityOf(name, options) {
   const api = globalThis[name]; if (!api?.availability) return 'unavailable';
   try { return await api.availability(options); } catch { return 'unavailable'; }
 }
-function normalizeInput(value) { return String(value || '').replace(/\s+/g, ' ').trim().slice(0, MAX_INPUT); }
-function heuristicSummary(text) { const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]; return sentences.slice(0, 5).map((sentence) => `• ${sentence.trim()}`).join('\n'); }
+function normalizeInput(value) { return String(value || '').replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_INPUT); }
+function cleanModelOutput(value) { const output = String(value || '').replace(/\r/g, '').trim(); return output.length >= 12 ? output : ''; }
+function heuristicSummary(text) {
+  const source = normalizeInput(text); const raw = source.split(/\n+|(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Þ0-9À-ÿ])/u).map((item) => item.replace(/^[-*•]\s*/, '').trim()).filter((item) => item.length >= 24);
+  if (!raw.length) return `• ${source}`;
+  const sentences = [...new Map(raw.map((sentence, index) => [sentence, { sentence, index }])).values()];
+  const words = sentences.flatMap(({ sentence }) => sentence.toLowerCase().match(/[\p{L}\d]{3,}/gu) || []); const frequency = words.reduce((map, word) => map.set(word, (map.get(word) || 0) + 1), new Map());
+  const selectedCount = sentences.length <= 3 ? sentences.length : source.length < 900 ? 3 : source.length < 2_500 ? 4 : 5;
+  const ranked = sentences.map((item) => ({ ...item, score: item.index === 0 ? 1.5 : 0 + Math.min(1.2, item.sentence.length / 500) + [...new Set(item.sentence.toLowerCase().match(/[\p{L}\d]{3,}/gu) || [])].reduce((sum, word) => sum + Math.min(0.4, (frequency.get(word) || 0) * 0.08), 0) })).sort((a, b) => b.score - a.score || a.index - b.index).slice(0, selectedCount).sort((a, b) => a.index - b.index);
+  return ranked.map(({ sentence }) => `• ${sentence}`).join('\n');
+}

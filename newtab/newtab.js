@@ -64,8 +64,8 @@ async function refreshPomodoro() {
   clearInterval(pomodoroTimer); if (state.status === 'running') pomodoroTimer = setInterval(refreshPomodoro, 1000);
 }
 
-async function togglePomodoro() { const settings = await getSettings(); await chrome.runtime.sendMessage({ type: 'pomodoro/toggle', durationMinutes: getPomodoroMinutes(settings), cycle: 'focus' }); await refreshPomodoro(); }
-async function resetPomodoro() { const settings = await getSettings(); await chrome.runtime.sendMessage({ type: 'pomodoro/reset', durationMinutes: getPomodoroMinutes(settings), cycle: 'focus' }); await refreshPomodoro(); }
+async function togglePomodoro() { const settings = await getSettings(); const response = await chrome.runtime.sendMessage({ type: 'pomodoro/toggle', durationMinutes: getPomodoroMinutes(settings), cycle: 'focus' }); if (!response?.ok) { $('#newtab-pomodoro-label').textContent = response?.error || 'Pomodoro indisponible.'; return; } await refreshPomodoro(); }
+async function resetPomodoro() { const settings = await getSettings(); const response = await chrome.runtime.sendMessage({ type: 'pomodoro/reset', durationMinutes: getPomodoroMinutes(settings), cycle: 'focus' }); if (!response?.ok) { $('#newtab-pomodoro-label').textContent = response?.error || 'Pomodoro indisponible.'; return; } await refreshPomodoro(); }
 function runSearch() { const query = $('#newtab-search').value.trim(); if (query) location.href = buildGoogleUrl(query, category); }
 function renderDate() { $('#current-date').textContent = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()).toUpperCase(); }
 function formatDuration(milliseconds = 0) { const minutes = Math.floor(Math.max(0, milliseconds) / 60_000); const seconds = Math.floor((Math.max(0, milliseconds) % 60_000) / 1000); return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; }
