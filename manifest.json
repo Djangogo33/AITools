@@ -3,7 +3,7 @@
   "name": "AITools",
   "version": "5.0.0",
   "description": "Un espace de travail rapide pour rechercher, résumer et organiser le web.",
-  "permissions": ["storage", "tabs", "alarms", "scripting", "activeTab", "notifications", "identity"],
+  "permissions": ["storage", "tabs", "tabGroups", "alarms", "scripting", "activeTab", "notifications", "identity"],
   "host_permissions": ["https://yvtukwaepqqsvacbbyou.supabase.co/*"],
   "action": {
     "default_title": "AITools",
@@ -12,6 +12,13 @@
   "background": {
     "service_worker": "background/service-worker.js",
     "type": "module"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab/index.html"
+  },
+  "options_ui": {
+    "page": "options/index.html",
+    "open_in_tab": true
   },
   "content_scripts": [
     {

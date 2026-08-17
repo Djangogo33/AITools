@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AITools — Nouvel onglet</title>
+  <link rel="stylesheet" href="./newtab.css" />
+</head>
+<body>
+  <main class="newtab-shell">
+    <header class="topline"><a class="brand" href="#"><span>✦</span>AITools</a><button id="open-options">Préférences</button></header>
+    <section class="welcome"><p id="current-date">AUJOURD’HUI</p><h1 id="greeting">Bonjour.</h1><p id="account-summary">Votre espace de travail est prêt.</p></section>
+    <section class="search-area"><div class="search-field"><span>⌕</span><input id="newtab-search" type="search" autofocus placeholder="Rechercher sur le web…"><button id="newtab-search-button">Rechercher</button></div><div class="search-modes"><button data-category="web" class="active">Web</button><button data-category="news">Actualités</button><button data-category="images">Images</button><button data-category="videos">Vidéos</button></div></section>
+    <section class="dashboard-grid"><article class="dashboard-card shortcuts-card"><div class="card-heading"><div><p>ACCÈS RAPIDES</p><h2>Mes raccourcis</h2></div><button id="manage-shortcuts">Modifier</button></div><div id="newtab-shortcuts" class="newtab-shortcuts"></div></article><article class="dashboard-card notes-card"><div class="card-heading"><div><p>CARNET</p><h2>Dernières notes</h2></div><button id="open-notes">Ouvrir</button></div><div id="newtab-notes" class="newtab-notes"></div></article><article class="dashboard-card focus-card"><div><p>CONCENTRATION</p><h2>Pomodoro</h2><strong id="newtab-pomodoro">25:00</strong><span id="newtab-pomodoro-label">Prêt quand vous l’êtes.</span><div><button id="newtab-pomodoro-toggle">Démarrer</button><button id="newtab-pomodoro-reset" title="Réinitialiser">↺</button></div></article></section>
+  </main>
+  <script type="module" src="./newtab.js"></script>
+</body>
+</html>

@@ -1,32 +1,39 @@
-# AITools
+# AITools 5
 
-AITools est une extension Chrome Manifest V3 conçue comme un espace de travail local pour rechercher, synthétiser et organiser le web. Cette version 5.0 a été recréée depuis zéro avec une architecture modulaire et une interface popup dark-first.
+AITools est une extension Chrome **Manifest V3** recréée depuis zéro comme espace de travail moderne, local-first et extensible. Elle réunit recherche avancée, organisation d’onglets, notes synchronisables, outils de lecture, IA locale Chrome, compte utilisateur et page Nouvel onglet.
 
-## Fonctionnalités
+## Fonctionnalités livrées
 
 | Espace | Fonctions |
 |---|---|
-| Accueil | Accès rapides vers ChatGPT, Perplexity, WhatsApp et GitHub ; résumé de l’onglet ; création rapide d’une note |
-| Recherche | Recherche Google et opérateurs avancés pour les domaines, les PDF, la récence, les images et l’exclusion de mots |
-| Outils | Résumé local de la page, anonymisation des emails/téléphones/IP, nettoyage des onglets doublons et Pomodoro |
-| Notes | Notes persistantes dans `chrome.storage.local`, suppression individuelle et compteur dans la navigation |
-| Préférences | Thème sombre/clair, notifications et mode compact |
-| Compte | Connexion Google via Supabase Auth, profil, session renouvelée et affichage du plan |
+| Accueil | Accès rapides personnalisables, résumé de l’onglet et création de note |
+| Recherche | Catégories Google, opérateurs avancés, historique local et raccourcis configurables |
+| Outils | Anonymisation, temps de lecture, mode concentration, surlignage, impression PDF, doublons, groupes par domaine et Pomodoro persistant |
+| IA | Résumé, traduction locale si Chrome le permet, analyse stylistique avec avertissement, palettes et contrôles YouTube |
+| Notes | Stockage local, import des notes existantes, synchronisation Supabase et mode hors ligne |
+| Compte | Google OAuth PKCE, session renouvelée, profil et droits d’abonnement |
+| Facturation | Checkout Stripe, portail client et synchronisation de plan par webhook Edge sécurisé |
+| Nouvel onglet | Recherche, raccourcis, dernières notes, état de compte et Pomodoro |
+| Options | Apparence, confidentialité de navigation, synchronisation, réinitialisation locale et diagnostic IA |
 
 ## Installation locale
 
-Ouvrez `chrome://extensions`, activez le **mode développeur**, cliquez sur **Charger l’extension non empaquetée**, puis sélectionnez le dossier racine du dépôt. Le popup est déclaré dans `popup/index.html` et le service worker dans `background/service-worker.js`.
+Ouvrez `chrome://extensions`, activez **Mode développeur**, choisissez **Charger l’extension non empaquetée**, puis sélectionnez le dossier racine du dépôt. Après toute modification de `manifest.json`, utilisez **Recharger** sur la carte de l’extension.
 
-## Architecture
+## Configuration complète de production
 
-Le manifeste est volontairement limité aux permissions nécessaires. Le popup utilise des modules ES natifs. Le service worker gère les alarmes et les actions globales sur les onglets. Le script de contenu est autonome et reçoit uniquement des messages ciblés afin d’extraire le texte ou d’anonymiser le contenu visible. Les préférences et les notes sont centralisées dans `shared/constants.js`.
+Le parcours local ne nécessite aucun compte. Les services distants — connexion Google, synchronisation des notes, abonnements Stripe et publication — nécessitent une configuration d’administrateur. Suivez précisément [`CONFIGURATION_PRODUCTION.md`](./CONFIGURATION_PRODUCTION.md) avant de considérer ces fonctions actives.
 
-Le fonctionnement local ne nécessite aucun compte. Lorsqu’il est configuré, le module Supabase ajoute une connexion Google via OAuth PKCE, une session renouvelée, un profil protégé par RLS et la lecture du plan utilisateur. Consultez [`SUPABASE_SETUP.md`](./SUPABASE_SETUP.md) pour activer ce parcours et [`AUTH_ARCHITECTURE.md`](./AUTH_ARCHITECTURE.md) pour ses garanties de sécurité.
+Les documents complémentaires sont :
+
+- [`AUTH_ARCHITECTURE.md`](./AUTH_ARCHITECTURE.md), qui décrit le flux OAuth PKCE et les limites de sécurité ;
+- [`supabase/schema.sql`](./supabase/schema.sql), la migration de profils, abonnements, politiques RLS et notes ;
+- [`supabase/functions/`](./supabase/functions), les fonctions Edge Stripe à déployer ;
+- [`FEATURE_MATRIX.md`](./FEATURE_MATRIX.md), l’inventaire de parité fonctionnelle ;
+- [`EXTERNAL_CONFIGURATION_SOURCES.md`](./EXTERNAL_CONFIGURATION_SOURCES.md), les références officielles de conception.
 
 ## Vérifications effectuées
 
-La syntaxe des trois fichiers JavaScript a été vérifiée avec Node.js. Le manifeste a été parsé comme JSON et chaque chemin déclaré dans le manifeste a été contrôlé. Le popup a également été ouvert en local pour une vérification visuelle de la hiérarchie, de la navigation et du thème sombre.
+Les contrôles automatisés couvrent la syntaxe des modules JavaScript, le manifeste JSON, les chemins déclarés, la simulation OAuth PKCE, la synchronisation de notes et les repli IA. Aucune clé Stripe secrète ni clé Supabase `service_role` n’est présente dans les modules client. La validation de typage des fonctions Edge reste à effectuer par la CLI Supabase/Deno lors du déploiement réel, car Deno n’est pas installé dans cet environnement.
 
-## Limites connues de cette première base
-
-Le résumé est volontairement local et heuristique : il extrait les premières phrases lisibles de la page. L’intégration Supabase couvre désormais l’identité et le profil ; la synchronisation des notes, la détection IA, la traduction, les outils PDF et le nouvel onglet restent des modules distincts à réintégrer ultérieurement.
+> L’analyse de probabilité IA est une estimation stylistique et ne peut pas prouver l’origine humaine ou artificielle d’un texte.

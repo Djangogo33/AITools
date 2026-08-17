@@ -20,6 +20,13 @@ export const MESSAGE_TYPES = {
   getPageText: 'page/get-text',
   anonymizePage: 'page/anonymize',
   summarizePage: 'page/summarize',
+  getReadingTime: 'page/reading-time',
+  toggleFocus: 'page/toggle-focus',
+  highlightSelection: 'page/highlight-selection',
+  printPage: 'page/print',
+  togglePageDark: 'page/toggle-dark',
+  dismissCookies: 'page/dismiss-cookies',
+  blockSponsored: 'page/block-sponsored',
   pomodoroTick: 'pomodoro/tick',
   pomodoroState: 'pomodoro/state'
 };

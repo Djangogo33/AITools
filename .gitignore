@@ -1,0 +1,12 @@
+# Secrets et fichiers de configuration locaux
+.env
+.env.*
+!.env.example
+supabase/.env
+supabase/.env.*
+
+# Artefacts locaux de validation
+.chrome-validation.md
+.audit/
+node_modules/
+.DS_Store

@@ -102,3 +102,55 @@ create trigger subscriptions_set_updated_at
 grant usage on schema public to authenticated;
 grant select, insert, update on public.profiles to authenticated;
 grant select on public.subscriptions to authenticated;
+
+-- Notes synchronisées : chaque utilisateur ne voit et ne modifie que ses propres notes.
+create table if not exists public.notes (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  content text not null check (char_length(content) <= 10000),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists notes_user_updated_idx
+  on public.notes (user_id, updated_at desc);
+
+alter table public.notes enable row level security;
+
+drop policy if exists "notes_select_own" on public.notes;
+create policy "notes_select_own"
+  on public.notes for select to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "notes_insert_own" on public.notes;
+create policy "notes_insert_own"
+  on public.notes for insert to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "notes_update_own" on public.notes;
+create policy "notes_update_own"
+  on public.notes for update to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "notes_delete_own" on public.notes;
+create policy "notes_delete_own"
+  on public.notes for delete to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop trigger if exists notes_set_updated_at on public.notes;
+create trigger notes_set_updated_at
+  before update on public.notes
+  for each row execute procedure public.set_updated_at();
+
+grant select, insert, update, delete on public.notes to authenticated;
+
+-- Facturation Stripe : conserver les identifiants nécessaires au portail et les statuts synchronisés par webhook.
+alter table public.subscriptions
+  drop constraint if exists subscriptions_status_check;
+alter table public.subscriptions
+  add constraint subscriptions_status_check check (status in ('active', 'trialing', 'past_due', 'canceled', 'unpaid', 'incomplete', 'incomplete_expired', 'paused', 'expired'));
+
+create unique index if not exists subscriptions_provider_subscription_unique
+  on public.subscriptions (provider_subscription_id)
+  where provider_subscription_id is not null;
