@@ -8,6 +8,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'dark',
   notifications: true,
   compactMode: false,
+  pomodoroMinutes: 25,
   quickLinks: [
     { id: 'chatgpt', label: 'ChatGPT', url: 'https://chatgpt.com', tone: 'violet' },
     { id: 'perplexity', label: 'Perplexity', url: 'https://www.perplexity.ai', tone: 'blue' },
@@ -31,6 +32,11 @@ export const MESSAGE_TYPES = {
   pomodoroState: 'pomodoro/state'
 };
 
+export function getPomodoroMinutes(settings) {
+  const value = Number(settings?.pomodoroMinutes);
+  return Number.isFinite(value) ? Math.min(120, Math.max(5, Math.round(value))) : DEFAULT_SETTINGS.pomodoroMinutes;
+}
+
 export function getQuickLinks(settings) {
   const candidate = Array.isArray(settings?.quickLinks) ? settings.quickLinks : DEFAULT_SETTINGS.quickLinks;
   return candidate.flatMap((link, index) => {
@@ -50,7 +56,9 @@ export async function getSettings() {
 }
 
 export async function saveSettings(patch) {
-  const settings = { ...(await getSettings()), ...patch };
+  const normalizedPatch = { ...patch };
+  if (Object.hasOwn(normalizedPatch, 'pomodoroMinutes')) normalizedPatch.pomodoroMinutes = getPomodoroMinutes(normalizedPatch);
+  const settings = { ...(await getSettings()), ...normalizedPatch };
   await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });
   return settings;
 }

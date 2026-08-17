@@ -1,4 +1,4 @@
-import { getQuickLinks, getSettings } from '../shared/constants.js';
+import { getPomodoroMinutes, getQuickLinks, getSettings } from '../shared/constants.js';
 import { buildGoogleUrl } from '../shared/search-service.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -9,7 +9,7 @@ init();
 
 async function init() {
   renderDate(); bindActions();
-  await Promise.all([renderAccount(), renderShortcuts(), renderNotes(), refreshPomodoro()]);
+  await Promise.all([renderAccount(), renderShortcuts(), renderNotes(), renderReadingList(), refreshPomodoro()]);
 }
 
 function bindActions() {
@@ -19,6 +19,7 @@ function bindActions() {
   $('#open-options').addEventListener('click', () => chrome.runtime.openOptionsPage());
   $('#manage-shortcuts').addEventListener('click', () => chrome.runtime.openOptionsPage());
   $('#open-notes').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('popup/index.html') }));
+  $('#open-reading-list').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('popup/index.html') }));
   $('#newtab-pomodoro-toggle').addEventListener('click', togglePomodoro);
   $('#newtab-pomodoro-reset').addEventListener('click', resetPomodoro);
 }
@@ -36,6 +37,14 @@ async function renderNotes() {
   try { const response = await chrome.runtime.sendMessage({ type: 'notes/list' }); const notes = response?.ok ? response.data.slice(0, 3) : []; $('#newtab-notes').innerHTML = notes.length ? notes.map((note) => `<article class="newtab-note">${escapeHtml(note.content)}<small>${new Date(note.updatedAt).toLocaleDateString('fr-FR')}</small></article>`).join('') : '<article class="newtab-note">Aucune note récente. Ouvrez le popup pour en créer une.</article>'; } catch { $('#newtab-notes').innerHTML = '<article class="newtab-note">Notes indisponibles hors de l’extension.</article>'; }
 }
 
+async function renderReadingList() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'reading/list' });
+    const items = response?.ok ? response.data.filter((item) => !item.done).slice(0, 3) : [];
+    $('#newtab-reading-list').innerHTML = items.length ? items.map((item) => `<a class="newtab-reading-item" href="${escapeAttribute(item.url)}"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(new URL(item.url).hostname)}</small></a>`).join('') : '<p>Aucune page à lire. Ajoutez l’onglet actif depuis AITools.</p>';
+  } catch { $('#newtab-reading-list').innerHTML = '<p>Liste de lecture indisponible.</p>'; }
+}
+
 async function refreshPomodoro() {
   const response = await chrome.runtime.sendMessage({ type: 'pomodoro/get' }); if (!response?.ok) return;
   const state = response.data; const remaining = state.status === 'running' && state.endAt ? Math.max(0, state.endAt - Date.now()) : state.remainingMs;
@@ -43,8 +52,8 @@ async function refreshPomodoro() {
   clearInterval(pomodoroTimer); if (state.status === 'running') pomodoroTimer = setInterval(refreshPomodoro, 1000);
 }
 
-async function togglePomodoro() { await chrome.runtime.sendMessage({ type: 'pomodoro/toggle', durationMinutes: 25, cycle: 'focus' }); await refreshPomodoro(); }
-async function resetPomodoro() { await chrome.runtime.sendMessage({ type: 'pomodoro/reset', durationMinutes: 25, cycle: 'focus' }); await refreshPomodoro(); }
+async function togglePomodoro() { const settings = await getSettings(); await chrome.runtime.sendMessage({ type: 'pomodoro/toggle', durationMinutes: getPomodoroMinutes(settings), cycle: 'focus' }); await refreshPomodoro(); }
+async function resetPomodoro() { const settings = await getSettings(); await chrome.runtime.sendMessage({ type: 'pomodoro/reset', durationMinutes: getPomodoroMinutes(settings), cycle: 'focus' }); await refreshPomodoro(); }
 function runSearch() { const query = $('#newtab-search').value.trim(); if (query) location.href = buildGoogleUrl(query, category); }
 function renderDate() { $('#current-date').textContent = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()).toUpperCase(); }
 function formatDuration(milliseconds = 0) { const minutes = Math.floor(Math.max(0, milliseconds) / 60_000); const seconds = Math.floor((Math.max(0, milliseconds) % 60_000) / 1000); return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; }

@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, MESSAGE_TYPES, getQuickLinks, getSettings, saveSettings } from '../shared/constants.js';
+import { DEFAULT_SETTINGS, MESSAGE_TYPES, getPomodoroMinutes, getQuickLinks, getSettings, saveSettings } from '../shared/constants.js';
 import { SEARCH_PRESETS, buildGoogleUrl, clearSearchHistory, getSearchHistory, saveSearch } from '../shared/search-service.js';
 import { analyzeAIProbability, getAIStatus, paletteFromText, summarizeWithAI, translateWithAI } from './ai-runtime.js';
 
@@ -336,7 +336,7 @@ async function refreshPomodoro() {
 }
 
 async function togglePomodoro() {
-  const response = await chrome.runtime.sendMessage({ type: 'pomodoro/toggle', durationMinutes: 25, cycle: 'focus' });
+  const response = await chrome.runtime.sendMessage({ type: 'pomodoro/toggle', durationMinutes: getPomodoroMinutes(settings), cycle: 'focus' });
   if (!response?.ok) return showToast(response?.error || 'Pomodoro indisponible.');
   pomodoro = response.data; renderPomodoro();
   clearInterval(pomodoroTimer);
@@ -344,12 +344,12 @@ async function togglePomodoro() {
 }
 
 async function resetPomodoro() {
-  const response = await chrome.runtime.sendMessage({ type: 'pomodoro/reset', durationMinutes: 25, cycle: 'focus' });
+  const response = await chrome.runtime.sendMessage({ type: 'pomodoro/reset', durationMinutes: getPomodoroMinutes(settings), cycle: 'focus' });
   if (!response?.ok) return showToast(response?.error || 'Réinitialisation impossible.');
   pomodoro = response.data; clearInterval(pomodoroTimer); renderPomodoro(); showToast('Pomodoro réinitialisé.');
 }
 
-function renderPomodoro() { const remaining = pomodoro.status === 'running' && pomodoro.endAt ? Math.max(0, pomodoro.endAt - Date.now()) : pomodoro.remainingMs; const minutes = Math.floor(Math.max(0, remaining) / 60_000); const seconds = Math.floor((Math.max(0, remaining) % 60_000) / 1000); $('#pomodoro-time').textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; $('#pomodoro-label').textContent = pomodoro.status === 'running' ? 'Restez concentré.' : pomodoro.status === 'paused' ? 'Session en pause.' : pomodoro.status === 'done' ? 'Session terminée. Faites une pause.' : '25 minutes pour avancer.'; $('#pomodoro-toggle').textContent = pomodoro.status === 'running' ? 'Pause' : pomodoro.status === 'paused' ? 'Reprendre' : pomodoro.status === 'done' ? 'Recommencer' : 'Démarrer'; }
+function renderPomodoro() { const remaining = pomodoro.status === 'running' && pomodoro.endAt ? Math.max(0, pomodoro.endAt - Date.now()) : pomodoro.remainingMs; const minutes = Math.floor(Math.max(0, remaining) / 60_000); const seconds = Math.floor((Math.max(0, remaining) % 60_000) / 1000); $('#pomodoro-time').textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; $('#pomodoro-label').textContent = pomodoro.status === 'running' ? 'Restez concentré.' : pomodoro.status === 'paused' ? 'Session en pause.' : pomodoro.status === 'done' ? 'Session terminée. Faites une pause.' : `${getPomodoroMinutes(settings)} minutes pour avancer.`; $('#pomodoro-toggle').textContent = pomodoro.status === 'running' ? 'Pause' : pomodoro.status === 'paused' ? 'Reprendre' : pomodoro.status === 'done' ? 'Recommencer' : 'Démarrer'; }
 function applyTheme(theme) { document.body.classList.toggle('light-theme', theme === 'light'); }
 function showToast(message) { const toast = $('#toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 2800); }
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }

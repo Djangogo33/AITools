@@ -1,4 +1,4 @@
-import { MESSAGE_TYPES, STORAGE_KEYS } from '../shared/constants.js';
+import { MESSAGE_TYPES, STORAGE_KEYS, getPomodoroMinutes } from '../shared/constants.js';
 import { getAccount, isFeatureAllowed, signInWithGoogle, signOut } from '../shared/auth-client.js';
 import { createNote, deleteNote, importGuestNotes, listNotes, syncNotes } from '../shared/notes-service.js';
 import { createCheckout, createPortal } from '../shared/billing-client.js';
@@ -27,7 +27,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 chrome.commands.onCommand.addListener(async (command) => {
   try {
     if (command === 'toggle-pomodoro') {
-      const state = await togglePomodoro(25, 'focus');
+      const settings = (await chrome.storage.local.get(STORAGE_KEYS.settings))[STORAGE_KEYS.settings] || {};
+      const state = await togglePomodoro(getPomodoroMinutes(settings), 'focus');
       await notifyCommand('Pomodoro AITools', state.status === 'running' ? 'Session démarrée.' : 'Session suspendue.');
     }
     if (command === 'save-to-reading-list') {
