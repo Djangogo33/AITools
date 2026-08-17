@@ -1,0 +1,22 @@
+const targets = await (await fetch('http://127.0.0.1:9333/json/list')).json();
+const worker = targets.find((item) => item.type === 'service_worker' && /\/background\/service-worker\.js$/.test(item.url));
+const extensionId = worker?.url.match(/^chrome-extension:\/\/([^/]+)\//)?.[1];
+if (!extensionId) throw new Error('Identifiant AITools introuvable dans Chromium.');
+const popupUrl = `chrome-extension://${extensionId}/popup/index.html`;
+const target = targets.find((item) => item.url === popupUrl);
+if (!target) throw new Error('Le popup AITools n’est pas ouvert dans Chromium.');
+const ws = new WebSocket(target.webSocketDebuggerUrl);
+await new Promise((resolve, reject) => { ws.addEventListener('open', resolve, { once: true }); ws.addEventListener('error', reject, { once: true }); });
+let sequence = 0; const events = [];
+ws.addEventListener('message', (event) => { const message = JSON.parse(event.data); if (message.method === 'Runtime.exceptionThrown' || message.method === 'Log.entryAdded') events.push(message); });
+function command(method, params = {}) { const id = ++sequence; return new Promise((resolve, reject) => { const onMessage = (event) => { const message = JSON.parse(event.data); if (message.id !== id) return; ws.removeEventListener('message', onMessage); if (message.error) reject(new Error(message.error.message)); else resolve(message.result); }; ws.addEventListener('message', onMessage); ws.send(JSON.stringify({ id, method, params })); }); }
+await command('Runtime.enable'); await command('Log.enable'); await command('Page.enable'); await command('Page.reload', { ignoreCache: true });
+await new Promise((resolve) => setTimeout(resolve, 2500));
+const snapshot = await command('Runtime.evaluate', { expression: `(async () => { const send = (type, extra = {}) => new Promise((resolve) => chrome.runtime.sendMessage({ type, ...extra }, (response) => resolve(response || { ok: false, error: chrome.runtime.lastError?.message || 'sans réponse' }))); const routes = {}; for (const type of ['notes/list','tasks/list','inbox/list','reading/list','workspaces/list','focus/stats','analytics/weekly-review','pomodoro/get','personal/sync-status']) routes[type] = await send(type, type === 'focus/stats' ? { days: 7 } : {}); document.querySelector('[data-view="tasks"]')?.click(); const taskViewActive = document.querySelector('#view-tasks')?.classList.contains('active'); document.querySelector('#open-command-launcher')?.click(); const commandOpen = !document.querySelector('#command-overlay')?.hidden && document.querySelectorAll('.command-item').length > 0; document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); const commandClosed = document.querySelector('#command-overlay')?.hidden; return { readyState: document.readyState, title: document.title, activeView: document.querySelector('.view.active')?.id || null, taskViewActive, commandOpen, commandClosed, navItems: document.querySelectorAll('.nav-item').length, commandOverlay: Boolean(document.querySelector('#command-overlay')), missingExpected: ['#view-home','#view-search','#view-tools','#view-ai','#view-notes','#view-tasks','#view-inbox','#view-workspaces','#view-settings','#open-command-launcher'].filter((selector) => !document.querySelector(selector)), routes }; })()`, returnByValue: true, awaitPromise: true });
+ws.close();
+const errors = events.filter((event) => event.method === 'Runtime.exceptionThrown' || event.params?.entry?.level === 'error');
+const result = snapshot.result.value;
+console.log(JSON.stringify({ popup: result, errors: errors.map((event) => event.params?.exceptionDetails?.text || event.params?.entry?.text || 'Erreur runtime') }, null, 2));
+const failedRoutes = Object.entries(result.routes || {}).filter(([, response]) => !response?.ok).map(([type, response]) => `${type}: ${response?.error || 'erreur inconnue'}`);
+if (result.readyState !== 'complete' || result.missingExpected.length || errors.length || failedRoutes.length || !result.taskViewActive || !result.commandOpen || !result.commandClosed) throw new Error(`Le popup comporte une anomalie de rendu, de route ou une exception runtime. ${failedRoutes.join(' | ')}`);
+console.log('runtime popup audit: ok');
