@@ -9,7 +9,7 @@ init();
 
 async function init() {
   renderDate(); bindActions();
-  await Promise.all([renderAccount(), renderShortcuts(), renderNotes(), renderReadingList(), renderTasks(), refreshPomodoro()]);
+  await Promise.all([renderAccount(), renderToday(), renderShortcuts(), renderNotes(), renderReadingList(), renderTasks(), refreshPomodoro()]);
 }
 
 function bindActions() {
@@ -21,6 +21,7 @@ function bindActions() {
   $('#open-notes').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('popup/index.html') }));
   $('#open-reading-list').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('popup/index.html') }));
   $('#open-tasks').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('popup/index.html#tasks') }));
+  $('#open-inbox').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('popup/index.html#inbox') }));
   $('#newtab-pomodoro-toggle').addEventListener('click', togglePomodoro);
   $('#newtab-pomodoro-reset').addEventListener('click', resetPomodoro);
 }
@@ -28,6 +29,8 @@ function bindActions() {
 async function renderAccount() {
   try { const response = await chrome.runtime.sendMessage({ type: 'auth/get-account' }); const name = response?.data?.user?.name; $('#greeting').textContent = name ? `Bonjour, ${name.split(' ')[0]}.` : 'Bonjour.'; $('#account-summary').textContent = name ? `Plan ${String(response.data.plan || 'free').toUpperCase()} · Vos outils sont synchronisés.` : 'Votre espace de travail local est prêt.'; } catch { /* mode local */ }
 }
+
+async function renderToday() { try { const [tasksResponse, inboxResponse, focusResponse] = await Promise.all([chrome.runtime.sendMessage({ type: 'tasks/list', period: 'today', includeDone: false }), chrome.runtime.sendMessage({ type: 'inbox/list' }), chrome.runtime.sendMessage({ type: 'focus/stats', days: 7 })]); const tasks = tasksResponse?.ok ? tasksResponse.data : []; const inbox = inboxResponse?.ok ? inboxResponse.data : []; const focus = focusResponse?.ok ? focusResponse.data : { minutes: 0 }; $('#newtab-today').innerHTML = `<div><strong>${tasks.length}</strong><span>échéance(s) aujourd’hui</span></div><div><strong>${inbox.length}</strong><span>capture(s) à traiter</span></div><div><strong>${focus.minutes || 0}</strong><span>minutes de concentration</span></div>${tasks[0] ? `<p>Prochaine action : ${escapeHtml(tasks[0].title)}</p>` : '<p>Aucune échéance urgente.</p>'}`; } catch { $('#newtab-today').textContent = 'Tableau de bord indisponible.'; } }
 
 async function renderShortcuts() {
   const settings = await getSettings(); const links = getQuickLinks(settings);

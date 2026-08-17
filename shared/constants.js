@@ -59,7 +59,7 @@ export async function getSettings() {
 export async function saveSettings(patch) {
   const normalizedPatch = { ...patch };
   if (Object.hasOwn(normalizedPatch, 'pomodoroMinutes')) normalizedPatch.pomodoroMinutes = getPomodoroMinutes(normalizedPatch);
-  const settings = { ...(await getSettings()), ...normalizedPatch };
+  const settings = { ...(await getSettings()), ...normalizedPatch, updatedAt: new Date().toISOString() };
   await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });
   return settings;
 }

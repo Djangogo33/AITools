@@ -11,7 +11,7 @@ async function init() {
   $('#option-compact').checked = settings.compactMode === true;
   $('#option-notifications').checked = settings.notifications !== false;
   $('#option-pomodoro-duration').value = getPomodoroMinutes(settings);
-  bindActions(); await Promise.all([renderAIStatus(), renderAccount(), renderFocusStats(), renderDndSettings(), renderTabRules()]);
+  bindActions(); await Promise.all([renderAIStatus(), renderAccount(), renderFocusStats(), renderWeeklyReview(), renderDndSettings(), renderTabRules(), renderPersonalSyncStatus()]);
 }
 
 function bindActions() {
@@ -24,7 +24,7 @@ function bindActions() {
   $('#option-sponsored').addEventListener('click', () => runPageAction('page/block-sponsored', 'Résultats sponsorisés masqués.'));
   $('#option-sync-notes').addEventListener('click', () => runBackgroundAction('notes/sync', (data) => `${data.count} note(s) synchronisée(s).`));
   $('#option-import-notes').addEventListener('click', () => runBackgroundAction('notes/import-guest', (data) => `${data.imported} note(s) locale(s) importée(s).`));
-  $('#option-sync-personal').addEventListener('click', () => runBackgroundAction('personal/sync', (data) => `${data.tasks.count} tâche(s) et ${data.reading.count} page(s) synchronisées.`));
+  $('#option-sync-personal').addEventListener('click', syncPersonalWorkspace);
   $('#option-export').addEventListener('click', exportLocalData);
   $('#option-export-markdown').addEventListener('click', () => exportStructuredData('markdown'));
   $('#option-export-csv').addEventListener('click', () => exportStructuredData('csv'));
@@ -33,13 +33,20 @@ function bindActions() {
   $('#option-reset').addEventListener('click', resetLocalData);
   $('#option-refresh-ai').addEventListener('click', renderAIStatus);
   $('#option-refresh-focus').addEventListener('click', renderFocusStats);
+  $('#option-refresh-review').addEventListener('click', renderWeeklyReview);
+  $('#option-export-diagnostics').addEventListener('click', exportDiagnostics);
   $('#option-save-dnd').addEventListener('click', saveDndSettings);
   $('#option-add-tab-rule').addEventListener('click', createTabRule);
   $('#option-apply-tab-rules').addEventListener('click', applyTabRules);
 }
 
+async function syncPersonalWorkspace() { const response = await chrome.runtime.sendMessage({ type: 'personal/sync' }); await renderPersonalSyncStatus(); if (!response?.ok) return showToast(response?.error || 'Synchronisation impossible.'); const data = response.data; showToast(`${data.tasks.count} tâche(s), ${data.reading.count} page(s), ${data.workspaces.count} espace(s) et vos préférences sont synchronisés.`); }
+async function renderPersonalSyncStatus() { try { const response = await chrome.runtime.sendMessage({ type: 'personal/sync-status' }); const status = response?.ok ? response.data : null; if (status?.state === 'success' && status.syncedAt) { $('#personal-sync-status').textContent = `Dernière synchronisation réussie : ${new Date(status.syncedAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}. Les données restent disponibles localement.`; return; } if (status?.state === 'error') { $('#personal-sync-status').textContent = `Dernière synchronisation incomplète : ${status.error || 'erreur inconnue'}. Vos données locales ne sont pas modifiées.`; return; } $('#personal-sync-status').textContent = 'Synchronisation optionnelle : tâches, lecture, espaces de travail et préférences. Vos données locales restent disponibles sans compte.'; } catch { $('#personal-sync-status').textContent = 'État de synchronisation indisponible en mode local.'; } }
 async function saveSetting(patch) { await saveSettings(patch); showToast('Préférence enregistrée.'); }
 async function renderAIStatus() { const status = await getAIStatus(); $('#ai-diagnostic').innerHTML = Object.entries(status).filter(([name]) => name !== 'local').map(([name, value]) => `<article class="diagnostic-item ${value !== 'unavailable' ? 'available' : ''}"><small>${name.toUpperCase()}</small><strong>${value === 'unavailable' ? 'Indisponible' : String(value)}</strong></article>`).join(''); }
+async function renderWeeklyReview() { try { const response = await chrome.runtime.sendMessage({ type: 'analytics/weekly-review' }); const review = response?.data; if (!response?.ok || !review) throw new Error(); $('#weekly-review').innerHTML = [`<article class="diagnostic-item available"><small>TÂCHES TERMINÉES</small><strong>${review.completedTasks}</strong></article>`, `<article class="diagnostic-item ${review.missedOpenTasks ? '' : 'available'}"><small>ÉCHÉANCES EN RETARD</small><strong>${review.missedOpenTasks}</strong></article>`, `<article class="diagnostic-item available"><small>CONCENTRATION</small><strong>${review.focus.minutes} min</strong></article>`].join(''); const domains = review.frequentDomains.length ? review.frequentDomains.map((item) => `${escapeHtml(item.domain)} (${item.count})`).join(' · ') : 'Aucun domaine enregistré dans votre lecture ou vos espaces.'; const tasks = review.focusedTasks.length ? review.focusedTasks.map((item) => `${escapeHtml(item.label)} (${item.count})`).join(' · ') : 'Aucune tâche associée aux sessions.'; $('#weekly-review-detail').innerHTML = `Sessions : <strong>${review.focus.sessions}</strong> · moyenne : <strong>${review.focus.averageMinutes} min</strong><br>Domaines les plus présents : ${domains}<br>Sessions associées : ${tasks}`; } catch { $('#weekly-review').textContent = 'Rétrospective indisponible.'; } }
+async function exportDiagnostics() { const response = await chrome.runtime.sendMessage({ type: 'diagnostics/export' }); if (!response?.ok) return showToast(response?.error || 'Export du diagnostic impossible.'); const file = response.data; const blob = new Blob([file.content], { type: file.mime }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = file.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1_000); showToast('Journal de diagnostic téléchargé.'); }
+
 async function renderFocusStats() { try { const response = await chrome.runtime.sendMessage({ type: 'focus/stats', days: 7 }); const stats = response?.data; if (!stats) throw new Error(); $('#focus-diagnostic').innerHTML = [`<article class="diagnostic-item available"><small>SESSIONS</small><strong>${stats.sessions}</strong></article>`, `<article class="diagnostic-item available"><small>MINUTES</small><strong>${stats.minutes}</strong></article>`, `<article class="diagnostic-item available"><small>MOYENNE</small><strong>${stats.averageMinutes} min</strong></article>`].join(''); } catch { $('#focus-diagnostic').textContent = 'Statistiques indisponibles.'; } }
 async function renderDndSettings() { try { const response = await chrome.runtime.sendMessage({ type: 'focus/get-dnd' }); const settings = response?.data || { enabled: false, domains: [] }; $('#option-dnd-enabled').checked = settings.enabled; $('#option-dnd-domains').value = (settings.domains || []).join(', '); } catch { showToast('Réglages Ne pas déranger indisponibles.'); } }
 async function saveDndSettings() { const response = await chrome.runtime.sendMessage({ type: 'focus/save-dnd', patch: { enabled: $('#option-dnd-enabled').checked, domains: $('#option-dnd-domains').value } }); if (!response?.ok) return showToast(response?.error || 'Enregistrement impossible.'); $('#option-dnd-domains').value = response.data.domains.join(', '); showToast(`${response.data.domains.length} domaine(s) enregistrés.`); }

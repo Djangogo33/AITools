@@ -8,14 +8,19 @@ import { captureCurrentWorkspace, listWorkspaces, removeWorkspace, restoreWorksp
 import { domainIsMuted, getDndSettings, getFocusStats, recordFocusSession, saveDndSettings } from '../shared/focus-service.js';
 import { clearCompletedTasks, createTask, listTasks, removeTask, setActiveTask, toggleTask, updateTask } from '../shared/tasks-service.js';
 import { applyTabRules, createTabRule, listTabRules, removeTabRule, toggleTabRule } from '../shared/tab-rules-service.js';
-import { markPersonalDeleted, syncPersonalData } from '../shared/personal-sync-service.js';
+import { getPersonalSyncStatus, markPersonalDeleted, syncPersonalData } from '../shared/personal-sync-service.js';
 import { createUserExport } from '../shared/export-service.js';
+import { addCapture, dismissCapture, listInbox, processCapture } from '../shared/inbox-service.js';
+import { getWeeklyReview } from '../shared/analytics-service.js';
+import { createDiagnosticsExport, listDiagnostics } from '../shared/diagnostics-service.js';
+import { migrateLocalData } from '../shared/migration-service.js';
 
 const POMODORO_ALARM = 'aitools-pomodoro-complete';
 const TASK_REMINDER_PREFIX = 'aitools-task-reminder:';
 const DEFAULT_POMODORO = { status: 'idle', durationMs: 25 * 60_000, remainingMs: 25 * 60_000, endAt: null, cycle: 'focus' };
 
 chrome.runtime.onInstalled.addListener(async () => {
+  await migrateLocalData();
   const current = await chrome.storage.local.get([STORAGE_KEYS.settings, STORAGE_KEYS.notes, STORAGE_KEYS.pomodoro]);
   if (!current[STORAGE_KEYS.settings]) await chrome.storage.local.set({ [STORAGE_KEYS.settings]: { theme: 'dark', notifications: true, compactMode: false, quickLinks: [] } });
   if (!current[STORAGE_KEYS.notes]) await chrome.storage.local.set({ [STORAGE_KEYS.notes]: [] });
@@ -23,7 +28,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   await rescheduleTaskReminders();
 });
 
-chrome.runtime.onStartup.addListener(() => { rescheduleTaskReminders(); });
+chrome.runtime.onStartup.addListener(() => { migrateLocalData().then(rescheduleTaskReminders).catch(() => rescheduleTaskReminders()); });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name.startsWith(TASK_REMINDER_PREFIX)) {
@@ -54,6 +59,7 @@ chrome.commands.onCommand.addListener(async (command) => {
       const result = await saveCurrentPage();
       await notifyCommand('Liste de lecture AITools', result.created ? 'Page ajoutée à votre liste.' : 'Cette page est déjà enregistrée.');
     }
+    if (command === 'open-command-launcher') await openCommandLauncher();
   } catch (error) { await notifyCommand('AITools', normalizeError(error)); }
 });
 
@@ -73,6 +79,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     'notes/delete': () => deleteNote(message.noteId),
     'notes/sync': () => syncNotes(),
     'notes/import-guest': () => importGuestNotes(),
+    'inbox/list': () => listInbox({ includeProcessed: message.includeProcessed === true }),
+    'inbox/add': () => addCapture(message.capture || {}),
+    'inbox/process': () => processCapture(message.captureId, message.target),
+    'inbox/dismiss': () => dismissCapture(message.captureId),
     'reading/list': () => listReadingItems(),
     'reading/save-current': () => saveCurrentPage(),
     'reading/toggle': () => toggleReadingItem(message.itemId),
@@ -81,8 +91,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     'search/unified': () => searchWorkspace(message.query, { tags: message.tags || [], limit: message.limit }),
     'tags/list': () => listWorkspaceTags(),
     'personal/sync': () => syncPersonalData(),
+    'personal/sync-status': () => getPersonalSyncStatus(),
     'export/create': () => createUserExport(message.format),
     'focus/stats': () => getFocusStats(message.days),
+    'analytics/weekly-review': () => getWeeklyReview(),
+    'diagnostics/list': () => listDiagnostics(message.limit),
+    'diagnostics/export': () => createDiagnosticsExport(),
     'focus/get-dnd': () => getDndSettings(),
     'focus/save-dnd': () => saveDndSettings(message.patch || {}),
     'tab-rules/list': () => listTabRules(),
@@ -94,10 +108,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     'workspaces/capture': () => captureCurrentWorkspace(message.name, { tags: message.tags || [] }),
     'workspaces/restore': () => restoreWorkspace(message.workspaceId),
     'workspaces/update': () => updateWorkspace(message.workspaceId, message.patch),
-    'workspaces/remove': () => removeWorkspace(message.workspaceId),
+    'workspaces/remove': async () => { const result = await removeWorkspace(message.workspaceId); await markPersonalDeleted('workspaces', message.workspaceId); return result; },
     'tasks/list': () => listTasks({ includeDone: message.includeDone !== false, period: message.period || 'all', tags: message.tags || [] }),
     'tasks/create': async () => { const task = await createTask(message.title, message.priority, message.details || {}); await scheduleTaskReminder(task); return task; },
-    'tasks/toggle': async () => { const task = await toggleTask(message.taskId); await scheduleTaskReminder(task); return task; },
+    'tasks/toggle': async () => { const task = await toggleTask(message.taskId); await scheduleTaskReminder(task); if (task.nextOccurrence) await scheduleTaskReminder(task.nextOccurrence); return task; },
     'tasks/update': async () => { const task = await updateTask(message.taskId, message.patch); await scheduleTaskReminder(task); return task; },
     'tasks/remove': async () => { const result = await removeTask(message.taskId); await chrome.alarms.clear(`${TASK_REMINDER_PREFIX}${message.taskId}`); await markPersonalDeleted('tasks', message.taskId); return result; },
     'tasks/set-active': () => setActiveTask(message.taskId),
@@ -114,6 +128,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   handler().then((data) => sendResponse({ ok: true, data })).catch((error) => sendResponse({ ok: false, error: normalizeError(error) }));
   return true;
 });
+
+async function openCommandLauncher() {
+  const url = chrome.runtime.getURL('popup/index.html#command');
+  const existing = (await chrome.tabs.query({ url })).find((tab) => tab.id);
+  if (existing?.id) { await chrome.tabs.update(existing.id, { active: true }); if (existing.windowId) await chrome.windows.update(existing.windowId, { focused: true }); return; }
+  await chrome.tabs.create({ url });
+}
 
 async function getPomodoro() {
   const state = (await chrome.storage.local.get(STORAGE_KEYS.pomodoro))[STORAGE_KEYS.pomodoro] || DEFAULT_POMODORO;

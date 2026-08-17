@@ -211,3 +211,47 @@ create policy "reading_items_delete_own" on public.reading_items for delete to a
 drop trigger if exists reading_items_set_updated_at on public.reading_items;
 create trigger reading_items_set_updated_at before update on public.reading_items for each row execute procedure public.set_updated_at();
 grant select, insert, update, delete on public.tasks, public.reading_items to authenticated;
+
+-- Évolutions v7 : cadence des tâches, espaces de travail et préférences synchronisées.
+alter table public.tasks add column if not exists recurrence text not null default 'none' check (recurrence in ('none', 'daily', 'weekly', 'monthly'));
+alter table public.tasks add column if not exists recurrence_series_id uuid;
+
+create table if not exists public.workspaces (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null check (char_length(name) <= 120),
+  tags text[] not null default '{}',
+  tabs jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists workspaces_user_updated_idx on public.workspaces (user_id, updated_at desc);
+alter table public.workspaces enable row level security;
+drop policy if exists "workspaces_select_own" on public.workspaces;
+create policy "workspaces_select_own" on public.workspaces for select to authenticated using ((select auth.uid()) = user_id);
+drop policy if exists "workspaces_insert_own" on public.workspaces;
+create policy "workspaces_insert_own" on public.workspaces for insert to authenticated with check ((select auth.uid()) = user_id);
+drop policy if exists "workspaces_update_own" on public.workspaces;
+create policy "workspaces_update_own" on public.workspaces for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+drop policy if exists "workspaces_delete_own" on public.workspaces;
+create policy "workspaces_delete_own" on public.workspaces for delete to authenticated using ((select auth.uid()) = user_id);
+drop trigger if exists workspaces_set_updated_at on public.workspaces;
+create trigger workspaces_set_updated_at before update on public.workspaces for each row execute procedure public.set_updated_at();
+
+create table if not exists public.user_preferences (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  settings jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+alter table public.user_preferences enable row level security;
+drop policy if exists "user_preferences_select_own" on public.user_preferences;
+create policy "user_preferences_select_own" on public.user_preferences for select to authenticated using ((select auth.uid()) = user_id);
+drop policy if exists "user_preferences_insert_own" on public.user_preferences;
+create policy "user_preferences_insert_own" on public.user_preferences for insert to authenticated with check ((select auth.uid()) = user_id);
+drop policy if exists "user_preferences_update_own" on public.user_preferences;
+create policy "user_preferences_update_own" on public.user_preferences for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
+drop policy if exists "user_preferences_delete_own" on public.user_preferences;
+create policy "user_preferences_delete_own" on public.user_preferences for delete to authenticated using ((select auth.uid()) = user_id);
+drop trigger if exists user_preferences_set_updated_at on public.user_preferences;
+create trigger user_preferences_set_updated_at before update on public.user_preferences for each row execute procedure public.set_updated_at();
+grant select, insert, update, delete on public.workspaces, public.user_preferences to authenticated;

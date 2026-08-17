@@ -13,6 +13,7 @@ let account = { authenticated: false, user: null, plan: 'free', entitlements: []
 let searchCategory = 'web';
 let activeTaskTitle = '';
 let taskPeriod = 'all';
+let commandSelection = 0;
 
 init();
 
@@ -31,12 +32,15 @@ async function init() {
   bindNavigation();
   bindActions();
   const requestedView = location.hash.slice(1);
-  if (['home', 'search', 'tools', 'ai', 'notes', 'tasks', 'workspaces', 'settings'].includes(requestedView)) showView(requestedView);
+  if (['home', 'search', 'tools', 'ai', 'notes', 'tasks', 'inbox', 'workspaces', 'settings'].includes(requestedView)) showView(requestedView);
+  if (requestedView === 'command') openCommandLauncher();
   await refreshAccount();
   await loadNotes();
   await loadReadingList();
   await loadTasks();
   await loadWorkspaces();
+  await loadInbox();
+  await refreshTodayDashboard();
   await refreshPomodoro();
   await refreshTabStats();
   await refreshAIStatus();
@@ -50,7 +54,7 @@ function bindNavigation() {
 function showView(view) {
   $$('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   $$('.view').forEach((section) => section.classList.toggle('active', section.id === `view-${view}`));
-  const titles = { home: ['VOTRE ESPACE DE TRAVAIL', 'Bonjour, Alex'], search: ['RECHERCHE UNIVERSELLE', 'Rechercher mieux'], tools: ['BOÎTE À OUTILS', 'Travaillez plus vite'], ai: ['IA LOCALE ET PRIVÉE', 'Analyse assistée'], notes: ['VOTRE CARNET', 'Notes rapides'], tasks: ['PLAN DE TRAVAIL', 'Prochaines actions'], workspaces: ['SESSIONS D’ONGLETS', 'Espaces de travail'], settings: ['PERSONNALISATION', 'Préférences'] };
+  const titles = { home: ['VOTRE ESPACE DE TRAVAIL', 'Bonjour, Alex'], search: ['RECHERCHE UNIVERSELLE', 'Rechercher mieux'], tools: ['BOÎTE À OUTILS', 'Travaillez plus vite'], ai: ['IA LOCALE ET PRIVÉE', 'Analyse assistée'], notes: ['VOTRE CARNET', 'Notes rapides'], tasks: ['PLAN DE TRAVAIL', 'Prochaines actions'], inbox: ['BOÎTE DE RÉCEPTION', 'Captures à traiter'], workspaces: ['SESSIONS D’ONGLETS', 'Espaces de travail'], settings: ['PERSONNALISATION', 'Préférences'] };
   $('#view-eyebrow').textContent = titles[view][0];
   $('#view-title').innerHTML = `${titles[view][1]} <span>✦</span>`;
 }
@@ -107,7 +111,48 @@ function bindActions() {
   $('#upgrade-max').addEventListener('click', () => startCheckout('max'));
   $('#manage-billing').addEventListener('click', openBillingPortal);
   $('#sign-out').addEventListener('click', handleSignOut);
+  $('#open-command-launcher').addEventListener('click', openCommandLauncher);
+  $('#command-overlay').addEventListener('click', (event) => { if (event.target === $('#command-overlay')) closeCommandLauncher(); });
+  $('#command-input').addEventListener('input', () => { commandSelection = 0; renderCommandList(); });
+  $('#command-input').addEventListener('keydown', handleCommandKeyboard);
+  document.addEventListener('keydown', (event) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openCommandLauncher(); } else if (event.key === 'Escape' && !$('#command-overlay').hidden) closeCommandLauncher(); });
 }
+
+function commandItems() {
+  return [
+    { label: 'Créer une tâche', hint: 'Ouvrir le plan de travail', run: () => { showView('tasks'); $('#task-input').focus(); } },
+    { label: 'Créer une note', hint: 'Ouvrir le carnet', run: () => { showView('notes'); $('#note-input').focus(); } },
+    { label: 'Capturer la page', hint: 'Ajouter la page à À traiter', run: captureCurrentPage },
+    { label: 'Enregistrer à lire', hint: 'Ajouter l’onglet actif à la liste', run: saveCurrentPageToReadingList },
+    { label: 'Démarrer le Pomodoro', hint: 'Lancer ou suspendre la session', run: togglePomodoro },
+    { label: 'Ouvrir À traiter', hint: 'Trier les captures', run: () => showView('inbox') },
+    { label: 'Enregistrer cet espace', hint: 'Capturer les onglets de la fenêtre', run: () => { showView('workspaces'); $('#workspace-name').focus(); } },
+    { label: 'Rechercher dans AITools', hint: 'Notes, tâches, lecture et espaces', run: () => { showView('search'); $('#search-input').focus(); } }
+  ];
+}
+
+function openCommandLauncher() {
+  $('#command-overlay').hidden = false; $('#command-overlay').setAttribute('aria-hidden', 'false'); $('#command-input').value = ''; commandSelection = 0; renderCommandList(); requestAnimationFrame(() => $('#command-input').focus());
+}
+
+function closeCommandLauncher() { $('#command-overlay').hidden = true; $('#command-overlay').setAttribute('aria-hidden', 'true'); }
+
+function renderCommandList() {
+  const query = $('#command-input').value.trim().toLocaleLowerCase('fr-FR'); const matching = commandItems().filter((item) => `${item.label} ${item.hint}`.toLocaleLowerCase('fr-FR').includes(query));
+  if (commandSelection >= matching.length) commandSelection = Math.max(0, matching.length - 1);
+  $('#command-list').innerHTML = matching.length ? matching.map((item, index) => `<button class="command-item ${index === commandSelection ? 'selected' : ''}" data-command-index="${index}"><span><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.hint)}</small></span><b>↵</b></button>`).join('') : '<p class="history-empty">Aucune commande correspondante.</p>';
+  $$('[data-command-index]').forEach((button) => button.addEventListener('click', () => executeCommand(matching[Number(button.dataset.commandIndex)])));
+}
+
+function handleCommandKeyboard(event) {
+  const matching = commandItems().filter((item) => `${item.label} ${item.hint}`.toLocaleLowerCase('fr-FR').includes($('#command-input').value.trim().toLocaleLowerCase('fr-FR')));
+  if (event.key === 'ArrowDown') { event.preventDefault(); commandSelection = Math.min(commandSelection + 1, Math.max(0, matching.length - 1)); renderCommandList(); }
+  if (event.key === 'ArrowUp') { event.preventDefault(); commandSelection = Math.max(commandSelection - 1, 0); renderCommandList(); }
+  if (event.key === 'Enter' && matching[commandSelection]) { event.preventDefault(); executeCommand(matching[commandSelection]); }
+  if (event.key === 'Escape') { event.preventDefault(); closeCommandLauncher(); }
+}
+
+async function executeCommand(item) { closeCommandLauncher(); try { await item.run(); } catch (error) { showToast(error.message || 'Commande indisponible.'); } }
 
 async function refreshAccount() {
   try {
@@ -274,10 +319,9 @@ async function captureCurrentPage() {
     const context = await chrome.tabs.sendMessage(tab.id, { type: MESSAGE_TYPES.captureContext });
     if (!context?.ok || !context.text) throw new Error(context?.error || 'Aucun texte lisible.');
     const title = String(context.title || tab.title || 'Page capturée').trim();
-    const content = `${title}\n\n${String(context.text).trim().slice(0, 2_400)}`;
-    const response = await chrome.runtime.sendMessage({ type: 'notes/create', content, details: { sourceUrl: context.url || tab.url, sourceTitle: title, tags: tagsFromText(context.text) } });
+    const response = await chrome.runtime.sendMessage({ type: 'inbox/add', capture: { content: String(context.text).trim().slice(0, 2_400), sourceUrl: context.url || tab.url, sourceTitle: title, tags: tagsFromText(context.text) } });
     if (!response?.ok) throw new Error(response?.error || 'Enregistrement impossible.');
-    await loadNotes(); showToast(context.selection ? 'Sélection capturée dans vos notes.' : 'Page capturée dans vos notes.');
+    await Promise.all([loadInbox(), refreshTodayDashboard()]); showToast(context.selection ? 'Sélection ajoutée à À traiter.' : 'Page ajoutée à À traiter.');
   } catch (error) { showToast(error.message || 'Capture indisponible : rechargez la page puis réessayez.'); }
 }
 
@@ -316,6 +360,21 @@ async function saveCurrentPageToReadingList() {
   showToast(response.data.created ? 'Page ajoutée à la liste de lecture.' : 'Cette page figure déjà dans votre liste.');
 }
 
+async function loadInbox() {
+  const response = await chrome.runtime.sendMessage({ type: 'inbox/list' }); const captures = response?.ok ? response.data : [];
+  $('#inbox-count').textContent = captures.length;
+  $('#inbox-list').innerHTML = captures.length ? captures.map((capture) => `<article class="inbox-item"><div><strong>${escapeHtml(capture.sourceTitle || 'Capture sans titre')}</strong><p>${escapeHtml(capture.content.slice(0, 190))}</p>${capture.tags?.length ? `<small class="item-tags">${escapeHtml(formatTags(capture.tags))}</small>` : ''}</div><div class="inbox-actions"><button data-inbox-process="note" data-capture-id="${escapeAttribute(capture.id)}">Note</button><button data-inbox-process="task" data-capture-id="${escapeAttribute(capture.id)}">Tâche</button>${capture.sourceUrl ? `<button data-inbox-process="reading" data-capture-id="${escapeAttribute(capture.id)}">Lire</button>` : ''}<button data-inbox-dismiss="${escapeAttribute(capture.id)}" title="Écarter">×</button></div></article>`).join('') : '<p class="history-empty">Aucune capture à traiter. Capturez une page depuis l’accueil.</p>';
+  $$('[data-inbox-process]').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'inbox/process', captureId: button.dataset.captureId, target: button.dataset.inboxProcess }); if (!response?.ok) return showToast(response?.error || 'Traitement impossible.'); await Promise.all([loadInbox(), loadNotes(), loadTasks(), loadReadingList(), refreshTodayDashboard()]); showToast('Capture traitée.'); }));
+  $$('[data-inbox-dismiss]').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'inbox/dismiss', captureId: button.dataset.inboxDismiss }); if (!response?.ok) return showToast(response?.error || 'Action impossible.'); await Promise.all([loadInbox(), refreshTodayDashboard()]); }));
+}
+
+async function refreshTodayDashboard() {
+  const [tasksResponse, inboxResponse, focusResponse] = await Promise.all([chrome.runtime.sendMessage({ type: 'tasks/list', period: 'today', includeDone: false }), chrome.runtime.sendMessage({ type: 'inbox/list' }), chrome.runtime.sendMessage({ type: 'focus/stats', days: 7 })]);
+  const tasks = tasksResponse?.ok ? tasksResponse.data : []; const inbox = inboxResponse?.ok ? inboxResponse.data : []; const focus = focusResponse?.ok ? focusResponse.data : { minutes: 0 };
+  $('#today-tasks-count').textContent = tasks.length; $('#today-next-task').textContent = tasks[0]?.title || 'Aucune échéance pour aujourd’hui';
+  $('#today-inbox-count').textContent = inbox.length; $('#today-inbox-next').textContent = inbox[0]?.sourceTitle || 'Boîte de réception vide'; $('#today-focus-minutes').textContent = focus.minutes || 0;
+}
+
 async function loadTasks() {
   const response = await chrome.runtime.sendMessage({ type: 'tasks/list', period: taskPeriod });
   const tasks = response?.ok ? response.data : [];
@@ -323,8 +382,8 @@ async function loadTasks() {
   activeTaskTitle = active?.title || '';
   $('#tasks-count').textContent = tasks.filter((task) => !task.done).length;
   $('#active-task-label').textContent = active ? `Tâche active : ${active.title}` : 'Aucune tâche active';
-  $('#tasks-list').innerHTML = tasks.length ? tasks.map((task) => `<article class="task-item ${task.done ? 'done' : ''} ${task.active ? 'active' : ''}"><button class="task-toggle" data-task-toggle="${escapeAttribute(task.id)}" title="${task.done ? 'Réouvrir' : 'Terminer'}">${task.done ? '✓' : '○'}</button><div><strong>${escapeHtml(task.title)}</strong><small class="task-priority ${escapeAttribute(task.priority)}">${task.priority === 'high' ? 'Haute priorité' : task.priority === 'low' ? 'Faible priorité' : 'Priorité normale'}${task.dueAt ? ` · ${escapeHtml(formatTaskDate(task.dueAt))}` : ''}${task.tags?.length ? ` · ${escapeHtml(formatTags(task.tags))}` : ''}</small></div><button class="task-active" data-task-active="${escapeAttribute(task.id)}" ${task.done ? 'disabled' : ''}>${task.active ? 'En cours' : 'Activer'}</button><button class="task-remove" data-task-remove="${escapeAttribute(task.id)}" title="Supprimer">×</button></article>`).join('') : '<p class="history-empty">Aucune tâche pour le moment. Ajoutez votre prochaine action.</p>';
-  $$('[data-task-toggle]').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'tasks/toggle', taskId: button.dataset.taskToggle }); if (!response?.ok) return showToast(response?.error || 'Mise à jour impossible.'); await loadTasks(); }));
+  $('#tasks-list').innerHTML = tasks.length ? tasks.map((task) => `<article class="task-item ${task.done ? 'done' : ''} ${task.active ? 'active' : ''}"><button class="task-toggle" data-task-toggle="${escapeAttribute(task.id)}" title="${task.done ? 'Réouvrir' : 'Terminer'}">${task.done ? '✓' : '○'}</button><div><strong>${escapeHtml(task.title)}</strong><small class="task-priority ${escapeAttribute(task.priority)}">${task.priority === 'high' ? 'Haute priorité' : task.priority === 'low' ? 'Faible priorité' : 'Priorité normale'}${task.dueAt ? ` · ${escapeHtml(formatTaskDate(task.dueAt))}` : ''}${task.recurrence && task.recurrence !== 'none' ? ` · ${escapeHtml(recurrenceLabel(task.recurrence))}` : ''}${task.tags?.length ? ` · ${escapeHtml(formatTags(task.tags))}` : ''}</small></div><button class="task-active" data-task-active="${escapeAttribute(task.id)}" ${task.done ? 'disabled' : ''}>${task.active ? 'En cours' : 'Activer'}</button><button class="task-remove" data-task-remove="${escapeAttribute(task.id)}" title="Supprimer">×</button></article>`).join('') : '<p class="history-empty">Aucune tâche pour le moment. Ajoutez votre prochaine action.</p>';
+  $$('[data-task-toggle]').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'tasks/toggle', taskId: button.dataset.taskToggle }); if (!response?.ok) return showToast(response?.error || 'Mise à jour impossible.'); await loadTasks(); await refreshTodayDashboard(); if (response.data?.nextOccurrence) showToast('Tâche terminée : prochaine occurrence créée.'); }));
   $$('[data-task-active]').forEach((button) => button.addEventListener('click', async () => { const taskId = button.dataset.taskActive; const response = await chrome.runtime.sendMessage({ type: 'tasks/set-active', taskId: button.textContent === 'En cours' ? null : taskId }); if (!response?.ok) return showToast(response?.error || 'Activation impossible.'); await loadTasks(); showToast(response.data ? 'Tâche active mise à jour.' : 'Tâche active retirée.'); }));
   $$('[data-task-remove]').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'tasks/remove', taskId: button.dataset.taskRemove }); if (!response?.ok) return showToast(response?.error || 'Suppression impossible.'); await loadTasks(); }));
 }
@@ -332,9 +391,9 @@ async function loadTasks() {
 async function saveTask() {
   const input = $('#task-input'); const title = input.value.trim();
   if (!title) return showToast('Ajoutez un titre pour créer une tâche.');
-  const response = await chrome.runtime.sendMessage({ type: 'tasks/create', title, priority: $('#task-priority').value, details: { tags: $('#task-tags').value, dueAt: $('#task-due').value || null, reminderAt: $('#task-reminder').value || null } });
+  const response = await chrome.runtime.sendMessage({ type: 'tasks/create', title, priority: $('#task-priority').value, details: { tags: $('#task-tags').value, dueAt: $('#task-due').value || null, reminderAt: $('#task-reminder').value || null, recurrence: $('#task-recurrence').value } });
   if (!response?.ok) return showToast(response?.error || 'Création impossible.');
-  input.value = ''; $('#task-tags').value = ''; $('#task-due').value = ''; $('#task-reminder').value = ''; await loadTasks(); showToast('Tâche ajoutée.');
+  input.value = ''; $('#task-tags').value = ''; $('#task-due').value = ''; $('#task-reminder').value = ''; $('#task-recurrence').value = 'none'; await loadTasks(); await refreshTodayDashboard(); showToast('Tâche ajoutée.');
 }
 
 async function clearCompletedTasks() {
@@ -445,6 +504,8 @@ async function resetPomodoro() {
 }
 
 function renderPomodoro() { const remaining = pomodoro.status === 'running' && pomodoro.endAt ? Math.max(0, pomodoro.endAt - Date.now()) : pomodoro.remainingMs; const minutes = Math.floor(Math.max(0, remaining) / 60_000); const seconds = Math.floor((Math.max(0, remaining) % 60_000) / 1000); $('#pomodoro-time').textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; const taskContext = activeTaskTitle ? `Tâche active : ${activeTaskTitle}` : ''; $('#pomodoro-label').textContent = pomodoro.status === 'running' ? (taskContext || 'Restez concentré.') : pomodoro.status === 'paused' ? 'Session en pause.' : pomodoro.status === 'done' ? 'Session terminée. Faites une pause.' : (taskContext || `${getPomodoroMinutes(settings)} minutes pour avancer.`); $('#pomodoro-toggle').textContent = pomodoro.status === 'running' ? 'Pause' : pomodoro.status === 'paused' ? 'Reprendre' : pomodoro.status === 'done' ? 'Recommencer' : 'Démarrer'; }
+function recurrenceLabel(value) { return ({ daily: 'Chaque jour', weekly: 'Chaque semaine', monthly: 'Chaque mois' })[value] || ''; }
+
 function formatTaskDate(value) { return new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }); }
 function applyTheme(theme) { document.body.classList.toggle('light-theme', theme === 'light'); }
 function showToast(message) { const toast = $('#toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 2800); }

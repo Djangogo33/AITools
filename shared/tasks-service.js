@@ -4,6 +4,7 @@ const TASKS_KEY = 'aitools.tasks';
 const ACTIVE_TASK_KEY = 'aitools.tasks.active';
 const MAX_TASKS = 250;
 const PRIORITIES = ['low', 'normal', 'high'];
+const RECURRENCES = ['none', 'daily', 'weekly', 'monthly'];
 
 export async function listTasks({ includeDone = true, period = 'all', tags = [] } = {}) {
   const result = await chrome.storage.local.get([TASKS_KEY, ACTIVE_TASK_KEY]);
@@ -18,7 +19,7 @@ export async function createTask(title, priority = 'normal', details = {}) {
   if (!normalizedTitle) throw new Error('Le titre de la tâche est obligatoire.');
   if (normalizedTitle.length > 240) throw new Error('Une tâche est limitée à 240 caractères.');
   const now = new Date().toISOString();
-  const task = { id: crypto.randomUUID(), title: normalizedTitle, priority: normalizePriority(priority), done: false, tags: normalizeTags(details.tags), dueAt: normalizeDueAt(details.dueAt), reminderAt: normalizeReminder(details.reminderAt), sourceUrl: normalizeHttpUrl(details.sourceUrl), createdAt: now, updatedAt: now, completedAt: null };
+  const task = { id: crypto.randomUUID(), title: normalizedTitle, priority: normalizePriority(priority), done: false, tags: normalizeTags(details.tags), dueAt: normalizeDueAt(details.dueAt), reminderAt: normalizeReminder(details.reminderAt), recurrence: normalizeRecurrence(details.recurrence), recurrenceSeriesId: null, sourceUrl: normalizeHttpUrl(details.sourceUrl), createdAt: now, updatedAt: now, completedAt: null };
   const tasks = await readTasks();
   await writeTasks([task, ...tasks].slice(0, MAX_TASKS));
   return task;
@@ -30,7 +31,7 @@ export async function updateTask(taskId, patch = {}) {
     if (task.id !== taskId) return task;
     const title = Object.hasOwn(patch, 'title') ? String(patch.title || '').trim().slice(0, 240) : task.title;
     if (!title) throw new Error('Le titre de la tâche est obligatoire.');
-    updated = { ...task, title, priority: Object.hasOwn(patch, 'priority') ? normalizePriority(patch.priority) : task.priority, tags: Object.hasOwn(patch, 'tags') ? normalizeTags(patch.tags) : task.tags, dueAt: Object.hasOwn(patch, 'dueAt') ? normalizeDueAt(patch.dueAt) : task.dueAt, reminderAt: Object.hasOwn(patch, 'reminderAt') ? normalizeReminder(patch.reminderAt) : task.reminderAt, sourceUrl: Object.hasOwn(patch, 'sourceUrl') ? normalizeHttpUrl(patch.sourceUrl) : task.sourceUrl, updatedAt: new Date().toISOString() };
+    updated = { ...task, title, priority: Object.hasOwn(patch, 'priority') ? normalizePriority(patch.priority) : task.priority, tags: Object.hasOwn(patch, 'tags') ? normalizeTags(patch.tags) : task.tags, dueAt: Object.hasOwn(patch, 'dueAt') ? normalizeDueAt(patch.dueAt) : task.dueAt, reminderAt: Object.hasOwn(patch, 'reminderAt') ? normalizeReminder(patch.reminderAt) : task.reminderAt, recurrence: Object.hasOwn(patch, 'recurrence') ? normalizeRecurrence(patch.recurrence) : task.recurrence, sourceUrl: Object.hasOwn(patch, 'sourceUrl') ? normalizeHttpUrl(patch.sourceUrl) : task.sourceUrl, updatedAt: new Date().toISOString() };
     return updated;
   });
   if (!updated) throw new Error('Tâche introuvable.');
@@ -38,15 +39,17 @@ export async function updateTask(taskId, patch = {}) {
 }
 
 export async function toggleTask(taskId) {
-  const tasks = await readTasks(); let toggled = null;
+  const tasks = await readTasks(); let toggled = null; let nextOccurrence = null;
   const next = tasks.map((task) => {
     if (task.id !== taskId) return task;
-    const done = !task.done;
-    toggled = { ...task, done, completedAt: done ? new Date().toISOString() : null, updatedAt: new Date().toISOString() };
+    const done = !task.done; const completedAt = done ? new Date().toISOString() : null;
+    toggled = { ...task, done, completedAt, updatedAt: completedAt || new Date().toISOString() };
+    if (done && toggled.recurrence !== 'none') nextOccurrence = createNextOccurrence(toggled);
     return toggled;
   });
   if (!toggled) throw new Error('Tâche introuvable.');
-  await writeTasks(next); if (toggled.done) await clearActiveIf(taskId); return toggled;
+  await writeTasks(nextOccurrence ? [nextOccurrence, ...next].slice(0, MAX_TASKS) : next); if (toggled.done) await clearActiveIf(taskId);
+  return nextOccurrence ? { ...toggled, nextOccurrence } : toggled;
 }
 
 export async function removeTask(taskId) { const tasks = await readTasks(); const next = tasks.filter((task) => task.id !== taskId); await writeTasks(next); await clearActiveIf(taskId); return { removed: next.length !== tasks.length }; }
@@ -56,8 +59,11 @@ export async function clearCompletedTasks() { const tasks = await readTasks(); c
 async function readTasks() { const result = await chrome.storage.local.get(TASKS_KEY); return Array.isArray(result[TASKS_KEY]) ? result[TASKS_KEY].map(normalizeTask).filter((task) => task.title) : []; }
 async function writeTasks(tasks) { await chrome.storage.local.set({ [TASKS_KEY]: tasks }); }
 async function clearActiveIf(taskId) { const active = (await chrome.storage.local.get(ACTIVE_TASK_KEY))[ACTIVE_TASK_KEY]; if (active === taskId) await chrome.storage.local.remove(ACTIVE_TASK_KEY); }
-function normalizeTask(task) { const title = String(task?.title || '').trim().slice(0, 240); const createdAt = validDate(task?.createdAt) ? task.createdAt : new Date().toISOString(); return { id: validId(task?.id) ? task.id : crypto.randomUUID(), title, priority: normalizePriority(task?.priority), done: Boolean(task?.done), tags: normalizeTags(task?.tags), dueAt: normalizeDueAt(task?.dueAt), reminderAt: normalizeReminder(task?.reminderAt), sourceUrl: normalizeHttpUrl(task?.sourceUrl), createdAt, updatedAt: validDate(task?.updatedAt) ? task.updatedAt : createdAt, completedAt: validDate(task?.completedAt) ? task.completedAt : null }; }
+function normalizeTask(task) { const title = String(task?.title || '').trim().slice(0, 240); const createdAt = validDate(task?.createdAt) ? task.createdAt : new Date().toISOString(); return { id: validId(task?.id) ? task.id : crypto.randomUUID(), title, priority: normalizePriority(task?.priority), done: Boolean(task?.done), tags: normalizeTags(task?.tags), dueAt: normalizeDueAt(task?.dueAt), reminderAt: normalizeReminder(task?.reminderAt), recurrence: normalizeRecurrence(task?.recurrence), recurrenceSeriesId: validId(task?.recurrenceSeriesId) ? task.recurrenceSeriesId : null, sourceUrl: normalizeHttpUrl(task?.sourceUrl), createdAt, updatedAt: validDate(task?.updatedAt) ? task.updatedAt : createdAt, completedAt: validDate(task?.completedAt) ? task.completedAt : null }; }
 function normalizePriority(value) { return PRIORITIES.includes(value) ? value : 'normal'; }
+function normalizeRecurrence(value) { return RECURRENCES.includes(value) ? value : 'none'; }
+function createNextOccurrence(task) { const now = new Date(); const base = task.dueAt ? new Date(task.dueAt) : new Date(task.completedAt || now); const due = advanceRecurringDate(base, task.recurrence, now); const reminderOffset = task.dueAt && task.reminderAt ? new Date(task.reminderAt).getTime() - new Date(task.dueAt).getTime() : null; const reminderAt = reminderOffset === null ? null : new Date(due.getTime() + reminderOffset).toISOString(); const timestamp = now.toISOString(); return { ...task, id: crypto.randomUUID(), done: false, dueAt: due.toISOString(), reminderAt: normalizeReminder(reminderAt), recurrenceSeriesId: task.recurrenceSeriesId || task.id, createdAt: timestamp, updatedAt: timestamp, completedAt: null }; }
+function advanceRecurringDate(base, recurrence, now) { const date = new Date(base); const advance = () => { if (recurrence === 'daily') date.setDate(date.getDate() + 1); if (recurrence === 'weekly') date.setDate(date.getDate() + 7); if (recurrence === 'monthly') date.setMonth(date.getMonth() + 1); }; do { advance(); } while (date <= now); return date; }
 function normalizeDueAt(value) { return validDate(value) ? new Date(value).toISOString() : null; }
 function normalizeReminder(value) { const date = normalizeDueAt(value); return date && new Date(date) > new Date(Date.now() - 86_400_000) ? date : null; }
 function normalizeHttpUrl(value) { try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.toString() : null; } catch { return null; } }

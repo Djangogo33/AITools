@@ -1,4 +1,4 @@
-# AITools 5 — Configuration de production
+# AITools 7 — Configuration de production
 
 **Auteur : Manus AI**
 **Portée :** ce guide active l’authentification Google, la synchronisation des notes, les plans payants Stripe, les capacités IA locales de Chrome et la publication de l’extension. Les fonctionnalités locales restent utilisables sans ces services, mais la connexion, la synchronisation et la facturation ne seront pas actives avant la fin de cette procédure.
@@ -44,9 +44,9 @@ export const SUPABASE_CONFIG = {
 };
 ```
 
-### 2.2 Créer le schéma, les politiques et les notes synchronisées
+### 2.2 Créer le schéma, les politiques et les données synchronisées
 
-Dans **Supabase Dashboard → SQL Editor**, ouvrez une nouvelle requête, collez intégralement le contenu de [`supabase/schema.sql`](./supabase/schema.sql), puis choisissez **Run**. Cette migration crée les tables `profiles`, `subscriptions` et `notes`, déclenche la création du profil et active les politiques RLS.
+Dans **Supabase Dashboard → SQL Editor**, ouvrez une nouvelle requête, collez intégralement le contenu de [`supabase/schema.sql`](./supabase/schema.sql), puis choisissez **Run**. Cette migration crée les tables `profiles`, `subscriptions`, `notes`, `tasks`, `reading_items`, `workspaces` et `user_preferences`, déclenche la création du profil et active les politiques RLS. Elle est idempotente : les `create table if not exists` et `alter table ... if not exists` permettent de la relancer pour appliquer les évolutions v7.
 
 Vérifiez ensuite dans **Table Editor** les résultats suivants :
 
@@ -55,12 +55,24 @@ Vérifiez ensuite dans **Table Editor** les résultats suivants :
 | `public.profiles` | RLS activée ; un utilisateur ne lit et ne modifie que son propre profil |
 | `public.notes` | RLS activée ; l’utilisateur ne lit, crée, modifie et supprime que ses notes |
 | `public.subscriptions` | RLS activée ; le client peut lire son abonnement mais ne peut pas créer ou modifier un plan |
+| `public.tasks` | RLS activée ; champs `recurrence` et `recurrence_series_id` présents pour les tâches récurrentes |
+| `public.reading_items` | RLS activée ; chaque élément appartient au compte connecté |
+| `public.workspaces` | RLS activée ; les onglets enregistrés sont stockés dans `tabs` au format JSONB |
+| `public.user_preferences` | RLS activée ; une ligne par utilisateur, avec les préférences non sensibles dans `settings` JSONB |
 | `handle_new_user()` | Fonction présente ; déclencheur exécuté après la création d’un utilisateur Auth |
 | `subscriptions_provider_subscription_unique` | Index unique présent ; un webhook Stripe ne crée pas de doublon pour le même abonnement |
 
 Dans **Project Settings → API → Data API**, assurez-vous que le schéma `public` et les tables nécessaires sont accessibles. Les politiques RLS restent obligatoires avant d’accorder des droits au rôle `authenticated`. [1]
 
-### 2.3 Configurer les URL de redirection Supabase
+### 2.3 Vérifier la synchronisation personnelle v7
+
+Après connexion dans AITools, ouvrez **Préférences → Données → Synchroniser mon espace**. Cette action synchronise volontairement les tâches, les éléments de lecture, les espaces de travail et les préférences non sensibles. Les notes disposent de leur propre bouton de synchronisation. Vérifiez que l’indicateur affiche une date de réussite et que les tables concernées contiennent uniquement des lignes avec votre `user_id`.
+
+La résolution de conflit est déterminée par `updated_at` : la version la plus récente d’un même élément est conservée. Les suppressions locales sont mises en attente puis propagées lors de la synchronisation suivante. Le mode local continue de fonctionner même si la connexion ou Supabase est indisponible.
+
+**Ne synchronisez pas** les jetons, secrets, sessions d’authentification, clés Stripe, clés Supabase privées ou diagnostics contenant des informations de support. AITools ne les place pas dans `user_preferences`.
+
+### 2.4 Configurer les URL de redirection Supabase
 
 Ouvrez **Authentication → URL Configuration**.
 
@@ -186,10 +198,14 @@ Après chaque changement de manifeste, ouvrez `chrome://extensions` puis cliquez
 | Mode local | Recherche, notes locales, Pomodoro, outils d’onglets et page Nouvel onglet fonctionnent sans connexion |
 | Connexion Google | Session créée, profil affiché, déconnexion possible |
 | Notes | Création locale, import des notes existantes, synchronisation du compte, suppression locale et distante |
+| À traiter | Capture ajoutée localement ; transformation en note, tâche ou lecture ; écartement possible |
+| Tâches | Création avec tags, échéance, rappel et récurrence ; la complétion crée la prochaine occurrence attendue |
+| Synchronisation | État lisible ; tâches, lecture, espaces et préférences synchronisés seulement après action volontaire |
 | Productivité | Doublons fermés, groupes par domaine créés, mode focus et temps de lecture disponibles sur une page HTTP(S) |
 | IA | Diagnostic visible ; résumé ou repli heuristique ; avertissement clair pour l’analyse stylistique |
 | Facturation | Checkout et portail s’ouvrent seulement pour un utilisateur connecté ; le webhook détermine le plan final |
-| Nouvel onglet | Recherche, raccourcis, dernières notes et Pomodoro affichés |
+| Nouvel onglet | Recherche, tableau Aujourd’hui, raccourcis, dernières notes, tâches et Pomodoro affichés |
+| Rétrospective | Les compteurs de tâche, concentration et domaines déjà enregistrés restent disponibles localement ; le diagnostic exporté ne contient ni page, ni jeton, ni URL complète |
 
 Sur `chrome://extensions`, ouvrez **Erreurs** et le lien **service worker** de l’extension. Il ne doit pas y avoir d’erreur de chargement du manifeste, de module introuvable, de CSP ou de permission.
 
@@ -199,7 +215,7 @@ Depuis la racine du dépôt, construisez l’archive avec le manifeste à la rac
 
 ```bash
 cd /chemin/vers/AITools
-zip -r ../AITools-v5.zip . \
+zip -r ../AITools-v7.0.zip . \
   -x '.git/*' '.audit/*' 'tests/*' '.env*' '*.md' 'node_modules/*' \
   -x '.chrome-validation.md'
 ```
@@ -207,7 +223,7 @@ zip -r ../AITools-v5.zip . \
 Avant l’import Web Store, vérifiez que l’archive contient `manifest.json` au premier niveau :
 
 ```bash
-unzip -l ../AITools-v5.zip | head -30
+unzip -l ../AITools-v7.0.zip | head -30
 ```
 
 Dans le Chrome Web Store Developer Dashboard, créez l’élément, chargez le ZIP, ajoutez des captures d’écran, une politique de confidentialité, une explication honnête de chaque permission et les mentions concernant le traitement local de l’IA. Après attribution de l’ID définitif, retournez aux étapes 1 et 3 pour mettre à jour le client OAuth et l’URL de redirection de production.

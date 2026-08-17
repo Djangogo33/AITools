@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+
+const store = new Map();
+globalThis.chrome = { storage: { local: { async get(keys) { const list = Array.isArray(keys) ? keys : [keys]; return Object.fromEntries(list.map((key) => [key, store.get(key)])); }, async set(values) { Object.entries(values).forEach(([key, value]) => store.set(key, value)); }, async remove(keys) { (Array.isArray(keys) ? keys : [keys]).forEach((key) => store.delete(key)); } } } };
+const { addCapture, dismissCapture, listInbox, processCapture } = await import('../shared/inbox-service.js');
+const first = await addCapture({ content: 'Idée utile pour la feuille de route', sourceUrl: 'https://example.com/article', sourceTitle: 'Article de référence', tags: 'produit, veille' });
+assert.equal((await listInbox()).length, 1);
+const processed = await processCapture(first.id, 'note');
+assert.equal(processed.capture.status, 'processed');
+assert.equal(processed.capture.processedAs, 'note');
+assert.equal(store.get('aitools.notes').length, 1);
+assert.equal(store.get('aitools.notes')[0].sourceUrl, 'https://example.com/article');
+assert.equal((await listInbox()).length, 0, 'une capture traitée ne doit plus rester à traiter');
+const second = await addCapture({ content: 'À écarter', sourceTitle: 'Brouillon' });
+const dismissed = await dismissCapture(second.id);
+assert.equal(dismissed.status, 'dismissed');
+assert.equal((await listInbox()).length, 0);
+const all = await listInbox({ includeProcessed: true });
+assert.equal(all.length, 2);
+assert.equal(all.some((item) => item.id === first.id && item.status === 'processed'), true);
+console.log('inbox-service simulation: ok');
