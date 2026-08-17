@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+
+const store = new Map();
+globalThis.chrome = { storage: { local: { async get(keys) { const list = Array.isArray(keys) ? keys : [keys]; return Object.fromEntries(list.map((key) => [key, store.get(key)])); }, async set(values) { Object.entries(values).forEach(([key, value]) => store.set(key, value)); }, async remove(keys) { (Array.isArray(keys) ? keys : [keys]).forEach((key) => store.delete(key)); } } } };
+const { clearCompletedTasks, createTask, listTasks, removeTask, setActiveTask, toggleTask } = await import('../shared/tasks-service.js');
+const normal = await createTask('Préparer la réunion', 'normal');
+const high = await createTask('Finaliser la présentation', 'high');
+const low = await createTask('Classer les notes', 'low');
+let tasks = await listTasks();
+assert.equal(tasks[0].id, high.id, 'les tâches de haute priorité doivent être affichées en premier');
+const active = await setActiveTask(normal.id);
+assert.equal(active.id, normal.id);
+tasks = await listTasks({ includeDone: false });
+assert.equal(tasks.find((task) => task.id === normal.id).active, true);
+const completed = await toggleTask(normal.id);
+assert.equal(completed.done, true);
+tasks = await listTasks({ includeDone: false });
+assert.equal(tasks.some((task) => task.id === normal.id), false);
+assert.equal((await listTasks()).find((task) => task.id === normal.id).active, false);
+const cleared = await clearCompletedTasks();
+assert.equal(cleared.removed, 1);
+const removal = await removeTask(low.id);
+assert.equal(removal.removed, true);
+await assert.rejects(() => createTask('x'.repeat(241)), /240/);
+console.log('tasks-service simulation: ok');

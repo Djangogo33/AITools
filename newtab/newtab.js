@@ -9,7 +9,7 @@ init();
 
 async function init() {
   renderDate(); bindActions();
-  await Promise.all([renderAccount(), renderShortcuts(), renderNotes(), renderReadingList(), refreshPomodoro()]);
+  await Promise.all([renderAccount(), renderShortcuts(), renderNotes(), renderReadingList(), renderTasks(), refreshPomodoro()]);
 }
 
 function bindActions() {
@@ -20,6 +20,7 @@ function bindActions() {
   $('#manage-shortcuts').addEventListener('click', () => chrome.runtime.openOptionsPage());
   $('#open-notes').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('popup/index.html') }));
   $('#open-reading-list').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('popup/index.html') }));
+  $('#open-tasks').addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL('popup/index.html#tasks') }));
   $('#newtab-pomodoro-toggle').addEventListener('click', togglePomodoro);
   $('#newtab-pomodoro-reset').addEventListener('click', resetPomodoro);
 }
@@ -43,6 +44,14 @@ async function renderReadingList() {
     const items = response?.ok ? response.data.filter((item) => !item.done).slice(0, 3) : [];
     $('#newtab-reading-list').innerHTML = items.length ? items.map((item) => `<a class="newtab-reading-item" href="${escapeAttribute(item.url)}"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(new URL(item.url).hostname)}</small></a>`).join('') : '<p>Aucune page à lire. Ajoutez l’onglet actif depuis AITools.</p>';
   } catch { $('#newtab-reading-list').innerHTML = '<p>Liste de lecture indisponible.</p>'; }
+}
+
+async function renderTasks() {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'tasks/list', includeDone: false });
+    const tasks = response?.ok ? response.data.slice(0, 4) : [];
+    $('#newtab-tasks').innerHTML = tasks.length ? tasks.map((task) => `<article class="newtab-task ${task.active ? 'active' : ''}"><span class="task-dot ${escapeAttribute(task.priority)}"></span><div><strong>${escapeHtml(task.title)}</strong><small>${task.active ? 'Tâche active' : task.priority === 'high' ? 'Haute priorité' : task.priority === 'low' ? 'Faible priorité' : 'Priorité normale'}</small></div></article>`).join('') : '<p>Aucune tâche en attente. Ouvrez AITools pour planifier votre prochaine action.</p>';
+  } catch { $('#newtab-tasks').innerHTML = '<p>Tâches indisponibles.</p>'; }
 }
 
 async function refreshPomodoro() {

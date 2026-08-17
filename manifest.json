@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AITools",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "description": "Un espace de travail rapide pour rechercher, résumer et organiser le web.",
   "permissions": ["storage", "tabs", "tabGroups", "alarms", "scripting", "activeTab", "notifications", "identity"],
   "host_permissions": ["https://yvtukwaepqqsvacbbyou.supabase.co/*"],

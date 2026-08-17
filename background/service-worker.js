@@ -3,6 +3,7 @@ import { getAccount, isFeatureAllowed, signInWithGoogle, signOut } from '../shar
 import { createNote, deleteNote, importGuestNotes, listNotes, syncNotes } from '../shared/notes-service.js';
 import { createCheckout, createPortal } from '../shared/billing-client.js';
 import { listReadingItems, removeReadingItem, saveCurrentPage, toggleReadingItem } from '../shared/reading-list-service.js';
+import { clearCompletedTasks, createTask, listTasks, removeTask, setActiveTask, toggleTask } from '../shared/tasks-service.js';
 
 const POMODORO_ALARM = 'aitools-pomodoro-complete';
 const DEFAULT_POMODORO = { status: 'idle', durationMs: 25 * 60_000, remainingMs: 25 * 60_000, endAt: null, cycle: 'focus' };
@@ -55,6 +56,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     'reading/save-current': () => saveCurrentPage(),
     'reading/toggle': () => toggleReadingItem(message.itemId),
     'reading/remove': () => removeReadingItem(message.itemId),
+    'tasks/list': () => listTasks({ includeDone: message.includeDone !== false }),
+    'tasks/create': () => createTask(message.title, message.priority),
+    'tasks/toggle': () => toggleTask(message.taskId),
+    'tasks/remove': () => removeTask(message.taskId),
+    'tasks/set-active': () => setActiveTask(message.taskId),
+    'tasks/clear-completed': () => clearCompletedTasks(),
     'pomodoro/get': () => getPomodoro(),
     'pomodoro/toggle': () => togglePomodoro(message.durationMinutes, message.cycle),
     'pomodoro/reset': () => resetPomodoro(message.durationMinutes, message.cycle),

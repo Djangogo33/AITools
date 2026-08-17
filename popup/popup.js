@@ -10,6 +10,7 @@ let pomodoro = { status: 'idle', remaining: 1500, notifications: true };
 let pomodoroTimer;
 let account = { authenticated: false, user: null, plan: 'free', entitlements: [] };
 let searchCategory = 'web';
+let activeTaskTitle = '';
 
 init();
 
@@ -27,9 +28,12 @@ async function init() {
   renderNotes();
   bindNavigation();
   bindActions();
+  const requestedView = location.hash.slice(1);
+  if (['home', 'search', 'tools', 'ai', 'notes', 'tasks', 'settings'].includes(requestedView)) showView(requestedView);
   await refreshAccount();
   await loadNotes();
   await loadReadingList();
+  await loadTasks();
   await refreshPomodoro();
   await refreshTabStats();
   await refreshAIStatus();
@@ -43,7 +47,7 @@ function bindNavigation() {
 function showView(view) {
   $$('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   $$('.view').forEach((section) => section.classList.toggle('active', section.id === `view-${view}`));
-  const titles = { home: ['VOTRE ESPACE DE TRAVAIL', 'Bonjour, Alex'], search: ['RECHERCHE UNIVERSELLE', 'Rechercher mieux'], tools: ['BOÎTE À OUTILS', 'Travaillez plus vite'], ai: ['IA LOCALE ET PRIVÉE', 'Analyse assistée'], notes: ['VOTRE CARNET', 'Notes rapides'], settings: ['PERSONNALISATION', 'Préférences'] };
+  const titles = { home: ['VOTRE ESPACE DE TRAVAIL', 'Bonjour, Alex'], search: ['RECHERCHE UNIVERSELLE', 'Rechercher mieux'], tools: ['BOÎTE À OUTILS', 'Travaillez plus vite'], ai: ['IA LOCALE ET PRIVÉE', 'Analyse assistée'], notes: ['VOTRE CARNET', 'Notes rapides'], tasks: ['PLAN DE TRAVAIL', 'Prochaines actions'], settings: ['PERSONNALISATION', 'Préférences'] };
   $('#view-eyebrow').textContent = titles[view][0];
   $('#view-title').innerHTML = `${titles[view][1]} <span>✦</span>`;
 }
@@ -85,6 +89,9 @@ function bindActions() {
   $('#sync-notes').addEventListener('click', syncNotesNow);
   $('#import-local-notes').addEventListener('click', importLocalNotes);
   $('#save-current-page').addEventListener('click', saveCurrentPageToReadingList);
+  $('#save-task').addEventListener('click', saveTask);
+  $('#task-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') saveTask(); });
+  $('#clear-completed-tasks').addEventListener('click', clearCompletedTasks);
   $('#pomodoro-toggle').addEventListener('click', togglePomodoro);
   $('#pomodoro-reset').addEventListener('click', resetPomodoro);
   $('#auth-action').addEventListener('click', handleAuthAction);
@@ -272,6 +279,33 @@ async function saveCurrentPageToReadingList() {
   showToast(response.data.created ? 'Page ajoutée à la liste de lecture.' : 'Cette page figure déjà dans votre liste.');
 }
 
+async function loadTasks() {
+  const response = await chrome.runtime.sendMessage({ type: 'tasks/list' });
+  const tasks = response?.ok ? response.data : [];
+  const active = tasks.find((task) => task.active);
+  activeTaskTitle = active?.title || '';
+  $('#tasks-count').textContent = tasks.filter((task) => !task.done).length;
+  $('#active-task-label').textContent = active ? `Tâche active : ${active.title}` : 'Aucune tâche active';
+  $('#tasks-list').innerHTML = tasks.length ? tasks.map((task) => `<article class="task-item ${task.done ? 'done' : ''} ${task.active ? 'active' : ''}"><button class="task-toggle" data-task-toggle="${escapeAttribute(task.id)}" title="${task.done ? 'Réouvrir' : 'Terminer'}">${task.done ? '✓' : '○'}</button><div><strong>${escapeHtml(task.title)}</strong><small class="task-priority ${escapeAttribute(task.priority)}">${task.priority === 'high' ? 'Haute priorité' : task.priority === 'low' ? 'Faible priorité' : 'Priorité normale'}</small></div><button class="task-active" data-task-active="${escapeAttribute(task.id)}" ${task.done ? 'disabled' : ''}>${task.active ? 'En cours' : 'Activer'}</button><button class="task-remove" data-task-remove="${escapeAttribute(task.id)}" title="Supprimer">×</button></article>`).join('') : '<p class="history-empty">Aucune tâche pour le moment. Ajoutez votre prochaine action.</p>';
+  $$('[data-task-toggle]').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'tasks/toggle', taskId: button.dataset.taskToggle }); if (!response?.ok) return showToast(response?.error || 'Mise à jour impossible.'); await loadTasks(); }));
+  $$('[data-task-active]').forEach((button) => button.addEventListener('click', async () => { const taskId = button.dataset.taskActive; const response = await chrome.runtime.sendMessage({ type: 'tasks/set-active', taskId: button.textContent === 'En cours' ? null : taskId }); if (!response?.ok) return showToast(response?.error || 'Activation impossible.'); await loadTasks(); showToast(response.data ? 'Tâche active mise à jour.' : 'Tâche active retirée.'); }));
+  $$('[data-task-remove]').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'tasks/remove', taskId: button.dataset.taskRemove }); if (!response?.ok) return showToast(response?.error || 'Suppression impossible.'); await loadTasks(); }));
+}
+
+async function saveTask() {
+  const input = $('#task-input'); const title = input.value.trim();
+  if (!title) return showToast('Ajoutez un titre pour créer une tâche.');
+  const response = await chrome.runtime.sendMessage({ type: 'tasks/create', title, priority: $('#task-priority').value });
+  if (!response?.ok) return showToast(response?.error || 'Création impossible.');
+  input.value = ''; await loadTasks(); showToast('Tâche ajoutée.');
+}
+
+async function clearCompletedTasks() {
+  const response = await chrome.runtime.sendMessage({ type: 'tasks/clear-completed' });
+  if (!response?.ok) return showToast(response?.error || 'Nettoyage impossible.');
+  await loadTasks(); showToast(`${response.data.removed} tâche(s) terminée(s) effacée(s).`);
+}
+
 async function runPageAction(type) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || tab.url?.startsWith('chrome://')) return showToast('Cette page ne permet pas cette action.');
@@ -349,7 +383,7 @@ async function resetPomodoro() {
   pomodoro = response.data; clearInterval(pomodoroTimer); renderPomodoro(); showToast('Pomodoro réinitialisé.');
 }
 
-function renderPomodoro() { const remaining = pomodoro.status === 'running' && pomodoro.endAt ? Math.max(0, pomodoro.endAt - Date.now()) : pomodoro.remainingMs; const minutes = Math.floor(Math.max(0, remaining) / 60_000); const seconds = Math.floor((Math.max(0, remaining) % 60_000) / 1000); $('#pomodoro-time').textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; $('#pomodoro-label').textContent = pomodoro.status === 'running' ? 'Restez concentré.' : pomodoro.status === 'paused' ? 'Session en pause.' : pomodoro.status === 'done' ? 'Session terminée. Faites une pause.' : `${getPomodoroMinutes(settings)} minutes pour avancer.`; $('#pomodoro-toggle').textContent = pomodoro.status === 'running' ? 'Pause' : pomodoro.status === 'paused' ? 'Reprendre' : pomodoro.status === 'done' ? 'Recommencer' : 'Démarrer'; }
+function renderPomodoro() { const remaining = pomodoro.status === 'running' && pomodoro.endAt ? Math.max(0, pomodoro.endAt - Date.now()) : pomodoro.remainingMs; const minutes = Math.floor(Math.max(0, remaining) / 60_000); const seconds = Math.floor((Math.max(0, remaining) % 60_000) / 1000); $('#pomodoro-time').textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; const taskContext = activeTaskTitle ? `Tâche active : ${activeTaskTitle}` : ''; $('#pomodoro-label').textContent = pomodoro.status === 'running' ? (taskContext || 'Restez concentré.') : pomodoro.status === 'paused' ? 'Session en pause.' : pomodoro.status === 'done' ? 'Session terminée. Faites une pause.' : (taskContext || `${getPomodoroMinutes(settings)} minutes pour avancer.`); $('#pomodoro-toggle').textContent = pomodoro.status === 'running' ? 'Pause' : pomodoro.status === 'paused' ? 'Reprendre' : pomodoro.status === 'done' ? 'Recommencer' : 'Démarrer'; }
 function applyTheme(theme) { document.body.classList.toggle('light-theme', theme === 'light'); }
 function showToast(message) { const toast = $('#toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 2800); }
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
