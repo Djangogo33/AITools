@@ -1,4 +1,4 @@
-# AITools 5
+# AITools 5.1
 
 AITools est une extension Chrome **Manifest V3** recréée depuis zéro comme espace de travail moderne, local-first et extensible. Elle réunit recherche avancée, organisation d’onglets, notes synchronisables, outils de lecture, IA locale Chrome, compte utilisateur et page Nouvel onglet.
 
@@ -10,11 +10,14 @@ AITools est une extension Chrome **Manifest V3** recréée depuis zéro comme es
 | Recherche | Catégories Google, opérateurs avancés, historique local et raccourcis configurables |
 | Outils | Anonymisation, temps de lecture, mode concentration, surlignage, impression PDF, doublons, groupes par domaine et Pomodoro persistant |
 | IA | Résumé, traduction locale si Chrome le permet, analyse stylistique avec avertissement, palettes et contrôles YouTube |
-| Notes | Stockage local, import des notes existantes, synchronisation Supabase et mode hors ligne |
+| Notes | Stockage local, import des notes existantes, synchronisation Supabase résiliente, file de suppressions hors ligne et protection contre les doublons historiques |
+| Liste de lecture | Ajout de la page active, suivi lu/à lire, ouverture et suppression locale sans dépendance externe |
+| Données locales | Export JSON des préférences, notes, listes et minuteur, sans jeton de session |
 | Compte | Google OAuth PKCE, session renouvelée, profil et droits d’abonnement |
 | Facturation | Checkout Stripe, portail client et synchronisation de plan par webhook Edge sécurisé |
 | Nouvel onglet | Recherche, raccourcis, dernières notes, état de compte et Pomodoro |
-| Options | Apparence, confidentialité de navigation, synchronisation, réinitialisation locale et diagnostic IA |
+| Options | Apparence, confidentialité de navigation, synchronisation, export/réinitialisation locale et diagnostic IA |
+| Raccourcis clavier | `Alt` + `Shift` + `P` pour le Pomodoro ; `Alt` + `Shift` + `R` pour ajouter la page active à la liste de lecture |
 
 ## Installation locale
 

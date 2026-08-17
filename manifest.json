@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AITools",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "description": "Un espace de travail rapide pour rechercher, résumer et organiser le web.",
   "permissions": ["storage", "tabs", "tabGroups", "alarms", "scripting", "activeTab", "notifications", "identity"],
   "host_permissions": ["https://yvtukwaepqqsvacbbyou.supabase.co/*"],
@@ -19,6 +19,16 @@
   "options_ui": {
     "page": "options/index.html",
     "open_in_tab": true
+  },
+  "commands": {
+    "toggle-pomodoro": {
+      "suggested_key": { "default": "Alt+Shift+P" },
+      "description": "Démarrer ou suspendre le Pomodoro AITools"
+    },
+    "save-to-reading-list": {
+      "suggested_key": { "default": "Alt+Shift+R" },
+      "description": "Ajouter la page active à la liste de lecture AITools"
+    }
   },
   "content_scripts": [
     {

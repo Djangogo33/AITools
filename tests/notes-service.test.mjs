@@ -2,22 +2,14 @@ import assert from 'node:assert/strict';
 
 const store = new Map();
 const calls = [];
-globalThis.chrome = {
-  storage: {
-    local: {
-      async get(keys) { const list = Array.isArray(keys) ? keys : [keys]; return Object.fromEntries(list.map((key) => [key, store.get(key)])); },
-      async set(values) { Object.entries(values).forEach(([key, value]) => store.set(key, value)); },
-      async remove(keys) { (Array.isArray(keys) ? keys : [keys]).forEach((key) => store.delete(key)); }
-    }
-  }
-};
-
-const session = { access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3_600_000, user: { id: 'user-1', email: 'alex@example.com', user_metadata: {} } };
+let online = true;
+globalThis.chrome = { storage: { local: { async get(keys) { const list = Array.isArray(keys) ? keys : [keys]; return Object.fromEntries(list.map((key) => [key, store.get(key)])); }, async set(values) { Object.entries(values).forEach(([key, value]) => store.set(key, value)); }, async remove(keys) { (Array.isArray(keys) ? keys : [keys]).forEach((key) => store.delete(key)); } } } };
+const session = { access_token: 'access', refresh_token: 'refresh', expires_at: Date.now() + 3_600_000, user: { id: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d', email: 'alex@example.com', user_metadata: {} } };
 store.set('aitools.auth.session', session);
-
 globalThis.fetch = async (url, options = {}) => {
   calls.push({ url: String(url), options });
-  if (String(url).includes('/rest/v1/notes') && !options.method) return response([{ id: 'remote-1', content: 'Note distante', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z' }]);
+  if (!online) throw new Error('Réseau indisponible');
+  if (String(url).includes('/rest/v1/notes') && !options.method) return response([{ id: '1b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d', content: 'Note distante', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z' }]);
   if (String(url).includes('/rest/v1/notes') && options.method === 'POST') return response([]);
   if (String(url).includes('/rest/v1/notes') && options.method === 'DELETE') return response([]);
   throw new Error(`Appel inattendu : ${url}`);
@@ -30,12 +22,23 @@ assert.equal(initial.length, 1);
 assert.equal(initial[0].content, 'Note distante');
 const created = await createNote('Note synchronisée');
 assert.equal(created.content, 'Note synchronisée');
+assert.equal(created.pending, false);
 await deleteNote(created.id);
-store.set('aitools.notes', [{ id: 'legacy-1', text: 'Note historique', createdAt: '2025-12-01T00:00:00Z' }]);
+store.set('aitools.notes', [{ text: 'Note historique', createdAt: '2025-12-01T00:00:00Z' }]);
 const imported = await importGuestNotes();
 assert.equal(imported.imported, 1);
+assert.ok((await importGuestNotes()).total >= 1, 'une note historique ne doit pas être dupliquée lors d’un second import');
+await assert.rejects(() => createNote('x'.repeat(10_001)), /limitée/);
+online = false;
+const offline = await createNote('Note hors ligne');
+assert.equal(offline.pending, true);
+const deletion = await deleteNote(offline.id);
+assert.equal(deletion.pending, true);
+assert.ok(store.get(`aitools.notes.deleted.${session.user.id}`).includes(offline.id));
+online = true;
 const synced = await syncNotes();
 assert.ok(synced.count >= 1);
+assert.deepEqual(store.get(`aitools.notes.deleted.${session.user.id}`), []);
 assert.ok(calls.some(({ options }) => options.method === 'POST'));
 assert.ok(calls.some(({ options }) => options.method === 'DELETE'));
 console.log('notes-service integration simulation: ok');

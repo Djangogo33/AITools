@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, getSettings } from '../shared/constants.js';
+import { getQuickLinks, getSettings } from '../shared/constants.js';
 import { buildGoogleUrl } from '../shared/search-service.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -28,7 +28,7 @@ async function renderAccount() {
 }
 
 async function renderShortcuts() {
-  const settings = await getSettings(); const links = settings.quickLinks?.length ? settings.quickLinks : DEFAULT_SETTINGS.quickLinks;
+  const settings = await getSettings(); const links = getQuickLinks(settings);
   $('#newtab-shortcuts').innerHTML = links.slice(0, 6).map((link) => `<a class="newtab-shortcut" href="${escapeAttribute(link.url)}"><i>↗</i>${escapeHtml(link.label)}</a>`).join('');
 }
 

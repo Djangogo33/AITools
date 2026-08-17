@@ -2,6 +2,7 @@ import { MESSAGE_TYPES, STORAGE_KEYS } from '../shared/constants.js';
 import { getAccount, isFeatureAllowed, signInWithGoogle, signOut } from '../shared/auth-client.js';
 import { createNote, deleteNote, importGuestNotes, listNotes, syncNotes } from '../shared/notes-service.js';
 import { createCheckout, createPortal } from '../shared/billing-client.js';
+import { listReadingItems, removeReadingItem, saveCurrentPage, toggleReadingItem } from '../shared/reading-list-service.js';
 
 const POMODORO_ALARM = 'aitools-pomodoro-complete';
 const DEFAULT_POMODORO = { status: 'idle', durationMs: 25 * 60_000, remainingMs: 25 * 60_000, endAt: null, cycle: 'focus' };
@@ -23,6 +24,19 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (settings.notifications !== false) chrome.notifications.create({ type: 'basic', iconUrl: 'assets/icon-128.png', title: 'Pomodoro terminé', message: state.cycle === 'focus' ? 'Session terminée. Accordez-vous une pause.' : 'Pause terminée. Prêt pour une nouvelle session ?' });
 });
 
+chrome.commands.onCommand.addListener(async (command) => {
+  try {
+    if (command === 'toggle-pomodoro') {
+      const state = await togglePomodoro(25, 'focus');
+      await notifyCommand('Pomodoro AITools', state.status === 'running' ? 'Session démarrée.' : 'Session suspendue.');
+    }
+    if (command === 'save-to-reading-list') {
+      const result = await saveCurrentPage();
+      await notifyCommand('Liste de lecture AITools', result.created ? 'Page ajoutée à votre liste.' : 'Cette page est déjà enregistrée.');
+    }
+  } catch (error) { await notifyCommand('AITools', normalizeError(error)); }
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handlers = {
     'auth/get-account': () => getAccount(),
@@ -36,6 +50,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     'notes/delete': () => deleteNote(message.noteId),
     'notes/sync': () => syncNotes(),
     'notes/import-guest': () => importGuestNotes(),
+    'reading/list': () => listReadingItems(),
+    'reading/save-current': () => saveCurrentPage(),
+    'reading/toggle': () => toggleReadingItem(message.itemId),
+    'reading/remove': () => removeReadingItem(message.itemId),
     'pomodoro/get': () => getPomodoro(),
     'pomodoro/toggle': () => togglePomodoro(message.durationMinutes, message.cycle),
     'pomodoro/reset': () => resetPomodoro(message.durationMinutes, message.cycle),
@@ -113,6 +131,11 @@ async function getTabStats() {
   const tabs = await chrome.tabs.query({ currentWindow: true });
   const unique = new Set(tabs.filter((tab) => tab.url).map((tab) => tab.url.split('#')[0]));
   return { total: tabs.length, duplicates: tabs.length - unique.size, audible: tabs.filter((tab) => tab.audible).length };
+}
+
+async function notifyCommand(title, message) {
+  const settings = (await chrome.storage.local.get(STORAGE_KEYS.settings))[STORAGE_KEYS.settings] || {};
+  if (settings.notifications !== false) await chrome.notifications.create({ type: 'basic', iconUrl: 'assets/icon-128.png', title, message });
 }
 
 function normalizeError(error) {

@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, MESSAGE_TYPES, getSettings, saveSettings } from '../shared/constants.js';
+import { DEFAULT_SETTINGS, MESSAGE_TYPES, getQuickLinks, getSettings, saveSettings } from '../shared/constants.js';
 import { SEARCH_PRESETS, buildGoogleUrl, clearSearchHistory, getSearchHistory, saveSearch } from '../shared/search-service.js';
 import { analyzeAIProbability, getAIStatus, paletteFromText, summarizeWithAI, translateWithAI } from './ai-runtime.js';
 
@@ -29,6 +29,7 @@ async function init() {
   bindActions();
   await refreshAccount();
   await loadNotes();
+  await loadReadingList();
   await refreshPomodoro();
   await refreshTabStats();
   await refreshAIStatus();
@@ -83,6 +84,7 @@ function bindActions() {
   $('#save-note').addEventListener('click', saveNote);
   $('#sync-notes').addEventListener('click', syncNotesNow);
   $('#import-local-notes').addEventListener('click', importLocalNotes);
+  $('#save-current-page').addEventListener('click', saveCurrentPageToReadingList);
   $('#pomodoro-toggle').addEventListener('click', togglePomodoro);
   $('#pomodoro-reset').addEventListener('click', resetPomodoro);
   $('#auth-action').addEventListener('click', handleAuthAction);
@@ -157,7 +159,7 @@ async function handleSignOut() {
   account = response.data; renderAccount(); await loadNotes(); showToast('Vous êtes déconnecté.');
 }
 
-function activeShortcuts() { return settings.quickLinks?.length ? settings.quickLinks : DEFAULT_SETTINGS.quickLinks; }
+function activeShortcuts() { return getQuickLinks(settings); }
 
 function renderQuickLinks() {
   const icons = { chatgpt: '✧', perplexity: 'P', whatsapp: '◌', github: '◈' };
@@ -232,7 +234,7 @@ function renderNotes() {
   $('#sync-notes').classList.toggle('hidden', !account.authenticated);
   $('#import-local-notes').classList.toggle('hidden', !account.authenticated);
   $('#notes-list').innerHTML = notes.length ? notes.map((note) => `<article class="note-item"><button class="note-delete" data-note="${note.id}" title="Supprimer">×</button>${escapeHtml(note.content)}<small>${new Date(note.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</small></article>`).join('') : '<div class="empty-state">Aucune note pour le moment. Capturez une idée avant de la perdre.</div>';
-  $$('.note-delete').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'notes/delete', noteId: button.dataset.note }); if (!response?.ok) return showToast(response?.error || 'Suppression impossible.'); await loadNotes(); showToast('Note supprimée'); }));
+  $$('.note-delete').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'notes/delete', noteId: button.dataset.note }); if (!response?.ok) return showToast(response?.error || 'Suppression impossible.'); await loadNotes(); showToast(response.data?.pending ? 'Suppression locale ; synchronisation en attente.' : 'Note supprimée.'); }));
 }
 
 async function saveNote() {
@@ -240,7 +242,7 @@ async function saveNote() {
   if (!content) return showToast('Écrivez une note avant de l’enregistrer.');
   const response = await chrome.runtime.sendMessage({ type: 'notes/create', content });
   if (!response?.ok) return showToast(response?.error || 'Enregistrement impossible.');
-  input.value = ''; await loadNotes(); showToast(account.authenticated ? 'Note synchronisée.' : 'Note enregistrée localement.');
+  input.value = ''; await loadNotes(); showToast(account.authenticated ? (response.data?.pending ? 'Note enregistrée localement ; synchronisation en attente.' : 'Note synchronisée.') : 'Note enregistrée localement.');
 }
 
 async function syncNotesNow() {
@@ -253,6 +255,21 @@ async function importLocalNotes() {
   const response = await chrome.runtime.sendMessage({ type: 'notes/import-guest' });
   if (!response?.ok) return showToast(response?.error || 'Import impossible.');
   await loadNotes(); showToast(`${response.data.imported} note(s) locale(s) importée(s).`);
+}
+
+async function loadReadingList() {
+  const response = await chrome.runtime.sendMessage({ type: 'reading/list' });
+  const items = response?.ok ? response.data : [];
+  $('#reading-list').innerHTML = items.length ? items.map((item) => `<article class="reading-item ${item.done ? 'done' : ''}"><button class="reading-toggle" data-reading-toggle="${escapeAttribute(item.id)}" title="${item.done ? 'Marquer à lire' : 'Marquer comme lu'}">${item.done ? '✓' : '○'}</button><a href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(new URL(item.url).hostname)}</small></a><button class="reading-remove" data-reading-remove="${escapeAttribute(item.id)}" title="Supprimer">×</button></article>`).join('') : '<p class="history-empty">Aucune page enregistrée. Ajoutez votre onglet actif pour le retrouver ici.</p>';
+  $$('[data-reading-toggle]').forEach((button) => button.addEventListener('click', async () => { const result = await chrome.runtime.sendMessage({ type: 'reading/toggle', itemId: button.dataset.readingToggle }); if (!result?.ok) return showToast(result?.error || 'Mise à jour impossible.'); await loadReadingList(); }));
+  $$('[data-reading-remove]').forEach((button) => button.addEventListener('click', async () => { const result = await chrome.runtime.sendMessage({ type: 'reading/remove', itemId: button.dataset.readingRemove }); if (!result?.ok) return showToast(result?.error || 'Suppression impossible.'); await loadReadingList(); showToast('Page retirée de la liste.'); }));
+}
+
+async function saveCurrentPageToReadingList() {
+  const response = await chrome.runtime.sendMessage({ type: 'reading/save-current' });
+  if (!response?.ok) return showToast(response?.error || 'Ajout impossible.');
+  await loadReadingList();
+  showToast(response.data.created ? 'Page ajoutée à la liste de lecture.' : 'Cette page figure déjà dans votre liste.');
 }
 
 async function runPageAction(type) {
