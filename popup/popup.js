@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS, MESSAGE_TYPES, getPomodoroMinutes, getQuickLinks, getSettings, saveSettings } from '../shared/constants.js';
 import { SEARCH_PRESETS, buildGoogleUrl, clearSearchHistory, getSearchHistory, saveSearch } from '../shared/search-service.js';
+import { formatTags, tagsFromText } from '../shared/tags-service.js';
 import { analyzeAIProbability, getAIStatus, paletteFromText, summarizeWithAI, translateWithAI } from './ai-runtime.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -11,6 +12,7 @@ let pomodoroTimer;
 let account = { authenticated: false, user: null, plan: 'free', entitlements: [] };
 let searchCategory = 'web';
 let activeTaskTitle = '';
+let taskPeriod = 'all';
 
 init();
 
@@ -29,11 +31,12 @@ async function init() {
   bindNavigation();
   bindActions();
   const requestedView = location.hash.slice(1);
-  if (['home', 'search', 'tools', 'ai', 'notes', 'tasks', 'settings'].includes(requestedView)) showView(requestedView);
+  if (['home', 'search', 'tools', 'ai', 'notes', 'tasks', 'workspaces', 'settings'].includes(requestedView)) showView(requestedView);
   await refreshAccount();
   await loadNotes();
   await loadReadingList();
   await loadTasks();
+  await loadWorkspaces();
   await refreshPomodoro();
   await refreshTabStats();
   await refreshAIStatus();
@@ -47,7 +50,7 @@ function bindNavigation() {
 function showView(view) {
   $$('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   $$('.view').forEach((section) => section.classList.toggle('active', section.id === `view-${view}`));
-  const titles = { home: ['VOTRE ESPACE DE TRAVAIL', 'Bonjour, Alex'], search: ['RECHERCHE UNIVERSELLE', 'Rechercher mieux'], tools: ['BOÎTE À OUTILS', 'Travaillez plus vite'], ai: ['IA LOCALE ET PRIVÉE', 'Analyse assistée'], notes: ['VOTRE CARNET', 'Notes rapides'], tasks: ['PLAN DE TRAVAIL', 'Prochaines actions'], settings: ['PERSONNALISATION', 'Préférences'] };
+  const titles = { home: ['VOTRE ESPACE DE TRAVAIL', 'Bonjour, Alex'], search: ['RECHERCHE UNIVERSELLE', 'Rechercher mieux'], tools: ['BOÎTE À OUTILS', 'Travaillez plus vite'], ai: ['IA LOCALE ET PRIVÉE', 'Analyse assistée'], notes: ['VOTRE CARNET', 'Notes rapides'], tasks: ['PLAN DE TRAVAIL', 'Prochaines actions'], workspaces: ['SESSIONS D’ONGLETS', 'Espaces de travail'], settings: ['PERSONNALISATION', 'Préférences'] };
   $('#view-eyebrow').textContent = titles[view][0];
   $('#view-title').innerHTML = `${titles[view][1]} <span>✦</span>`;
 }
@@ -62,6 +65,7 @@ function bindActions() {
   $('#notifications-setting').addEventListener('change', async (event) => { settings = await saveSettings({ notifications: event.target.checked }); });
   $('#compact-setting').addEventListener('change', async (event) => { settings = await saveSettings({ compactMode: event.target.checked }); document.body.classList.toggle('compact', event.target.checked); });
   $('#search-submit').addEventListener('click', runSearch);
+  $('#local-search-submit').addEventListener('click', runLocalSearch);
   $('#search-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') runSearch(); });
   $$('[data-query]').forEach((button) => button.addEventListener('click', () => { $('#search-input').value = `${button.dataset.query}${$('#search-input').value}`; $('#search-input').focus(); }));
   $$('.category-chip').forEach((button) => button.addEventListener('click', () => { searchCategory = button.dataset.category; $$('.category-chip').forEach((chip) => chip.classList.toggle('active', chip === button)); }));
@@ -72,11 +76,13 @@ function bindActions() {
   $('#ai-translate').addEventListener('click', runAITranslation);
   $('#ai-detect').addEventListener('click', runAIAnalysis);
   $('#ai-palette').addEventListener('click', runAIPalette);
+  $('#ai-research-tabs').addEventListener('click', runMultiTabResearch);
   $('#ai-copy').addEventListener('click', copyAIResult);
   $('#youtube-theater').addEventListener('click', () => runYouTubeAction('page/youtube-theater'));
   $('#youtube-speed').addEventListener('click', () => runYouTubeAction('page/youtube-speed'));
   $('#home-summarize').addEventListener('click', () => runPageAction(MESSAGE_TYPES.summarizePage));
   $('#home-note').addEventListener('click', () => { showView('notes'); $('#note-input').focus(); });
+  $('#home-capture').addEventListener('click', captureCurrentPage);
   $('#tool-summarize').addEventListener('click', () => runPageAction(MESSAGE_TYPES.summarizePage));
   $('#tool-anonymize').addEventListener('click', () => runPageAction(MESSAGE_TYPES.anonymizePage));
   $('#tool-duplicates').addEventListener('click', closeDuplicates);
@@ -92,6 +98,8 @@ function bindActions() {
   $('#save-task').addEventListener('click', saveTask);
   $('#task-input').addEventListener('keydown', (event) => { if (event.key === 'Enter') saveTask(); });
   $('#clear-completed-tasks').addEventListener('click', clearCompletedTasks);
+  $$('[data-task-period]').forEach((button) => button.addEventListener('click', () => { taskPeriod = button.dataset.taskPeriod; $$('[data-task-period]').forEach((item) => item.classList.toggle('active', item === button)); loadTasks(); }));
+  $('#save-workspace').addEventListener('click', saveWorkspace);
   $('#pomodoro-toggle').addEventListener('click', togglePomodoro);
   $('#pomodoro-reset').addEventListener('click', resetPomodoro);
   $('#auth-action').addEventListener('click', handleAuthAction);
@@ -214,6 +222,21 @@ async function fillAIFromPage() {
 async function runAISummary() { await runAIJob(async (text) => summarizeWithAI(text), (result) => { setAIResult(result.text, result.engine); }); }
 async function runAITranslation() { await runAIJob(async (text) => translateWithAI(text, $('#ai-target-language').value), (result) => { setAIResult(result.text, result.engine); }); }
 async function runAIAnalysis() { await runAIJob(async (text) => analyzeAIProbability(text), (result) => { setAIResult(`Indice stylistique : ${result.score}/100 (${result.confidence})\n\nMots analysés : ${result.indicators.words}\nDiversité lexicale : ${result.indicators.uniqueRatio}\nLongueur moyenne des phrases : ${result.indicators.averageSentenceLength}\nConnecteurs structurants : ${result.indicators.connectors}\nRépétitions d’amorces : ${result.indicators.repetition}\n\n${result.disclaimer}`, 'analyse heuristique'); }); }
+async function runMultiTabResearch() {
+  const button = $('#ai-research-tabs'); const previous = button.textContent; button.disabled = true; button.textContent = 'Lecture des onglets…';
+  try {
+    const tabs = (await chrome.tabs.query({ currentWindow: true })).filter((tab) => tab.id && /^https?:/i.test(tab.url || '')).slice(0, 8);
+    if (!tabs.length) throw new Error('Aucun onglet web lisible dans cette fenêtre.');
+    const captures = await Promise.all(tabs.map(async (tab) => { try { const response = await chrome.tabs.sendMessage(tab.id, { type: MESSAGE_TYPES.getPageText }); const text = response?.ok ? response.text : ''; return text ? { title: tab.title || new URL(tab.url).hostname, url: tab.url, text: String(text).slice(0, 1_600) } : null; } catch { return null; } }));
+    const sources = captures.filter(Boolean); if (!sources.length) throw new Error('Rechargez au moins une page afin de permettre son analyse.');
+    const corpus = sources.map((source, index) => `[Source ${index + 1} : ${source.title}]\n${source.text}`).join('\n\n').slice(0, 11_500);
+    const result = await summarizeWithAI(corpus, { length: 'medium', outputLanguage: 'fr' });
+    $('#ai-result').textContent = `${result.text}\n\n--- Sources consultées ---\n${sources.map((source, index) => `${index + 1}. ${source.title} — ${source.url}`).join('\n')}`;
+    $('#ai-engine').textContent = `Synthèse multi-onglets · ${result.engine}`; showToast(`${sources.length} onglet(s) analysé(s) localement.`);
+  } catch (error) { $('#ai-result').textContent = error.message || 'Synthèse multi-onglets indisponible.'; $('#ai-engine').textContent = 'Aucun moteur utilisé'; }
+  finally { button.disabled = false; button.textContent = previous; }
+}
+
 async function runAIPalette() { const source = $('#ai-input').value.trim() || 'AITools'; const palette = paletteFromText(source); setAIResult(palette.map((color) => `■ ${color}`).join('\n'), 'générateur local'); }
 
 async function runAIJob(task, render) {
@@ -240,16 +263,30 @@ function renderNotes() {
   $('#notes-mode').textContent = account.authenticated ? 'Synchronisées avec votre compte' : 'Stockage local et privé';
   $('#sync-notes').classList.toggle('hidden', !account.authenticated);
   $('#import-local-notes').classList.toggle('hidden', !account.authenticated);
-  $('#notes-list').innerHTML = notes.length ? notes.map((note) => `<article class="note-item"><button class="note-delete" data-note="${note.id}" title="Supprimer">×</button>${escapeHtml(note.content)}<small>${new Date(note.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</small></article>`).join('') : '<div class="empty-state">Aucune note pour le moment. Capturez une idée avant de la perdre.</div>';
+  $('#notes-list').innerHTML = notes.length ? notes.map((note) => `<article class="note-item"><button class="note-delete" data-note="${note.id}" title="Supprimer">×</button>${escapeHtml(note.content)}${note.tags?.length ? `<small class="item-tags">${escapeHtml(formatTags(note.tags))}</small>` : ''}${note.sourceUrl ? `<a class="source-link" href="${escapeAttribute(note.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(note.sourceTitle || 'Ouvrir la source')}</a>` : ''}<small>${new Date(note.createdAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</small></article>`).join('') : '<div class="empty-state">Aucune note pour le moment. Capturez une idée avant de la perdre.</div>';
   $$('.note-delete').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'notes/delete', noteId: button.dataset.note }); if (!response?.ok) return showToast(response?.error || 'Suppression impossible.'); await loadNotes(); showToast(response.data?.pending ? 'Suppression locale ; synchronisation en attente.' : 'Note supprimée.'); }));
+}
+
+async function captureCurrentPage() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !/^https?:/i.test(tab.url || '')) return showToast('Cette page ne peut pas être capturée.');
+  try {
+    const context = await chrome.tabs.sendMessage(tab.id, { type: MESSAGE_TYPES.captureContext });
+    if (!context?.ok || !context.text) throw new Error(context?.error || 'Aucun texte lisible.');
+    const title = String(context.title || tab.title || 'Page capturée').trim();
+    const content = `${title}\n\n${String(context.text).trim().slice(0, 2_400)}`;
+    const response = await chrome.runtime.sendMessage({ type: 'notes/create', content, details: { sourceUrl: context.url || tab.url, sourceTitle: title, tags: tagsFromText(context.text) } });
+    if (!response?.ok) throw new Error(response?.error || 'Enregistrement impossible.');
+    await loadNotes(); showToast(context.selection ? 'Sélection capturée dans vos notes.' : 'Page capturée dans vos notes.');
+  } catch (error) { showToast(error.message || 'Capture indisponible : rechargez la page puis réessayez.'); }
 }
 
 async function saveNote() {
   const input = $('#note-input'); const content = input.value.trim();
   if (!content) return showToast('Écrivez une note avant de l’enregistrer.');
-  const response = await chrome.runtime.sendMessage({ type: 'notes/create', content });
+  const response = await chrome.runtime.sendMessage({ type: 'notes/create', content, details: { tags: $('#note-tags').value } });
   if (!response?.ok) return showToast(response?.error || 'Enregistrement impossible.');
-  input.value = ''; await loadNotes(); showToast(account.authenticated ? (response.data?.pending ? 'Note enregistrée localement ; synchronisation en attente.' : 'Note synchronisée.') : 'Note enregistrée localement.');
+  input.value = ''; $('#note-tags').value = ''; await loadNotes(); showToast(account.authenticated ? (response.data?.pending ? 'Note enregistrée localement ; synchronisation en attente.' : 'Note synchronisée.') : 'Note enregistrée localement.');
 }
 
 async function syncNotesNow() {
@@ -280,13 +317,13 @@ async function saveCurrentPageToReadingList() {
 }
 
 async function loadTasks() {
-  const response = await chrome.runtime.sendMessage({ type: 'tasks/list' });
+  const response = await chrome.runtime.sendMessage({ type: 'tasks/list', period: taskPeriod });
   const tasks = response?.ok ? response.data : [];
   const active = tasks.find((task) => task.active);
   activeTaskTitle = active?.title || '';
   $('#tasks-count').textContent = tasks.filter((task) => !task.done).length;
   $('#active-task-label').textContent = active ? `Tâche active : ${active.title}` : 'Aucune tâche active';
-  $('#tasks-list').innerHTML = tasks.length ? tasks.map((task) => `<article class="task-item ${task.done ? 'done' : ''} ${task.active ? 'active' : ''}"><button class="task-toggle" data-task-toggle="${escapeAttribute(task.id)}" title="${task.done ? 'Réouvrir' : 'Terminer'}">${task.done ? '✓' : '○'}</button><div><strong>${escapeHtml(task.title)}</strong><small class="task-priority ${escapeAttribute(task.priority)}">${task.priority === 'high' ? 'Haute priorité' : task.priority === 'low' ? 'Faible priorité' : 'Priorité normale'}</small></div><button class="task-active" data-task-active="${escapeAttribute(task.id)}" ${task.done ? 'disabled' : ''}>${task.active ? 'En cours' : 'Activer'}</button><button class="task-remove" data-task-remove="${escapeAttribute(task.id)}" title="Supprimer">×</button></article>`).join('') : '<p class="history-empty">Aucune tâche pour le moment. Ajoutez votre prochaine action.</p>';
+  $('#tasks-list').innerHTML = tasks.length ? tasks.map((task) => `<article class="task-item ${task.done ? 'done' : ''} ${task.active ? 'active' : ''}"><button class="task-toggle" data-task-toggle="${escapeAttribute(task.id)}" title="${task.done ? 'Réouvrir' : 'Terminer'}">${task.done ? '✓' : '○'}</button><div><strong>${escapeHtml(task.title)}</strong><small class="task-priority ${escapeAttribute(task.priority)}">${task.priority === 'high' ? 'Haute priorité' : task.priority === 'low' ? 'Faible priorité' : 'Priorité normale'}${task.dueAt ? ` · ${escapeHtml(formatTaskDate(task.dueAt))}` : ''}${task.tags?.length ? ` · ${escapeHtml(formatTags(task.tags))}` : ''}</small></div><button class="task-active" data-task-active="${escapeAttribute(task.id)}" ${task.done ? 'disabled' : ''}>${task.active ? 'En cours' : 'Activer'}</button><button class="task-remove" data-task-remove="${escapeAttribute(task.id)}" title="Supprimer">×</button></article>`).join('') : '<p class="history-empty">Aucune tâche pour le moment. Ajoutez votre prochaine action.</p>';
   $$('[data-task-toggle]').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'tasks/toggle', taskId: button.dataset.taskToggle }); if (!response?.ok) return showToast(response?.error || 'Mise à jour impossible.'); await loadTasks(); }));
   $$('[data-task-active]').forEach((button) => button.addEventListener('click', async () => { const taskId = button.dataset.taskActive; const response = await chrome.runtime.sendMessage({ type: 'tasks/set-active', taskId: button.textContent === 'En cours' ? null : taskId }); if (!response?.ok) return showToast(response?.error || 'Activation impossible.'); await loadTasks(); showToast(response.data ? 'Tâche active mise à jour.' : 'Tâche active retirée.'); }));
   $$('[data-task-remove]').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'tasks/remove', taskId: button.dataset.taskRemove }); if (!response?.ok) return showToast(response?.error || 'Suppression impossible.'); await loadTasks(); }));
@@ -295,15 +332,31 @@ async function loadTasks() {
 async function saveTask() {
   const input = $('#task-input'); const title = input.value.trim();
   if (!title) return showToast('Ajoutez un titre pour créer une tâche.');
-  const response = await chrome.runtime.sendMessage({ type: 'tasks/create', title, priority: $('#task-priority').value });
+  const response = await chrome.runtime.sendMessage({ type: 'tasks/create', title, priority: $('#task-priority').value, details: { tags: $('#task-tags').value, dueAt: $('#task-due').value || null, reminderAt: $('#task-reminder').value || null } });
   if (!response?.ok) return showToast(response?.error || 'Création impossible.');
-  input.value = ''; await loadTasks(); showToast('Tâche ajoutée.');
+  input.value = ''; $('#task-tags').value = ''; $('#task-due').value = ''; $('#task-reminder').value = ''; await loadTasks(); showToast('Tâche ajoutée.');
 }
 
 async function clearCompletedTasks() {
   const response = await chrome.runtime.sendMessage({ type: 'tasks/clear-completed' });
   if (!response?.ok) return showToast(response?.error || 'Nettoyage impossible.');
   await loadTasks(); showToast(`${response.data.removed} tâche(s) terminée(s) effacée(s).`);
+}
+
+async function loadWorkspaces() {
+  const response = await chrome.runtime.sendMessage({ type: 'workspaces/list' });
+  const spaces = response?.ok ? response.data : [];
+  $('#workspaces-list').innerHTML = spaces.length ? spaces.map((space) => `<article class="workspace-item"><div><strong>${escapeHtml(space.name)}</strong><small>${space.tabs.length} onglet(s)${space.tags?.length ? ` · ${escapeHtml(formatTags(space.tags))}` : ''}</small></div><button class="workspace-restore" data-workspace-restore="${escapeAttribute(space.id)}">Restaurer</button><button class="workspace-remove" data-workspace-remove="${escapeAttribute(space.id)}" title="Supprimer">×</button></article>`).join('') : '<p class="history-empty">Aucun espace enregistré. Capturez cette fenêtre pour reprendre votre contexte plus tard.</p>';
+  $$('[data-workspace-restore]').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'workspaces/restore', workspaceId: button.dataset.workspaceRestore }); if (!response?.ok) return showToast(response?.error || 'Restauration impossible.'); showToast(`${response.data.opened} onglet(s) restauré(s).`); }));
+  $$('[data-workspace-remove]').forEach((button) => button.addEventListener('click', async () => { const response = await chrome.runtime.sendMessage({ type: 'workspaces/remove', workspaceId: button.dataset.workspaceRemove }); if (!response?.ok) return showToast(response?.error || 'Suppression impossible.'); await loadWorkspaces(); }));
+}
+
+async function saveWorkspace() {
+  const name = $('#workspace-name').value.trim();
+  if (!name) return showToast('Donnez un nom à cet espace.');
+  const response = await chrome.runtime.sendMessage({ type: 'workspaces/capture', name, tags: $('#workspace-tags').value });
+  if (!response?.ok) return showToast(response?.error || 'Enregistrement impossible.');
+  $('#workspace-name').value = ''; $('#workspace-tags').value = ''; await loadWorkspaces(); showToast('Espace de travail enregistré.');
 }
 
 async function runPageAction(type) {
@@ -348,6 +401,14 @@ async function refreshTabStats() {
   $('#tabs-status').textContent = `${total} onglet(s) · ${duplicates} doublon(s) détecté(s)`;
 }
 
+async function runLocalSearch() {
+  const query = $('#search-input').value.trim(); if (!query) return showToast('Saisissez un mot-clé à rechercher dans AITools.');
+  const response = await chrome.runtime.sendMessage({ type: 'search/unified', query, limit: 20 });
+  if (!response?.ok) return showToast(response?.error || 'Recherche locale indisponible.');
+  const results = response.data || []; $('#local-search-results').innerHTML = results.length ? results.map((item) => `<button class="local-result" data-local-type="${escapeAttribute(item.type)}" data-local-url="${escapeAttribute(item.url || '')}"><span>${escapeHtml(item.type === 'note' ? 'Note' : item.type === 'task' ? 'Tâche' : item.type === 'reading' ? 'Lecture' : 'Espace')}</span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml((item.tags || []).map((tag) => `#${tag}`).join(' '))}</small></button>`).join('') : '<p class="history-empty">Aucun élément local correspondant.</p>';
+  $$('.local-result').forEach((button) => button.addEventListener('click', async () => { const type = button.dataset.localType; const url = button.dataset.localUrl; if (url) return chrome.tabs.create({ url }); if (type === 'note' || type === 'reading') return showView('notes'); if (type === 'task') return showView('tasks'); if (type === 'workspace') return showView('workspaces'); }));
+}
+
 async function runSearch() { const query = $('#search-input').value.trim(); if (!query) return; await saveSearch(query); await renderSearchHistory(); chrome.tabs.create({ url: buildGoogleUrl(query, searchCategory) }); }
 
 function renderSearchOperators() {
@@ -384,6 +445,7 @@ async function resetPomodoro() {
 }
 
 function renderPomodoro() { const remaining = pomodoro.status === 'running' && pomodoro.endAt ? Math.max(0, pomodoro.endAt - Date.now()) : pomodoro.remainingMs; const minutes = Math.floor(Math.max(0, remaining) / 60_000); const seconds = Math.floor((Math.max(0, remaining) % 60_000) / 1000); $('#pomodoro-time').textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; const taskContext = activeTaskTitle ? `Tâche active : ${activeTaskTitle}` : ''; $('#pomodoro-label').textContent = pomodoro.status === 'running' ? (taskContext || 'Restez concentré.') : pomodoro.status === 'paused' ? 'Session en pause.' : pomodoro.status === 'done' ? 'Session terminée. Faites une pause.' : (taskContext || `${getPomodoroMinutes(settings)} minutes pour avancer.`); $('#pomodoro-toggle').textContent = pomodoro.status === 'running' ? 'Pause' : pomodoro.status === 'paused' ? 'Reprendre' : pomodoro.status === 'done' ? 'Recommencer' : 'Démarrer'; }
+function formatTaskDate(value) { return new Date(value).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }); }
 function applyTheme(theme) { document.body.classList.toggle('light-theme', theme === 'light'); }
 function showToast(message) { const toast = $('#toast'); toast.textContent = message; toast.classList.add('show'); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove('show'), 2800); }
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }

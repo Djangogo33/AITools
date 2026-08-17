@@ -1,5 +1,6 @@
 import { getValidSession } from './auth-client.js';
 import { SUPABASE_CONFIG } from './supabase-config.js';
+import { normalizeTags } from './tags-service.js';
 
 const LEGACY_KEY = 'aitools.notes';
 const ACCOUNT_KEY_PREFIX = 'aitools.notes.account.';
@@ -23,12 +24,12 @@ export async function listNotes() {
   }
 }
 
-export async function createNote(content) {
+export async function createNote(content, details = {}) {
   const normalized = normalizeContent(content);
   if (!normalized) throw new Error('La note ne peut pas être vide.');
   if (normalized.length > MAX_NOTE_LENGTH) throw new Error(`Une note est limitée à ${MAX_NOTE_LENGTH.toLocaleString('fr-FR')} caractères.`);
   const now = new Date().toISOString();
-  const note = { id: crypto.randomUUID(), content: normalized, createdAt: now, updatedAt: now };
+  const note = { id: crypto.randomUUID(), content: normalized, tags: normalizeTags(details.tags), sourceUrl: normalizeHttpUrl(details.sourceUrl), sourceTitle: String(details.sourceTitle || '').trim().slice(0, 240) || null, createdAt: now, updatedAt: now };
   const session = await getValidSession();
   const key = session?.user?.id ? accountKey(session.user.id) : LEGACY_KEY;
   const notes = await readLocal(key);
@@ -131,16 +132,17 @@ function normalizeLegacyNote(note) {
   const content = normalizeContent(note?.content ?? note?.text);
   const createdAt = validDate(note?.createdAt) ? note.createdAt : new Date().toISOString();
   const updatedAt = validDate(note?.updatedAt) ? note.updatedAt : createdAt;
-  return { id: isUuid(note?.id) ? note.id : deterministicUuid(`${content}\u0000${createdAt}`), content, createdAt, updatedAt };
+  return { id: isUuid(note?.id) ? note.id : deterministicUuid(`${content}\u0000${createdAt}`), content, tags: normalizeTags(note?.tags), sourceUrl: normalizeHttpUrl(note?.sourceUrl), sourceTitle: String(note?.sourceTitle || '').trim().slice(0, 240) || null, createdAt, updatedAt };
 }
 function mergeNotes(first, second) {
   const map = new Map();
   [...first, ...second].filter((note) => note?.content).forEach((note) => {
     const normalized = normalizeLegacyNote(note); const current = map.get(normalized.id);
-    if (!current || new Date(normalized.updatedAt) >= new Date(current.updatedAt)) map.set(normalized.id, normalized);
+    if (!current || new Date(normalized.updatedAt) >= new Date(current.updatedAt)) map.set(normalized.id, { ...normalized, tags: normalized.tags.length ? normalized.tags : current?.tags || [], sourceUrl: normalized.sourceUrl || current?.sourceUrl || null, sourceTitle: normalized.sourceTitle || current?.sourceTitle || null });
   });
   return [...map.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 }
+function normalizeHttpUrl(value) { try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) ? url.toString() : null; } catch { return null; } }
 function validDate(value) { return Number.isFinite(new Date(value).getTime()); }
 function isUuid(value) { return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
 function deterministicUuid(value) {

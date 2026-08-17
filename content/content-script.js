@@ -1,9 +1,11 @@
 const MESSAGE_TYPES = {
   getPageText: 'page/get-text',
+  captureContext: 'page/capture-context',
   anonymizePage: 'page/anonymize',
   summarizePage: 'page/summarize',
   getReadingTime: 'page/reading-time',
   toggleFocus: 'page/toggle-focus',
+  setFocus: 'page/set-focus',
   highlightSelection: 'page/highlight-selection',
   printPage: 'page/print',
   togglePageDark: 'page/toggle-dark',
@@ -18,10 +20,12 @@ const FOCUS_STYLE_ID = 'aitools-focus-style';
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handlers = {
     [MESSAGE_TYPES.getPageText]: () => ({ text: extractReadableText() }),
+    [MESSAGE_TYPES.captureContext]: () => captureContext(),
     [MESSAGE_TYPES.anonymizePage]: () => ({ count: anonymizeVisibleText() }),
     [MESSAGE_TYPES.summarizePage]: () => ({ summary: summarizeLocally(extractReadableText()) }),
     [MESSAGE_TYPES.getReadingTime]: () => readingTime(),
     [MESSAGE_TYPES.toggleFocus]: () => ({ enabled: toggleFocusMode() }),
+    [MESSAGE_TYPES.setFocus]: () => ({ enabled: setFocusMode(Boolean(message.enabled)) }),
     [MESSAGE_TYPES.highlightSelection]: () => ({ highlighted: highlightSelection() }),
     [MESSAGE_TYPES.printPage]: () => { window.print(); return { opened: true }; },
     [MESSAGE_TYPES.togglePageDark]: () => ({ enabled: togglePageDarkMode() }),
@@ -35,6 +39,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   try { sendResponse({ ok: true, ...handler() }); } catch (error) { sendResponse({ ok: false, error: error.message || 'Action impossible.' }); }
   return false;
 });
+
+function captureContext() {
+  const selected = String(window.getSelection?.()?.toString() || '').replace(/\s+/g, ' ').trim();
+  const text = selected || extractReadableText().slice(0, 1_200);
+  return { title: document.title || location.hostname, url: location.href, text, selection: Boolean(selected) };
+}
 
 function extractReadableText() {
   const root = document.querySelector('article, main, [role="main"]') || document.body;
@@ -50,6 +60,13 @@ function summarizeLocally(text) {
 function readingTime() {
   const words = extractReadableText().split(/\s+/).filter(Boolean).length;
   return { words, minutes: Math.max(1, Math.ceil(words / 220)) };
+}
+
+function setFocusMode(enabled) {
+  const existing = document.getElementById(FOCUS_STYLE_ID);
+  if (enabled && !existing) return toggleFocusMode();
+  if (!enabled && existing) { existing.remove(); document.documentElement.classList.remove('aitools-focus-mode'); return false; }
+  return Boolean(existing);
 }
 
 function toggleFocusMode() {

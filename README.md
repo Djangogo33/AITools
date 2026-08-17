@@ -1,45 +1,40 @@
-# AITools 5.3
+# AITools 6.0
 
-AITools est une extension Chrome **Manifest V3** recréée depuis zéro comme espace de travail moderne, local-first et extensible. Elle réunit recherche avancée, organisation d’onglets, notes synchronisables, outils de lecture, IA locale Chrome, compte utilisateur et page Nouvel onglet.
+AITools est une extension Chrome **Manifest V3** recréée comme espace de travail moderne, local-first et extensible. Elle réunit capture web, planification, organisation des onglets, recherche locale, IA intégrée à Chrome, données privées et services distants optionnels.
 
 ## Fonctionnalités livrées
 
 | Espace | Fonctions |
 |---|---|
-| Accueil | Accès rapides personnalisables, résumé de l’onglet et création de note |
-| Recherche | Catégories Google, opérateurs avancés, historique local et raccourcis configurables |
-| Outils | Anonymisation, temps de lecture, mode concentration, surlignage, impression PDF, doublons, groupes par domaine et Pomodoro persistant |
-| IA | Résumé, traduction locale si Chrome le permet, analyse stylistique avec avertissement, palettes et contrôles YouTube |
-| Notes | Stockage local, import des notes existantes, synchronisation Supabase résiliente, file de suppressions hors ligne et protection contre les doublons historiques |
-| Tâches | Création, priorités, complétion, nettoyage et tâche de concentration active, entièrement locale et exportable |
-| Liste de lecture | Ajout de la page active, suivi lu/à lire, ouverture et suppression locale ; reprise des pages à lire directement depuis le Nouvel onglet |
-| Données locales | Export et restauration JSON des préférences, notes, listes et minuteur, sans jeton de session ; validation de format et confirmation avant remplacement |
-| Compte | Google OAuth PKCE, session renouvelée, profil et droits d’abonnement |
-| Facturation | Checkout Stripe, portail client et synchronisation de plan par webhook Edge sécurisé |
-| Nouvel onglet | Recherche, raccourcis, dernières notes, pages à lire, priorités de tâches, état de compte et Pomodoro |
-| Concentration | Le Pomodoro affiche la tâche active afin de garder l’objectif de la session visible |
-| Options | Apparence, confidentialité de navigation, synchronisation, export/réinitialisation locale et diagnostic IA |
-| Raccourcis clavier | `Alt` + `Shift` + `P` pour le Pomodoro ; `Alt` + `Shift` + `R` pour ajouter la page active à la liste de lecture ; durée configurable de 5 à 120 minutes |
-| Accessibilité | Indicateurs de focus visibles sur les contrôles interactifs du popup, du Nouvel onglet et des préférences |
+| Accueil | Accès rapides personnalisables, résumé de l’onglet, ajout de note et capture enrichie de la page ou de la sélection active. |
+| Recherche | Recherche Google par catégories, opérateurs avancés, historique local, raccourcis configurables et recherche transversale dans les données AITools. |
+| Capture et tags | Notes, tâches, pages à lire et espaces de travail peuvent recevoir des tags normalisés ; une capture conserve également le titre et l’URL de sa source. |
+| Espaces de travail | Enregistrement de la fenêtre courante sous un nom, avec ses onglets web, puis restauration explicite ultérieure. |
+| Tâches | Priorités, tâche active, dates d’échéance, rappels locaux, tags et vues Toutes, Aujourd’hui, Cette semaine et En retard. |
+| Concentration | Pomodoro persistant, rappels de tâches, historique privé des sessions, statistiques locales sur sept jours et tâche active visible pendant une session. |
+| Ne pas déranger | Application automatique du mode concentration sur une liste de domaines contrôlée depuis Préférences. |
+| Onglets | Nettoyage des doublons, regroupement par domaine et règles locales d’organisation appliquées explicitement à la fenêtre courante. |
+| Lecture | Ajout de pages, suivi lu/à lire, tags, reprise depuis le Nouvel onglet et synchronisation optionnelle. |
+| IA locale | Résumé, traduction selon disponibilité Chrome, analyse stylistique indicative, palettes, contrôles YouTube et synthèse sourcée de jusqu’à huit onglets ouverts. |
+| Données | Sauvegarde/restauration JSON, export Markdown, export CSV et exclusion stricte des jetons d’authentification. |
+| Compte | Google OAuth PKCE, session renouvelée, profil et droits d’abonnement. |
+| Synchronisation | Notes, tâches et pages à lire peuvent être synchronisées volontairement avec Supabase après application de la migration SQL. Le fonctionnement local ne dépend pas du compte. |
+| Facturation | Checkout Stripe, portail client et synchronisation de plan par webhook Edge sécurisé. |
 
 ## Installation locale
 
-Ouvrez `chrome://extensions`, activez **Mode développeur**, choisissez **Charger l’extension non empaquetée**, puis sélectionnez le dossier racine du dépôt. Après toute modification de `manifest.json`, utilisez **Recharger** sur la carte de l’extension.
+Ouvrez `chrome://extensions`, activez **Mode développeur**, choisissez **Charger l’extension non empaquetée**, puis sélectionnez le dossier racine du dépôt. Après une modification du manifeste, utilisez **Recharger** sur la carte de l’extension.
 
-## Configuration complète de production
+L’archive de distribution ne contient que les fichiers exécutables de l’extension. Les documents, tests et dossiers `supabase/` restent dans le dépôt pour le développement et la configuration.
 
-Le parcours local ne nécessite aucun compte. Les services distants — connexion Google, synchronisation des notes, abonnements Stripe et publication — nécessitent une configuration d’administrateur. Suivez précisément [`CONFIGURATION_PRODUCTION.md`](./CONFIGURATION_PRODUCTION.md) avant de considérer ces fonctions actives.
+## Synchronisation et configuration de production
 
-Les documents complémentaires sont :
+Le parcours local ne nécessite aucun compte. Les fonctions distantes — connexion Google, synchronisation Supabase et abonnement Stripe — nécessitent l’accès administrateur aux services concernés. Avant d’activer la synchronisation de tâches et de lecture, exécutez la version à jour de [`supabase/schema.sql`](./supabase/schema.sql) dans Supabase : elle ajoute les tables `tasks` et `reading_items`, les colonnes de métadonnées aux notes et les politiques RLS qui limitent chaque ligne à son propriétaire authentifié.
 
-- [`AUTH_ARCHITECTURE.md`](./AUTH_ARCHITECTURE.md), qui décrit le flux OAuth PKCE et les limites de sécurité ;
-- [`supabase/schema.sql`](./supabase/schema.sql), la migration de profils, abonnements, politiques RLS et notes ;
-- [`supabase/functions/`](./supabase/functions), les fonctions Edge Stripe à déployer ;
-- [`FEATURE_MATRIX.md`](./FEATURE_MATRIX.md), l’inventaire de parité fonctionnelle ;
-- [`EXTERNAL_CONFIGURATION_SOURCES.md`](./EXTERNAL_CONFIGURATION_SOURCES.md), les références officielles de conception.
+Le guide détaillé est disponible dans [`CONFIGURATION_PRODUCTION.md`](./CONFIGURATION_PRODUCTION.md). Les documents complémentaires sont [`AUTH_ARCHITECTURE.md`](./AUTH_ARCHITECTURE.md), [`FULL_FEATURE_ARCHITECTURE.md`](./FULL_FEATURE_ARCHITECTURE.md), [`supabase/functions/`](./supabase/functions) et [`EXTERNAL_CONFIGURATION_SOURCES.md`](./EXTERNAL_CONFIGURATION_SOURCES.md).
 
 ## Vérifications effectuées
 
-Les contrôles automatisés couvrent la syntaxe des modules JavaScript, le manifeste JSON, les chemins déclarés, la simulation OAuth PKCE, la synchronisation de notes et les repli IA. Aucune clé Stripe secrète ni clé Supabase `service_role` n’est présente dans les modules client. La validation de typage des fonctions Edge reste à effectuer par la CLI Supabase/Deno lors du déploiement réel, car Deno n’est pas installé dans cet environnement.
+Les contrôles automatisés couvrent la syntaxe de tous les modules JavaScript, le manifeste JSON, les chemins déclarés, la simulation OAuth PKCE, les préférences, les notes, la liste de lecture, les tâches, l’IA locale ainsi que la normalisation des tags et statistiques de concentration. Aucune clé Stripe secrète ni clé Supabase `service_role` n’est présente dans les modules client.
 
-> L’analyse de probabilité IA est une estimation stylistique et ne peut pas prouver l’origine humaine ou artificielle d’un texte.
+> L’analyse stylistique IA est une estimation heuristique. Elle ne prouve jamais l’origine humaine ou artificielle d’un texte.

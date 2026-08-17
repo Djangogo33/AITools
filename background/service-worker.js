@@ -2,10 +2,17 @@ import { MESSAGE_TYPES, STORAGE_KEYS, getPomodoroMinutes } from '../shared/const
 import { getAccount, isFeatureAllowed, signInWithGoogle, signOut } from '../shared/auth-client.js';
 import { createNote, deleteNote, importGuestNotes, listNotes, syncNotes } from '../shared/notes-service.js';
 import { createCheckout, createPortal } from '../shared/billing-client.js';
-import { listReadingItems, removeReadingItem, saveCurrentPage, toggleReadingItem } from '../shared/reading-list-service.js';
-import { clearCompletedTasks, createTask, listTasks, removeTask, setActiveTask, toggleTask } from '../shared/tasks-service.js';
+import { listReadingItems, removeReadingItem, saveCurrentPage, toggleReadingItem, updateReadingItem } from '../shared/reading-list-service.js';
+import { listWorkspaceTags, searchWorkspace } from '../shared/unified-search-service.js';
+import { captureCurrentWorkspace, listWorkspaces, removeWorkspace, restoreWorkspace, updateWorkspace } from '../shared/workspaces-service.js';
+import { domainIsMuted, getDndSettings, getFocusStats, recordFocusSession, saveDndSettings } from '../shared/focus-service.js';
+import { clearCompletedTasks, createTask, listTasks, removeTask, setActiveTask, toggleTask, updateTask } from '../shared/tasks-service.js';
+import { applyTabRules, createTabRule, listTabRules, removeTabRule, toggleTabRule } from '../shared/tab-rules-service.js';
+import { markPersonalDeleted, syncPersonalData } from '../shared/personal-sync-service.js';
+import { createUserExport } from '../shared/export-service.js';
 
 const POMODORO_ALARM = 'aitools-pomodoro-complete';
+const TASK_REMINDER_PREFIX = 'aitools-task-reminder:';
 const DEFAULT_POMODORO = { status: 'idle', durationMs: 25 * 60_000, remainingMs: 25 * 60_000, endAt: null, cycle: 'focus' };
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -13,14 +20,25 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!current[STORAGE_KEYS.settings]) await chrome.storage.local.set({ [STORAGE_KEYS.settings]: { theme: 'dark', notifications: true, compactMode: false, quickLinks: [] } });
   if (!current[STORAGE_KEYS.notes]) await chrome.storage.local.set({ [STORAGE_KEYS.notes]: [] });
   if (!current[STORAGE_KEYS.pomodoro]) await chrome.storage.local.set({ [STORAGE_KEYS.pomodoro]: DEFAULT_POMODORO });
+  await rescheduleTaskReminders();
 });
 
+chrome.runtime.onStartup.addListener(() => { rescheduleTaskReminders(); });
+
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name.startsWith(TASK_REMINDER_PREFIX)) {
+    const taskId = alarm.name.slice(TASK_REMINDER_PREFIX.length);
+    const task = (await listTasks()).find((item) => item.id === taskId);
+    if (task && !task.done) await notifyCommand('Rappel AITools', `${task.title}${task.dueAt ? ` · échéance ${new Date(task.dueAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}`);
+    return;
+  }
   if (alarm.name !== POMODORO_ALARM) return;
   const state = await getPomodoro();
   if (state.status !== 'running') return;
   const done = { ...state, status: 'done', remainingMs: 0, endAt: null };
   await savePomodoro(done);
+  const activeTask = (await listTasks({ includeDone: false })).find((task) => task.active);
+  await recordFocusSession({ durationMs: state.durationMs, taskId: activeTask?.id, taskTitle: activeTask?.title });
   const settings = (await chrome.storage.local.get(STORAGE_KEYS.settings))[STORAGE_KEYS.settings] || {};
   if (settings.notifications !== false) chrome.notifications.create({ type: 'basic', iconUrl: 'assets/icon-128.png', title: 'Pomodoro terminé', message: state.cycle === 'focus' ? 'Session terminée. Accordez-vous une pause.' : 'Pause terminée. Prêt pour une nouvelle session ?' });
 });
@@ -39,6 +57,9 @@ chrome.commands.onCommand.addListener(async (command) => {
   } catch (error) { await notifyCommand('AITools', normalizeError(error)); }
 });
 
+chrome.tabs.onActivated.addListener(async ({ tabId }) => { await applyDndToTab(tabId); });
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => { if (changeInfo.status === 'complete' && tab.active) await applyDndToTab(tabId, tab.url); });
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handlers = {
     'auth/get-account': () => getAccount(),
@@ -48,20 +69,39 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     'billing/create-checkout': () => createCheckout(message.plan),
     'billing/create-portal': () => createPortal(),
     'notes/list': () => listNotes(),
-    'notes/create': () => createNote(message.content),
+    'notes/create': () => createNote(message.content, message.details || {}),
     'notes/delete': () => deleteNote(message.noteId),
     'notes/sync': () => syncNotes(),
     'notes/import-guest': () => importGuestNotes(),
     'reading/list': () => listReadingItems(),
     'reading/save-current': () => saveCurrentPage(),
     'reading/toggle': () => toggleReadingItem(message.itemId),
-    'reading/remove': () => removeReadingItem(message.itemId),
-    'tasks/list': () => listTasks({ includeDone: message.includeDone !== false }),
-    'tasks/create': () => createTask(message.title, message.priority),
-    'tasks/toggle': () => toggleTask(message.taskId),
-    'tasks/remove': () => removeTask(message.taskId),
+    'reading/remove': async () => { const result = await removeReadingItem(message.itemId); await markPersonalDeleted('reading', message.itemId); return result; },
+    'reading/update': () => updateReadingItem(message.itemId, message.patch),
+    'search/unified': () => searchWorkspace(message.query, { tags: message.tags || [], limit: message.limit }),
+    'tags/list': () => listWorkspaceTags(),
+    'personal/sync': () => syncPersonalData(),
+    'export/create': () => createUserExport(message.format),
+    'focus/stats': () => getFocusStats(message.days),
+    'focus/get-dnd': () => getDndSettings(),
+    'focus/save-dnd': () => saveDndSettings(message.patch || {}),
+    'tab-rules/list': () => listTabRules(),
+    'tab-rules/create': () => createTabRule(message.domain, message.color),
+    'tab-rules/toggle': () => toggleTabRule(message.ruleId),
+    'tab-rules/remove': () => removeTabRule(message.ruleId),
+    'tab-rules/apply': () => applyTabRules(),
+    'workspaces/list': () => listWorkspaces({ tags: message.tags || [] }),
+    'workspaces/capture': () => captureCurrentWorkspace(message.name, { tags: message.tags || [] }),
+    'workspaces/restore': () => restoreWorkspace(message.workspaceId),
+    'workspaces/update': () => updateWorkspace(message.workspaceId, message.patch),
+    'workspaces/remove': () => removeWorkspace(message.workspaceId),
+    'tasks/list': () => listTasks({ includeDone: message.includeDone !== false, period: message.period || 'all', tags: message.tags || [] }),
+    'tasks/create': async () => { const task = await createTask(message.title, message.priority, message.details || {}); await scheduleTaskReminder(task); return task; },
+    'tasks/toggle': async () => { const task = await toggleTask(message.taskId); await scheduleTaskReminder(task); return task; },
+    'tasks/update': async () => { const task = await updateTask(message.taskId, message.patch); await scheduleTaskReminder(task); return task; },
+    'tasks/remove': async () => { const result = await removeTask(message.taskId); await chrome.alarms.clear(`${TASK_REMINDER_PREFIX}${message.taskId}`); await markPersonalDeleted('tasks', message.taskId); return result; },
     'tasks/set-active': () => setActiveTask(message.taskId),
-    'tasks/clear-completed': () => clearCompletedTasks(),
+    'tasks/clear-completed': async () => { const result = await clearCompletedTasks(); await rescheduleTaskReminders(); return result; },
     'pomodoro/get': () => getPomodoro(),
     'pomodoro/toggle': () => togglePomodoro(message.durationMinutes, message.cycle),
     'pomodoro/reset': () => resetPomodoro(message.durationMinutes, message.cycle),
@@ -139,6 +179,27 @@ async function getTabStats() {
   const tabs = await chrome.tabs.query({ currentWindow: true });
   const unique = new Set(tabs.filter((tab) => tab.url).map((tab) => tab.url.split('#')[0]));
   return { total: tabs.length, duplicates: tabs.length - unique.size, audible: tabs.filter((tab) => tab.audible).length };
+}
+
+async function applyDndToTab(tabId, url) {
+  try {
+    const tab = url ? { url } : await chrome.tabs.get(tabId);
+    const settings = await getDndSettings();
+    if (!/^https?:/i.test(tab.url || '')) return;
+    await chrome.tabs.sendMessage(tabId, { type: 'page/set-focus', enabled: domainIsMuted(tab.url, settings) });
+  } catch { /* Le script de contenu n’est pas encore disponible sur cette page. */ }
+}
+
+async function scheduleTaskReminder(task) {
+  const name = `${TASK_REMINDER_PREFIX}${task.id}`;
+  await chrome.alarms.clear(name);
+  const when = task?.reminderAt ? new Date(task.reminderAt).getTime() : 0;
+  if (!task?.done && Number.isFinite(when) && when > Date.now()) await chrome.alarms.create(name, { when });
+}
+
+async function rescheduleTaskReminders() {
+  const tasks = await listTasks();
+  for (const task of tasks) await scheduleTaskReminder(task);
 }
 
 async function notifyCommand(title, message) {

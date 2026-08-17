@@ -1,0 +1,16 @@
+const RULES_KEY = 'aitools.tab-rules';
+const COLORS = ['blue', 'cyan', 'green', 'yellow', 'orange', 'pink', 'purple', 'grey'];
+
+export async function listTabRules() { const result = await chrome.storage.local.get(RULES_KEY); return Array.isArray(result[RULES_KEY]) ? result[RULES_KEY].map(normalizeRule).filter((rule) => rule.domain).sort((a, b) => a.domain.localeCompare(b.domain)) : []; }
+export async function createTabRule(domain, color = 'blue') { const normalizedDomain = normalizeDomain(domain); if (!normalizedDomain) throw new Error('Saisissez un domaine valide, par ex. github.com.'); const rules = await listTabRules(); const existing = rules.find((rule) => rule.domain === normalizedDomain); if (existing) return { rule: existing, created: false }; const rule = { id: crypto.randomUUID(), domain: normalizedDomain, color: normalizeColor(color), enabled: true, createdAt: new Date().toISOString() }; await writeRules([...rules, rule]); return { rule, created: true }; }
+export async function toggleTabRule(ruleId) { const rules = await listTabRules(); let updated = null; const next = rules.map((rule) => { if (rule.id !== ruleId) return rule; updated = { ...rule, enabled: !rule.enabled }; return updated; }); if (!updated) throw new Error('Règle introuvable.'); await writeRules(next); return updated; }
+export async function removeTabRule(ruleId) { const rules = await listTabRules(); const next = rules.filter((rule) => rule.id !== ruleId); await writeRules(next); return { removed: next.length !== rules.length }; }
+export async function applyTabRules() { const rules = (await listTabRules()).filter((rule) => rule.enabled); const tabs = await chrome.tabs.query({ currentWindow: true }); const applicable = new Map(); for (const tab of tabs) { if (!tab.id || tab.pinned || !tab.url) continue; const host = hostOf(tab.url); const rule = rules.find((item) => host === item.domain || host.endsWith(`.${item.domain}`)); if (rule) applicable.set(rule.id, [...(applicable.get(rule.id) || []), tab.id]); }
+  let groups = 0; for (const rule of rules) { const tabIds = applicable.get(rule.id) || []; if (!tabIds.length) continue; const groupId = await chrome.tabs.group({ tabIds }); await chrome.tabGroups.update(groupId, { title: rule.domain, color: rule.color, collapsed: false }); groups += 1; } return { groups, matchedTabs: [...applicable.values()].reduce((total, ids) => total + ids.length, 0) }; }
+
+async function writeRules(rules) { await chrome.storage.local.set({ [RULES_KEY]: rules }); }
+function normalizeRule(value) { return { id: typeof value?.id === 'string' ? value.id : crypto.randomUUID(), domain: normalizeDomain(value?.domain), color: normalizeColor(value?.color), enabled: value?.enabled !== false, createdAt: validDate(value?.createdAt) ? value.createdAt : new Date().toISOString() }; }
+function normalizeDomain(value) { return String(value || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].replace(/:\d+$/, '').replace(/^\.+|\.+$/g, ''); }
+function normalizeColor(value) { return COLORS.includes(value) ? value : 'blue'; }
+function hostOf(value) { try { return new URL(value).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } }
+function validDate(value) { return Number.isFinite(new Date(value).getTime()); }

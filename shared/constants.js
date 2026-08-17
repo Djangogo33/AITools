@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS = {
 
 export const MESSAGE_TYPES = {
   getPageText: 'page/get-text',
+  captureContext: 'page/capture-context',
   anonymizePage: 'page/anonymize',
   summarizePage: 'page/summarize',
   getReadingTime: 'page/reading-time',
