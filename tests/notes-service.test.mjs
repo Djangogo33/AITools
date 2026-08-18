@@ -9,7 +9,7 @@ store.set('aitools.auth.session', session);
 globalThis.fetch = async (url, options = {}) => {
   calls.push({ url: String(url), options });
   if (!online) throw new Error('Réseau indisponible');
-  if (String(url).includes('/rest/v1/notes') && !options.method) return response([{ id: '1b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d', content: 'Note distante', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z' }]);
+  if (String(url).includes('/rest/v1/notes') && !options.method) return response([{ id: '1b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d', content: 'Note distante', tags: ['veille'], source_url: 'https://example.com/source', source_title: 'Source distante', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z' }]);
   if (String(url).includes('/rest/v1/notes') && options.method === 'POST') return response([]);
   if (String(url).includes('/rest/v1/notes') && options.method === 'DELETE') return response([]);
   throw new Error(`Appel inattendu : ${url}`);
@@ -20,9 +20,15 @@ const { listNotes, createNote, deleteNote, importGuestNotes, syncNotes } = await
 const initial = await listNotes();
 assert.equal(initial.length, 1);
 assert.equal(initial[0].content, 'Note distante');
-const created = await createNote('Note synchronisée');
+assert.deepEqual(initial[0].tags, ['veille']);
+assert.equal(initial[0].sourceUrl, 'https://example.com/source');
+const created = await createNote('Note synchronisée', { tags: 'projet, sync', sourceUrl: 'https://example.com/article', sourceTitle: 'Article de test' });
 assert.equal(created.content, 'Note synchronisée');
 assert.equal(created.pending, false);
+const createdPayload = JSON.parse(calls.filter(({ options }) => options.method === 'POST').at(-1).options.body)[0];
+assert.deepEqual(createdPayload.tags, ['projet', 'sync']);
+assert.equal(createdPayload.source_url, 'https://example.com/article');
+assert.equal(createdPayload.source_title, 'Article de test');
 await deleteNote(created.id);
 store.set('aitools.notes', [{ text: 'Note historique', createdAt: '2025-12-01T00:00:00Z' }]);
 const imported = await importGuestNotes();

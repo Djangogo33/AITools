@@ -6,6 +6,8 @@ const LEGACY_KEY = 'aitools.notes';
 const ACCOUNT_KEY_PREFIX = 'aitools.notes.account.';
 const DELETED_KEY_PREFIX = 'aitools.notes.deleted.';
 const MAX_NOTE_LENGTH = 10_000;
+const REQUEST_TIMEOUT_MS = 12_000;
+const DELETE_CONCURRENCY = 20;
 
 export async function listNotes() {
   const session = await getValidSession();
@@ -86,17 +88,19 @@ export async function importGuestNotes() {
 
 async function fetchNotes(session) {
   const endpoint = new URL(`${SUPABASE_CONFIG.url}/rest/v1/notes`);
-  endpoint.searchParams.set('select', 'id,content,created_at,updated_at');
+  endpoint.searchParams.set('select', 'id,content,tags,source_url,source_title,created_at,updated_at');
   endpoint.searchParams.set('order', 'updated_at.desc');
-  const response = await fetch(endpoint, { headers: headers(session.access_token) });
+  const response = await fetchWithTimeout(endpoint, { headers: headers(session.access_token) });
   if (!response.ok) throw await responseError(response, 'Impossible de synchroniser les notes.');
-  return (await response.json()).map((note) => normalizeLegacyNote({ id: note.id, content: note.content, createdAt: note.created_at, updatedAt: note.updated_at }));
+  const payload = await response.json();
+  if (!Array.isArray(payload)) throw new Error('Réponse distante des notes invalide.');
+  return payload.map((note) => normalizeLegacyNote({ id: note.id, content: note.content, tags: note.tags, sourceUrl: note.source_url, sourceTitle: note.source_title, createdAt: note.created_at, updatedAt: note.updated_at }));
 }
 
 async function upsertNotes(session, notes) {
   if (!notes.length) return;
-  const payload = notes.map((note) => ({ id: note.id, user_id: session.user.id, content: note.content, created_at: note.createdAt, updated_at: note.updatedAt }));
-  const response = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/notes?on_conflict=id`, {
+  const payload = notes.map((note) => ({ id: note.id, user_id: session.user.id, content: note.content, tags: note.tags || [], source_url: note.sourceUrl, source_title: note.sourceTitle, created_at: note.createdAt, updated_at: note.updatedAt }));
+  const response = await fetchWithTimeout(`${SUPABASE_CONFIG.url}/rest/v1/notes?on_conflict=id`, {
     method: 'POST', headers: { ...headers(session.access_token), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify(payload)
   });
   if (!response.ok) throw await responseError(response, 'Impossible d’enregistrer les notes synchronisées.');
@@ -105,13 +109,13 @@ async function upsertNotes(session, notes) {
 async function deleteRemoteNote(session, noteId) {
   const endpoint = new URL(`${SUPABASE_CONFIG.url}/rest/v1/notes`);
   endpoint.searchParams.set('id', `eq.${noteId}`);
-  const response = await fetch(endpoint, { method: 'DELETE', headers: headers(session.access_token) });
+  const response = await fetchWithTimeout(endpoint, { method: 'DELETE', headers: headers(session.access_token) });
   if (!response.ok) throw await responseError(response, 'Impossible de supprimer la note synchronisée.');
 }
 
 async function flushDeletedNotes(session, deleted) {
   if (!deleted.length) return;
-  for (const noteId of deleted) await deleteRemoteNote(session, noteId);
+  for (let index = 0; index < deleted.length; index += DELETE_CONCURRENCY) await Promise.all(deleted.slice(index, index + DELETE_CONCURRENCY).map((noteId) => deleteRemoteNote(session, noteId)));
   await writeDeleted(session.user.id, []);
 }
 
@@ -152,4 +156,5 @@ function deterministicUuid(value) {
 }
 function hash32(value, seed) { let hash = seed >>> 0; for (let index = 0; index < value.length; index += 1) { hash ^= value.charCodeAt(index); hash = Math.imul(hash, 0x01000193); } return hash >>> 0; }
 function headers(accessToken) { return { apikey: SUPABASE_CONFIG.publishableKey, Authorization: `Bearer ${accessToken}` }; }
+async function fetchWithTimeout(url, options = {}) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS); try { return await fetch(url, { ...options, signal: controller.signal }); } catch (error) { if (error?.name === 'AbortError') throw new Error('La synchronisation des notes a expiré après 12 secondes.'); throw error; } finally { clearTimeout(timer); } }
 async function responseError(response, fallback) { const payload = await response.json().catch(() => null); return new Error(payload?.message || payload?.msg || fallback); }

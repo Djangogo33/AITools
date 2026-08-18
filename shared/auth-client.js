@@ -1,6 +1,7 @@
 import { SUPABASE_CONFIG, SUPABASE_STORAGE_KEYS } from './supabase-config.js';
 
 const CLOCK_SKEW_MS = 60_000;
+const REQUEST_TIMEOUT_MS = 12_000;
 const FREE_ENTITLEMENTS = ['local_tools', 'dark_mode', 'advanced_search', 'notes_local'];
 const PLAN_ENTITLEMENTS = {
   free: FREE_ENTITLEMENTS,
@@ -72,7 +73,7 @@ export async function getValidSession() {
 export async function signOut() {
   const session = (await chrome.storage.local.get(SUPABASE_STORAGE_KEYS.session))[SUPABASE_STORAGE_KEYS.session];
   if (session?.access_token) {
-    await fetch(`${SUPABASE_CONFIG.url}/auth/v1/logout`, { method: 'POST', headers: authHeaders(session.access_token) }).catch(() => undefined);
+    await fetchWithTimeout(`${SUPABASE_CONFIG.url}/auth/v1/logout`, { method: 'POST', headers: authHeaders(session.access_token) }).catch(() => undefined);
   }
   await clearSession();
   return createGuestAccount();
@@ -84,7 +85,7 @@ export async function isFeatureAllowed(feature) {
 }
 
 async function exchangeCodeForSession(code, verifier) {
-  const response = await fetch(`${SUPABASE_CONFIG.url}/auth/v1/token?grant_type=pkce`, {
+  const response = await fetchWithTimeout(`${SUPABASE_CONFIG.url}/auth/v1/token?grant_type=pkce`, {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify({ auth_code: code, code_verifier: verifier })
@@ -93,7 +94,7 @@ async function exchangeCodeForSession(code, verifier) {
 }
 
 async function refreshSession(refreshToken) {
-  const response = await fetch(`${SUPABASE_CONFIG.url}/auth/v1/token?grant_type=refresh_token`, {
+  const response = await fetchWithTimeout(`${SUPABASE_CONFIG.url}/auth/v1/token?grant_type=refresh_token`, {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify({ refresh_token: refreshToken })
@@ -105,13 +106,14 @@ async function getOrCreateProfile(session) {
   const endpoint = new URL(`${SUPABASE_CONFIG.url}/rest/v1/profiles`);
   endpoint.searchParams.set('select', 'id,display_name,avatar_url,created_at');
   endpoint.searchParams.set('id', `eq.${session.user.id}`);
-  const response = await fetch(endpoint, { headers: authHeaders(session.access_token) });
+  const response = await fetchWithTimeout(endpoint, { headers: authHeaders(session.access_token) });
   if (!response.ok) throw await responseError(response, 'Impossible de récupérer le profil utilisateur.');
   const profiles = await response.json();
+  if (!Array.isArray(profiles)) throw new Error('Réponse de profil invalide.');
   if (profiles[0]) return profiles[0];
 
   const metadata = session.user?.user_metadata || {};
-  const createResponse = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/profiles?on_conflict=id`, {
+  const createResponse = await fetchWithTimeout(`${SUPABASE_CONFIG.url}/rest/v1/profiles?on_conflict=id`, {
     method: 'POST',
     headers: { ...authHeaders(session.access_token), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' },
     body: JSON.stringify({ id: session.user.id, display_name: metadata.full_name || metadata.name || session.user.email?.split('@')[0] || 'Utilisateur', avatar_url: metadata.avatar_url || metadata.picture || null })
@@ -127,9 +129,11 @@ async function getSubscription(session) {
   endpoint.searchParams.set('user_id', `eq.${session.user.id}`);
   endpoint.searchParams.set('order', 'current_period_end.desc');
   endpoint.searchParams.set('limit', '1');
-  const response = await fetch(endpoint, { headers: authHeaders(session.access_token) });
+  const response = await fetchWithTimeout(endpoint, { headers: authHeaders(session.access_token) });
   if (!response.ok) return { plan: 'free', entitlements: FREE_ENTITLEMENTS, expiresAt: null };
-  const [subscription] = await response.json();
+  const payload = await response.json();
+  if (!Array.isArray(payload)) return { plan: 'free', entitlements: FREE_ENTITLEMENTS, expiresAt: null };
+  const [subscription] = payload;
   const plan = normalizePlan(subscription);
   return { plan, entitlements: PLAN_ENTITLEMENTS[plan], expiresAt: subscription?.current_period_end || null };
 }
@@ -151,7 +155,8 @@ function createGuestAccount() { return { authenticated: false, user: null, plan:
 function normalizeUser(user, profile) { const metadata = user?.user_metadata || {}; return { id: user.id, email: user.email || '', name: profile?.display_name || metadata.full_name || metadata.name || user.email?.split('@')[0] || 'Utilisateur', avatarUrl: profile?.avatar_url || metadata.avatar_url || metadata.picture || null }; }
 function authHeaders(token) { return { apikey: SUPABASE_CONFIG.publishableKey, Authorization: `Bearer ${token}` }; }
 function jsonHeaders() { return { apikey: SUPABASE_CONFIG.publishableKey, 'Content-Type': 'application/json' }; }
-async function parseSessionResponse(response, fallback) { if (!response.ok) throw await responseError(response, fallback); return response.json(); }
+async function parseSessionResponse(response, fallback) { if (!response.ok) throw await responseError(response, fallback); const session = await response.json(); if (!session?.access_token || !session?.refresh_token || !session?.user?.id) throw new Error('Réponse de session invalide.'); return session; }
+async function fetchWithTimeout(url, options = {}) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS); try { return await fetch(url, { ...options, signal: controller.signal }); } catch (error) { if (error?.name === 'AbortError') throw new Error('La connexion à Supabase a expiré après 12 secondes.'); throw error; } finally { clearTimeout(timer); } }
 async function responseError(response, fallback) { const payload = await response.json().catch(() => null); return new Error(payload?.msg || payload?.message || payload?.error_description || fallback); }
 function createCodeVerifier() { const bytes = crypto.getRandomValues(new Uint8Array(64)); return base64Url(bytes); }
 async function createCodeChallenge(verifier) { const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)); return base64Url(new Uint8Array(hash)); }
