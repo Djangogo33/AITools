@@ -41,7 +41,7 @@ Les contrats de données locaux ont été resserrés. Une bascule de lecture ou 
 | Test du lanceur de commandes et de la navigation des vues | Réussi |
 | Test du Nouvel onglet et des Préférences | Réussi |
 | Suite des simulations locales et syntaxe JavaScript | Réussie |
-| Archive Manifest V3 | Intègre, SHA-256 `0fb8d926d6151f820f03b261c567f233f7b62d0a6c7fa74a4f64bd885461ad98` |
+| Archive Manifest V3 | Intègre, SHA-256 `6654717d203b4bb3c0aede5532f20b5c79d4214d63b1f4f38b20af76af117529` |
 
 ## Limites à conserver
 
