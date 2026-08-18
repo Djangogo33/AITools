@@ -19,6 +19,7 @@ assert.equal(toggled.done, true);
 const removed = await removeReadingItem(items[0].id);
 assert.equal(removed.removed, true);
 assert.equal((await listReadingItems()).length, 0);
+await assert.rejects(() => toggleReadingItem('page-introuvable'), /introuvable/i);
 activeTab = { url: 'chrome://settings', title: 'Paramètres' };
 await assert.rejects(() => saveCurrentPage(), /HTTP\(S\)/);
 console.log('reading-list service simulation: ok');

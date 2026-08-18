@@ -62,7 +62,7 @@ function summarizeLocally(text) {
   const source = String(text || '').replace(/\u00a0/g, ' ').replace(/[ \t]+/g, ' ').trim();
   if (!source) return 'Aucun contenu lisible n’a été trouvé sur cette page.';
   const candidates = source.split(/\n+|(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Þ0-9À-ÿ])/u).map((item) => item.replace(/^[-*•]\s*/, '').trim()).filter((item) => item.length >= 24);
-  if (!candidates.length) return source.slice(0, 480);
+  if (!candidates.length) return `• ${source.replace(/\n+/g, ' — ').slice(0, 480)}`;
   const words = candidates.flatMap((sentence) => sentence.toLowerCase().match(/[\p{L}\d]{3,}/gu) || []); const frequency = words.reduce((map, word) => map.set(word, (map.get(word) || 0) + 1), new Map());
   const count = candidates.length <= 3 ? candidates.length : source.length < 900 ? 3 : 5;
   return candidates.map((sentence, index) => ({ sentence, index, score: (index === 0 ? 1.5 : 0) + Math.min(1.2, sentence.length / 500) + [...new Set(sentence.toLowerCase().match(/[\p{L}\d]{3,}/gu) || [])].reduce((sum, word) => sum + Math.min(0.4, (frequency.get(word) || 0) * 0.08), 0) })).sort((a, b) => b.score - a.score || a.index - b.index).slice(0, count).sort((a, b) => a.index - b.index).map(({ sentence }) => `• ${sentence}`).join('\n');

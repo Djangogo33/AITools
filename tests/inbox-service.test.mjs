@@ -18,4 +18,5 @@ assert.equal((await listInbox()).length, 0);
 const all = await listInbox({ includeProcessed: true });
 assert.equal(all.length, 2);
 assert.equal(all.some((item) => item.id === first.id && item.status === 'processed'), true);
+await assert.rejects(() => dismissCapture('capture-introuvable'), /introuvable/i);
 console.log('inbox-service simulation: ok');

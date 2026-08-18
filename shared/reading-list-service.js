@@ -30,7 +30,7 @@ export async function updateReadingItem(itemId, patch = {}) {
   if (!updated) throw new Error('Page introuvable.'); await writeItems(next); return updated;
 }
 
-export async function toggleReadingItem(itemId) { const items = await listReadingItems(); const next = items.map((item) => item.id === itemId ? { ...item, done: !item.done, updatedAt: new Date().toISOString() } : item); await writeItems(next); return next.find((item) => item.id === itemId) || null; }
+export async function toggleReadingItem(itemId) { const items = await listReadingItems(); let toggled = null; const next = items.map((item) => { if (item.id !== itemId) return item; toggled = { ...item, done: !item.done, updatedAt: new Date().toISOString() }; return toggled; }); if (!toggled) throw new Error('Page introuvable.'); await writeItems(next); return toggled; }
 export async function removeReadingItem(itemId) { const items = await listReadingItems(); const next = items.filter((item) => item.id !== itemId); await writeItems(next); return { removed: next.length !== items.length }; }
 
 async function writeItems(items) { await chrome.storage.local.set({ [READING_LIST_KEY]: items }); }

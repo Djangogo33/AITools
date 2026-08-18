@@ -39,15 +39,14 @@ export async function updateTask(taskId, patch = {}) {
 }
 
 export async function toggleTask(taskId) {
-  const tasks = await readTasks(); let toggled = null; let nextOccurrence = null;
-  const next = tasks.map((task) => {
-    if (task.id !== taskId) return task;
-    const done = !task.done; const completedAt = done ? new Date().toISOString() : null;
-    toggled = { ...task, done, completedAt, updatedAt: completedAt || new Date().toISOString() };
-    if (done && toggled.recurrence !== 'none') nextOccurrence = createNextOccurrence(toggled);
-    return toggled;
-  });
-  if (!toggled) throw new Error('Tâche introuvable.');
+  const tasks = await readTasks(); const current = tasks.find((task) => task.id === taskId);
+  if (!current) throw new Error('Tâche introuvable.');
+  const done = !current.done; const completedAt = done ? new Date().toISOString() : null;
+  const toggled = { ...current, done, completedAt, updatedAt: completedAt || new Date().toISOString() };
+  const seriesId = current.recurrenceSeriesId || current.id;
+  const hasOpenFutureOccurrence = done && current.recurrence !== 'none' && tasks.some((task) => task.id !== current.id && !task.done && (task.recurrenceSeriesId === seriesId || task.id === seriesId));
+  const nextOccurrence = done && current.recurrence !== 'none' && !hasOpenFutureOccurrence ? createNextOccurrence(toggled) : null;
+  const next = tasks.map((task) => task.id === taskId ? toggled : task);
   await writeTasks(nextOccurrence ? [nextOccurrence, ...next].slice(0, MAX_TASKS) : next); if (toggled.done) await clearActiveIf(taskId);
   return nextOccurrence ? { ...toggled, nextOccurrence } : toggled;
 }

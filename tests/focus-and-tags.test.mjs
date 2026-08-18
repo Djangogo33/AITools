@@ -8,9 +8,13 @@ const { domainIsMuted, getFocusStats, recordFocusSession, saveDndSettings } = aw
 assert.deepEqual(normalizeTags([' Projet ', '#veille', 'projet', 'tag invalide !']), ['projet', 'veille']);
 assert.equal(matchesTags({ tags: ['projet', 'veille'] }, ['projet']), true);
 await recordFocusSession({ durationMs: 25 * 60_000, taskTitle: 'Écrire les tests' });
+const capped = await recordFocusSession({ durationMs: 9_999 * 60_000, endedAt: new Date(Date.now() + 48 * 60 * 60_000).toISOString() });
+assert.equal(capped.minutes, 720, 'une durée anormale doit être plafonnée');
+assert.ok(new Date(capped.endedAt) <= new Date(Date.now() + 5 * 60_000), 'une date de fin future ne doit pas fausser les statistiques');
 const stats = await getFocusStats(7);
-assert.equal(stats.sessions, 1); assert.equal(stats.minutes, 25);
-const dnd = await saveDndSettings({ enabled: true, domains: 'youtube.com, reddit.com' });
+assert.equal(stats.sessions, 2); assert.equal(stats.minutes, 745);
+const dnd = await saveDndSettings({ enabled: true, domains: 'youtube.com, reddit.com, https://www.youtube.com/watch, invalide, 127.0.0.1' });
 assert.equal(domainIsMuted('https://www.youtube.com/watch?v=x', dnd), true);
 assert.equal(domainIsMuted('https://example.com', dnd), false);
+assert.deepEqual(dnd.domains, ['youtube.com', 'reddit.com']);
 console.log('focus and tags simulation: ok');

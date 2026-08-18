@@ -2,6 +2,8 @@ import { getPomodoroMinutes, getSettings, saveSettings } from '../shared/constan
 import { getAIStatus } from '../popup/ai-runtime.js';
 
 const $ = (selector) => document.querySelector(selector);
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+async function sendPageMessage(tabId, message, attempts = 3) { let lastError; for (let attempt = 0; attempt < attempts; attempt += 1) { try { return await chrome.tabs.sendMessage(tabId, message); } catch (error) { lastError = error; if (attempt === 0 && /Receiving end does not exist/i.test(String(error?.message || error))) { try { await chrome.scripting.executeScript({ target: { tabId }, files: ['content/content-script.js'] }); } catch { /* la page peut interdire l’injection ; le message d’origine reste utile */ } } if (attempt < attempts - 1) await wait(180 * (attempt + 1)); } } throw lastError || new Error('Script de contenu indisponible.'); }
 
 init();
 
@@ -55,7 +57,7 @@ async function createTabRule() { const domain = $('#option-rule-domain').value.t
 async function applyTabRules() { const response = await chrome.runtime.sendMessage({ type: 'tab-rules/apply' }); if (!response?.ok) return showToast(response?.error || 'Application impossible.'); showToast(`${response.data.groups} groupe(s) créés pour ${response.data.matchedTabs} onglet(s).`); }
 async function renderAccount() { try { const response = await chrome.runtime.sendMessage({ type: 'auth/get-account' }); const account = response?.data; $('#account-diagnostic').innerHTML = account?.authenticated ? `<strong>${escapeHtml(account.user.name)}</strong><br>${escapeHtml(account.user.email)}<br>Plan : <strong>${escapeHtml(String(account.plan).toUpperCase())}</strong>` : 'Vous utilisez AITools en mode local. Connectez-vous depuis le popup pour synchroniser votre profil et vos notes.'; } catch { $('#account-diagnostic').textContent = 'État de compte indisponible.'; } }
 async function runBackgroundAction(type, formatter) { const response = await chrome.runtime.sendMessage({ type }); if (!response?.ok) return showToast(response?.error || 'Action impossible.'); showToast(formatter(response.data)); }
-async function runPageAction(type, success) { const [tab] = await chrome.tabs.query({ active: true, currentWindow: true }); if (!tab?.id || tab.url?.startsWith('chrome://')) return showToast('Cette page ne permet pas cette action.'); try { const response = await chrome.tabs.sendMessage(tab.id, { type }); if (!response?.ok) throw new Error(response?.error); showToast(success); } catch { showToast('Action indisponible : rechargez la page puis réessayez.'); } }
+async function runPageAction(type, success) { const [tab] = await chrome.tabs.query({ active: true, currentWindow: true }); if (!tab?.id || tab.url?.startsWith('chrome://')) return showToast('Cette page ne permet pas cette action.'); try { const response = await sendPageMessage(tab.id, { type }); if (!response?.ok) throw new Error(response?.error || 'Action indisponible.'); showToast(success); } catch (error) { showToast(error.message || 'Action indisponible : rechargez la page puis réessayez.'); } }
 async function exportLocalData() {
   const data = await chrome.storage.local.get(null);
   const entries = Object.entries(data).filter(([key]) => key.startsWith('aitools.') && !['aitools.auth.session', 'aitools.auth.pkce-verifier', 'aitools.auth.account-cache'].includes(key));

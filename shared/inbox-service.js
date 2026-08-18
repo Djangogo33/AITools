@@ -15,7 +15,7 @@ export async function addCapture(input = {}) {
   const items = await listInbox({ includeProcessed: true }); await write([capture, ...items].slice(0, MAX_CAPTURES)); return capture;
 }
 export async function listInbox({ includeProcessed = false } = {}) { const stored = await chrome.storage.local.get(INBOX_KEY); const entries = Array.isArray(stored[INBOX_KEY]) ? stored[INBOX_KEY] : []; return entries.map(normalize).filter((item) => includeProcessed || item.status === 'inbox').sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); }
-export async function dismissCapture(captureId) { const items = await listInbox({ includeProcessed: true }); const next = items.map((item) => item.id === captureId ? { ...item, status: 'dismissed', processedAt: new Date().toISOString() } : item); await write(next); return next.find((item) => item.id === captureId) || null; }
+export async function dismissCapture(captureId) { const items = await listInbox({ includeProcessed: true }); let dismissed = null; const next = items.map((item) => { if (item.id !== captureId) return item; dismissed = { ...item, status: 'dismissed', processedAt: new Date().toISOString() }; return dismissed; }); if (!dismissed) throw new Error('Capture introuvable.'); await write(next); return dismissed; }
 export async function processCapture(captureId, target) {
   const items = await listInbox({ includeProcessed: true }); const capture = items.find((item) => item.id === captureId && item.status === 'inbox'); if (!capture) throw new Error('Capture introuvable ou déjà traitée.');
   let result; if (target === 'note') result = await createNote(capture.content, { tags: capture.tags, sourceUrl: capture.sourceUrl, sourceTitle: capture.sourceTitle });

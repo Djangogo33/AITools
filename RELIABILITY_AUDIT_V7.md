@@ -16,6 +16,10 @@ L’extraction de contenu de page choisit le bloc `article`, `main` ou `[role="m
 
 Les actions du popup vérifient désormais `response.ok` et refusent un résumé vide. Le Nouvel onglet signale les erreurs du Pomodoro au lieu de rafraîchir silencieusement un état supposé valide. Les Préférences tolèrent une réponse de synchronisation partielle et affichent l’erreur réelle lorsqu’une synchronisation échoue. Le diagnostic IA utilise les méthodes `availability()` réellement présentes au lieu de supposer qu’une API partiellement exposée est disponible.
 
+Les outils de page du popup et des Préférences disposent aussi d’une reprise de messagerie. Lorsqu’une page est ouverte juste avant l’initialisation du script de contenu, AITools réessaie brièvement. Si Chrome signale précisément l’absence de destinataire, l’extension injecte une seule fois le script de contenu grâce à l’autorisation `scripting`, puis reprend l’action. Les pages protégées ou incompatibles conservent un message d’erreur explicite.
+
+Les contrats de données locaux ont été resserrés. Une bascule de lecture ou l’écartement d’une capture inexistante échoue désormais explicitement. Une tâche récurrente rouverte puis terminée ne génère plus une seconde occurrence future. Les sessions de concentration sont plafonnées à douze heures et une date de fin anormalement future est ramenée à l’instant présent afin de ne pas fausser les analyses privées.
+
 ## Vérifications effectuées
 
 | Contrôle | Résultat |
@@ -24,13 +28,20 @@ Les actions du popup vérifient désormais `response.ok` et refusent un résumé
 | Test d’échec de création du `Summarizer` | Repli extractif réussi |
 | Test d’échec de création du `LanguageModel` | Repli extractif réussi |
 | Test du résumé par script de contenu sur Chromium | Réussi, sortie en points lisible |
+| Test sur contenu court | Réussi, une puce cohérente est retournée |
+| Test d’extraction avec navigation et barre latérale bruitées | Réussi, le contenu principal seul est conservé |
 | Test de capture, résumé et temps de lecture sur `example.com` | Réussi |
+| Test de reprise après absence initiale de script de contenu | Réussi depuis le bouton réel de résumé du popup |
+| Test d’anonymisation, cookies, focus, mode sombre et erreurs YouTube | Réussi dans Chromium |
+| Test de tâche récurrente rouverte puis refermée | Réussi, aucune occurrence future doublonnée |
+| Test d’identifiants absents dans la lecture et la boîte À traiter | Réussi, erreurs explicites |
+| Test de concentration avec durée et date anormales | Réussi, valeurs plafonnées et normalisées |
 | Test du popup et de ses routes locales | Réussi sans exception JavaScript |
 | Test du Pomodoro démarrage puis remise à zéro | Réussi |
 | Test du lanceur de commandes et de la navigation des vues | Réussi |
 | Test du Nouvel onglet et des Préférences | Réussi |
 | Suite des simulations locales et syntaxe JavaScript | Réussie |
-| Archive Manifest V3 | Intègre, SHA-256 `e4b47ebe5cedb6c0a9ce085e91c9ba7636e0d94817b553c89e3f54297616d5d0` |
+| Archive Manifest V3 | Intègre, SHA-256 `0fb8d926d6151f820f03b261c567f233f7b62d0a6c7fa74a4f64bd885461ad98` |
 
 ## Limites à conserver
 

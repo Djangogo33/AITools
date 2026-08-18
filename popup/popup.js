@@ -5,6 +5,8 @@ import { analyzeAIProbability, getAIStatus, paletteFromText, summarizeWithAI, tr
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+async function sendPageMessage(tabId, message, attempts = 3) { let lastError; for (let attempt = 0; attempt < attempts; attempt += 1) { try { return await chrome.tabs.sendMessage(tabId, message); } catch (error) { lastError = error; if (attempt === 0 && /Receiving end does not exist/i.test(String(error?.message || error))) { try { await chrome.scripting.executeScript({ target: { tabId }, files: ['content/content-script.js'] }); } catch { /* la page peut interdire l’injection ; le message d’origine reste utile */ } } if (attempt < attempts - 1) await wait(180 * (attempt + 1)); } } throw lastError || new Error('Script de contenu indisponible.'); }
 let settings = { ...DEFAULT_SETTINGS };
 let notes = [];
 let pomodoro = { status: 'idle', remaining: 1500, notifications: true };
@@ -292,7 +294,7 @@ async function runAIJob(task, render) {
 
 function setAIResult(text, engine) { $('#ai-result').textContent = text; $('#ai-engine').textContent = `Moteur : ${engine}`; }
 async function copyAIResult() { const text = $('#ai-result').textContent; if (!text || text === 'Le résultat apparaîtra ici.') return; try { await navigator.clipboard.writeText(text); showToast('Résultat copié.'); } catch { showToast('Copie impossible.'); } }
-async function runYouTubeAction(type) { const [tab] = await chrome.tabs.query({ active: true, currentWindow: true }); if (!tab?.id || !/youtube\.com/i.test(tab.url || '')) return showToast('Ouvrez une vidéo YouTube pour utiliser ce contrôle.'); try { const response = await chrome.tabs.sendMessage(tab.id, { type }); if (!response?.ok) throw new Error(response?.error); showToast(response.message || 'Réglage YouTube appliqué.'); } catch { showToast('Contrôle YouTube indisponible sur cette page.'); } }
+async function runYouTubeAction(type) { const [tab] = await chrome.tabs.query({ active: true, currentWindow: true }); if (!tab?.id || !/youtube\.com/i.test(tab.url || '')) return showToast('Ouvrez une vidéo YouTube pour utiliser ce contrôle.'); try { const response = await sendPageMessage(tab.id, { type }); if (!response?.ok) throw new Error(response?.error); showToast(response.message || 'Réglage YouTube appliqué.'); } catch { showToast('Contrôle YouTube indisponible sur cette page.'); } }
 
 async function loadNotes() {
   try {
@@ -422,7 +424,7 @@ async function runPageAction(type) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || tab.url?.startsWith('chrome://')) return showToast('Cette page ne permet pas cette action.');
   try {
-    const response = await chrome.tabs.sendMessage(tab.id, { type });
+    const response = await sendPageMessage(tab.id, { type });
     if (!response?.ok) throw new Error(response?.error || 'Action indisponible.');
     if (type === MESSAGE_TYPES.summarizePage) { if (!response.summary) throw new Error('Le résumé n’a retourné aucun contenu.'); showView('notes'); $('#note-input').value = response.summary; showToast('Résumé prêt à être enregistré'); }
     else showToast(`${response.count || 0} élément(s) anonymisé(s)`);
@@ -433,13 +435,13 @@ async function runProductivityAction(type) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || tab.url?.startsWith('chrome://')) return showToast('Cette page ne permet pas cette action.');
   try {
-    const response = await chrome.tabs.sendMessage(tab.id, { type });
+    const response = await sendPageMessage(tab.id, { type });
     if (!response?.ok) throw new Error(response?.error || 'Action indisponible.');
     if (type === MESSAGE_TYPES.getReadingTime) { $('#reading-status').textContent = `${response.minutes} min · ${response.words.toLocaleString('fr-FR')} mots`; return showToast(`Temps de lecture estimé : ${response.minutes} min.`); }
     if (type === MESSAGE_TYPES.toggleFocus) { $('#focus-status').textContent = response.enabled ? 'Mode concentration activé' : 'Mode concentration désactivé'; return showToast(response.enabled ? 'Mode concentration activé.' : 'Mode concentration désactivé.'); }
     if (type === MESSAGE_TYPES.highlightSelection) return showToast(response.highlighted ? 'Sélection surlignée.' : 'Sélectionnez du texte dans la page avant de surligner.');
     if (type === MESSAGE_TYPES.printPage) return showToast('Boîte d’impression ouverte. Choisissez « Enregistrer au format PDF ».');
-  } catch { showToast('Impossible d’utiliser cet outil sur la page actuelle. Rechargez-la puis réessayez.'); }
+  } catch (error) { showToast(error.message || 'Impossible d’utiliser cet outil sur la page actuelle. Rechargez-la puis réessayez.'); }
 }
 
 async function closeDuplicates() {

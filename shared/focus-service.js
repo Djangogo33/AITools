@@ -1,10 +1,11 @@
 const HISTORY_KEY = 'aitools.focus-history';
 const DND_KEY = 'aitools.dnd-settings';
 const MAX_SESSIONS = 2_000;
+const MAX_SESSION_MINUTES = 12 * 60;
 
 export async function recordFocusSession({ durationMs, taskId = null, taskTitle = null, endedAt = new Date().toISOString() }) {
-  const minutes = Math.max(1, Math.round(Number(durationMs || 0) / 60_000));
-  const session = { id: crypto.randomUUID(), minutes, taskId: typeof taskId === 'string' ? taskId : null, taskTitle: String(taskTitle || '').trim().slice(0, 240) || null, endedAt: validDate(endedAt) ? new Date(endedAt).toISOString() : new Date().toISOString() };
+  const minutes = normalizeMinutes(Number(durationMs || 0) / 60_000);
+  const session = { id: crypto.randomUUID(), minutes, taskId: typeof taskId === 'string' ? taskId : null, taskTitle: String(taskTitle || '').trim().slice(0, 240) || null, endedAt: normalizeEndedAt(endedAt) };
   const history = await listFocusSessions(); await chrome.storage.local.set({ [HISTORY_KEY]: [session, ...history].slice(0, MAX_SESSIONS) }); return session;
 }
 
@@ -15,6 +16,8 @@ export async function getDndSettings() { const result = await chrome.storage.loc
 export async function saveDndSettings(patch = {}) { const current = await getDndSettings(); const next = { enabled: Object.hasOwn(patch, 'enabled') ? Boolean(patch.enabled) : current.enabled, domains: Object.hasOwn(patch, 'domains') ? normalizeDomains(patch.domains) : current.domains }; await chrome.storage.local.set({ [DND_KEY]: next }); return next; }
 export function domainIsMuted(url, settings) { try { const hostname = new URL(url).hostname.replace(/^www\./, '').toLowerCase(); return settings.enabled && settings.domains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`)); } catch { return false; } }
 
-function normalizeSession(value) { return { id: String(value?.id || crypto.randomUUID()), minutes: Math.max(1, Math.round(Number(value?.minutes) || 1)), taskId: typeof value?.taskId === 'string' ? value.taskId : null, taskTitle: String(value?.taskTitle || '').trim().slice(0, 240) || null, endedAt: new Date(value.endedAt).toISOString() }; }
+function normalizeSession(value) { return { id: String(value?.id || crypto.randomUUID()), minutes: normalizeMinutes(value?.minutes), taskId: typeof value?.taskId === 'string' ? value.taskId : null, taskTitle: String(value?.taskTitle || '').trim().slice(0, 240) || null, endedAt: normalizeEndedAt(value?.endedAt) }; }
+function normalizeMinutes(value) { return Math.max(1, Math.min(MAX_SESSION_MINUTES, Math.round(Number(value) || 1))); }
+function normalizeEndedAt(value) { const now = new Date(); const date = validDate(value) ? new Date(value) : now; return (date > new Date(now.getTime() + 5 * 60_000) ? now : date).toISOString(); }
 function normalizeDomains(value) { const source = Array.isArray(value) ? value : String(value || '').split(/[;,\s]+/); return [...new Set(source.map((item) => String(item || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]).filter((item) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(item)))].slice(0, 80); }
 function validDate(value) { return Number.isFinite(new Date(value).getTime()); }
