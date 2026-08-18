@@ -80,6 +80,17 @@ create table if not exists public.subscriptions (
   updated_at timestamptz not null default now()
 );
 
+-- Compatibilité avec les installations antérieures où la table existait déjà
+-- sans les colonnes de facturation introduites par AITools.
+alter table public.subscriptions add column if not exists plan text not null default 'free';
+alter table public.subscriptions add column if not exists status text not null default 'active';
+alter table public.subscriptions add column if not exists current_period_end timestamptz;
+alter table public.subscriptions add column if not exists provider text;
+alter table public.subscriptions add column if not exists provider_customer_id text;
+alter table public.subscriptions add column if not exists provider_subscription_id text;
+alter table public.subscriptions add column if not exists created_at timestamptz not null default now();
+alter table public.subscriptions add column if not exists updated_at timestamptz not null default now();
+
 create index if not exists subscriptions_user_period_idx
   on public.subscriptions (user_id, current_period_end desc);
 

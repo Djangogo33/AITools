@@ -48,6 +48,8 @@ export const SUPABASE_CONFIG = {
 
 Dans **Supabase Dashboard → SQL Editor**, ouvrez une nouvelle requête, collez intégralement le contenu de [`supabase/schema.sql`](./supabase/schema.sql), puis choisissez **Run**. Cette migration crée les tables `profiles`, `subscriptions`, `notes`, `tasks`, `reading_items`, `workspaces` et `user_preferences`, déclenche la création du profil et active les politiques RLS. Elle est idempotente : les `create table if not exists` et `alter table ... if not exists` permettent de la relancer pour appliquer les évolutions v7.
 
+> **Reprise d’une base existante.** Si l’exécution échoue avec `column "provider_subscription_id" does not exist`, n’effacez aucune table. Exécutez d’abord [`supabase/migrations/20260818_subscriptions_compatibility.sql`](./supabase/migrations/20260818_subscriptions_compatibility.sql) dans une nouvelle requête SQL, puis relancez intégralement `supabase/schema.sql`. Cette migration ajoute de façon idempotente les colonnes historiques de facturation avant la création de l’index Stripe.
+
 Vérifiez ensuite dans **Table Editor** les résultats suivants :
 
 | Élément | Vérification attendue |
