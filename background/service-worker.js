@@ -17,6 +17,8 @@ import { migrateLocalData } from '../shared/migration-service.js';
 
 const POMODORO_ALARM = 'aitools-pomodoro-complete';
 const TASK_REMINDER_PREFIX = 'aitools-task-reminder:';
+let pomodoroCompletionInFlight = null;
+let pomodoroCompletionEndAt = null;
 const DEFAULT_POMODORO = { status: 'idle', durationMs: 25 * 60_000, remainingMs: 25 * 60_000, endAt: null, cycle: 'focus' };
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -40,12 +42,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== POMODORO_ALARM) return;
   const state = await getPomodoro();
   if (state.status !== 'running') return;
-  const done = { ...state, status: 'done', remainingMs: 0, endAt: null };
-  await savePomodoro(done);
-  const activeTask = (await listTasks({ includeDone: false })).find((task) => task.active);
-  await recordFocusSession({ durationMs: state.durationMs, taskId: activeTask?.id, taskTitle: activeTask?.title });
-  const settings = (await chrome.storage.local.get(STORAGE_KEYS.settings))[STORAGE_KEYS.settings] || {};
-  if (settings.notifications !== false) chrome.notifications.create({ type: 'basic', iconUrl: 'assets/icon-128.png', title: 'Pomodoro terminé', message: state.cycle === 'focus' ? 'Session terminée. Accordez-vous une pause.' : 'Pause terminée. Prêt pour une nouvelle session ?' });
+  await completePomodoro(state, { notify: true });
 });
 
 chrome.commands.onCommand.addListener(async (command) => {
@@ -138,11 +135,7 @@ async function openCommandLauncher() {
 
 async function getPomodoro() {
   const state = (await chrome.storage.local.get(STORAGE_KEYS.pomodoro))[STORAGE_KEYS.pomodoro] || DEFAULT_POMODORO;
-  if (state.status === 'running' && state.endAt && state.endAt <= Date.now()) {
-    const done = { ...state, status: 'done', remainingMs: 0, endAt: null };
-    await savePomodoro(done);
-    return done;
-  }
+  if (state.status === 'running' && state.endAt && state.endAt <= Date.now()) return completePomodoro(state, { notify: true });
   return state.status === 'running' ? { ...state, remainingMs: Math.max(0, state.endAt - Date.now()) } : state;
 }
 
@@ -167,6 +160,28 @@ async function resetPomodoro(durationMinutes = 25, cycle = 'focus') {
 }
 
 async function savePomodoro(state) { await chrome.storage.local.set({ [STORAGE_KEYS.pomodoro]: state }); }
+
+function completePomodoro(state, { notify = false } = {}) {
+  if (!pomodoroCompletionInFlight || pomodoroCompletionEndAt !== state.endAt) {
+    pomodoroCompletionEndAt = state.endAt;
+    pomodoroCompletionInFlight = completePomodoroOnce(state, { notify }).finally(() => { pomodoroCompletionInFlight = null; pomodoroCompletionEndAt = null; });
+  }
+  return pomodoroCompletionInFlight;
+}
+
+async function completePomodoroOnce(state, { notify }) {
+  const done = { ...state, status: 'done', remainingMs: 0, endAt: null };
+  await savePomodoro(done);
+  if (state.cycle === 'focus') {
+    const activeTask = (await listTasks({ includeDone: false })).find((task) => task.active);
+    await recordFocusSession({ durationMs: state.durationMs, taskId: activeTask?.id, taskTitle: activeTask?.title });
+  }
+  if (notify) {
+    const settings = (await chrome.storage.local.get(STORAGE_KEYS.settings))[STORAGE_KEYS.settings] || {};
+    if (settings.notifications !== false) await createNotification({ title: 'Pomodoro terminé', message: state.cycle === 'focus' ? 'Session terminée. Accordez-vous une pause.' : 'Pause terminée. Prêt pour une nouvelle session ?' });
+  }
+  return done;
+}
 
 async function closeDuplicateTabs() {
   const tabs = await chrome.tabs.query({});
@@ -225,7 +240,11 @@ async function rescheduleTaskReminders() {
 
 async function notifyCommand(title, message) {
   const settings = (await chrome.storage.local.get(STORAGE_KEYS.settings))[STORAGE_KEYS.settings] || {};
-  if (settings.notifications !== false) await chrome.notifications.create({ type: 'basic', iconUrl: 'assets/icon-128.png', title, message });
+  if (settings.notifications !== false) await createNotification({ title, message });
+}
+
+async function createNotification({ title, message }) {
+  try { await chrome.notifications.create({ type: 'basic', iconUrl: chrome.runtime.getURL('assets/icon-128.png'), title, message }); } catch { /* Une notification indisponible ne doit pas bloquer l’action locale. */ }
 }
 
 function normalizeError(error) {

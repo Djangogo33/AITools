@@ -1,0 +1,20 @@
+const targets = await (await fetch('http://127.0.0.1:9333/json/list')).json();
+const worker = targets.find((item) => item.type === 'service_worker' && /\/background\/service-worker\.js$/.test(item.url));
+const extensionId = worker?.url.match(/^chrome-extension:\/\/([^/]+)\//)?.[1];
+if (!extensionId) throw new Error('Service worker AITools introuvable.');
+const popup = targets.find((item) => item.type === 'page' && item.url === `chrome-extension://${extensionId}/popup/index.html`);
+if (!popup) throw new Error('Popup AITools introuvable dans Chromium.');
+const ws = new WebSocket(popup.webSocketDebuggerUrl);
+await new Promise((resolve, reject) => { ws.addEventListener('open', resolve, { once: true }); ws.addEventListener('error', reject, { once: true }); });
+let sequence = 0;
+function command(method, params = {}) { const id = ++sequence; return new Promise((resolve, reject) => { const listener = (event) => { const message = JSON.parse(event.data); if (message.id !== id) return; ws.removeEventListener('message', listener); if (message.error) reject(new Error(message.error.message)); else resolve(message.result); }; ws.addEventListener('message', listener); ws.send(JSON.stringify({ id, method, params })); }); }
+await command('Runtime.enable');
+const result = await command('Runtime.evaluate', { expression: `(async () => { const send = (type, extra = {}) => new Promise((resolve) => chrome.runtime.sendMessage({ type, ...extra }, (response) => resolve(response || { ok: false, error: chrome.runtime.lastError?.message || 'sans réponse' }))); const before = await send('focus/stats', { days: 1 }); await chrome.storage.local.set({ 'aitools.pomodoro': { status: 'running', durationMs: 60000, remainingMs: 1, endAt: Date.now() - 1000, cycle: 'focus' } }); const first = await Promise.all([send('pomodoro/get'), send('pomodoro/get'), send('pomodoro/get')]); const after = await send('focus/stats', { days: 1 }); const second = await send('pomodoro/get'); const final = await send('focus/stats', { days: 1 }); return { before, first, after, second, final }; })()`, awaitPromise: true, returnByValue: true });
+ws.close();
+const data = result.result.value;
+console.log(JSON.stringify(data, null, 2));
+const beforeSessions = Number(data?.before?.data?.sessions || 0);
+const afterSessions = Number(data?.after?.data?.sessions || 0);
+const finalSessions = Number(data?.final?.data?.sessions || 0);
+if (!data?.first?.every((response) => response?.ok && response?.data?.status === 'done') || data?.second?.data?.status !== 'done' || afterSessions !== beforeSessions + 1 || finalSessions !== afterSessions) throw new Error('La reprise Pomodoro ne garantit pas une finalisation unique.');
+console.log('runtime pomodoro recovery audit: ok');

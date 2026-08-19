@@ -28,6 +28,11 @@ assert.equal(result.status.state, 'success');
 assert.ok(urls.some((url) => url.includes('/rest/v1/tasks') && url.includes('limit=250')));
 assert.ok(urls.some((url) => url.includes('/rest/v1/reading_items') && url.includes('limit=250')));
 assert.ok(urls.some((url) => url.includes('/rest/v1/workspaces') && url.includes('limit=80')));
+assert.ok(urls.filter((url) => url.includes('limit=')).every((url) => url.includes('user_id=eq.00000000-0000-4000-8000-000000000001')));
+
+urls.length = 0;
+await Promise.all([syncPersonalData(), syncPersonalData(), syncPersonalData()]);
+assert.equal(urls.filter((url) => url.includes('/rest/v1/') && !url.includes('on_conflict')).length, 4);
 
 mode = 'invalid'; urls.length = 0;
 await assert.rejects(() => syncPersonalData(), /Réponse distante invalide/);

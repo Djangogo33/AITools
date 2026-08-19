@@ -5,13 +5,19 @@ import { recordDiagnostic } from './diagnostics-service.js';
 const SYNC_STATUS_KEY = 'aitools.personal-sync-status';
 const REQUEST_TIMEOUT_MS = 12_000;
 const DELETE_CONCURRENCY = 20;
+let syncInFlight = null;
 const SOURCES = {
   tasks: { localKey: 'aitools.tasks', deletedPrefix: 'aitools.tasks.deleted.', table: 'tasks', max: 250, toRemote: taskToRemote, fromRemote: taskFromRemote },
   reading: { localKey: 'aitools.reading-list', deletedPrefix: 'aitools.reading.deleted.', table: 'reading_items', max: 250, toRemote: readingToRemote, fromRemote: readingFromRemote },
   workspaces: { localKey: 'aitools.workspaces', deletedPrefix: 'aitools.workspaces.deleted.', table: 'workspaces', max: 80, toRemote: workspaceToRemote, fromRemote: workspaceFromRemote }
 };
 
-export async function syncPersonalData() {
+export function syncPersonalData() {
+  if (!syncInFlight) syncInFlight = syncPersonalDataOnce().finally(() => { syncInFlight = null; });
+  return syncInFlight;
+}
+
+async function syncPersonalDataOnce() {
   const session = await getValidSession();
   if (!session?.user?.id) throw new Error('Connectez-vous pour synchroniser vos données personnelles.');
   const outcomes = {};
@@ -68,10 +74,10 @@ async function syncPreferences(session) {
   return { count: 1, direction: useRemote ? 'remote' : 'local' };
 }
 
-async function fetchRemote(source, session) { const endpoint = new URL(`${SUPABASE_CONFIG.url}/rest/v1/${source.table}`); endpoint.searchParams.set('select', '*'); endpoint.searchParams.set('order', 'updated_at.desc'); endpoint.searchParams.set('limit', String(source.max)); const response = await fetchWithTimeout(endpoint, { headers: headers(session.access_token) }); if (!response.ok) throw await responseError(response, 'Lecture distante impossible.'); const payload = await response.json(); if (!Array.isArray(payload)) throw new Error('Réponse distante invalide.'); return payload.map(source.fromRemote); }
+async function fetchRemote(source, session) { const endpoint = new URL(`${SUPABASE_CONFIG.url}/rest/v1/${source.table}`); endpoint.searchParams.set('select', '*'); endpoint.searchParams.set('user_id', `eq.${session.user.id}`); endpoint.searchParams.set('order', 'updated_at.desc'); endpoint.searchParams.set('limit', String(source.max)); const response = await fetchWithTimeout(endpoint, { headers: headers(session.access_token) }); if (!response.ok) throw await responseError(response, 'Lecture distante impossible.'); const payload = await response.json(); if (!Array.isArray(payload)) throw new Error('Réponse distante invalide.'); return payload.map(source.fromRemote); }
 async function upsertRemote(source, session, items) { if (!items.length) return; const payload = items.map((item) => source.toRemote(item, session.user.id)); const response = await fetchWithTimeout(`${SUPABASE_CONFIG.url}/rest/v1/${source.table}?on_conflict=id`, { method: 'POST', headers: { ...headers(session.access_token), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify(payload) }); if (!response.ok) throw await responseError(response, 'Enregistrement distant impossible.'); }
-async function deleteRemote(table, session, id) { const endpoint = new URL(`${SUPABASE_CONFIG.url}/rest/v1/${table}`); endpoint.searchParams.set('id', `eq.${id}`); const response = await fetchWithTimeout(endpoint, { method: 'DELETE', headers: headers(session.access_token) }); if (!response.ok) throw await responseError(response, 'Suppression distante impossible.'); }
-async function fetchRemotePreference(session) { const endpoint = new URL(`${SUPABASE_CONFIG.url}/rest/v1/user_preferences`); endpoint.searchParams.set('select', 'settings,updated_at'); endpoint.searchParams.set('limit', '1'); const response = await fetchWithTimeout(endpoint, { headers: headers(session.access_token) }); if (!response.ok) throw await responseError(response, 'Lecture des préférences distante impossible.'); const payload = await response.json(); if (!Array.isArray(payload)) throw new Error('Réponse de préférences invalide.'); const [item] = payload; return item ? { settings: item.settings, updatedAt: item.updated_at } : null; }
+async function deleteRemote(table, session, id) { const endpoint = new URL(`${SUPABASE_CONFIG.url}/rest/v1/${table}`); endpoint.searchParams.set('id', `eq.${id}`); endpoint.searchParams.set('user_id', `eq.${session.user.id}`); const response = await fetchWithTimeout(endpoint, { method: 'DELETE', headers: headers(session.access_token) }); if (!response.ok) throw await responseError(response, 'Suppression distante impossible.'); }
+async function fetchRemotePreference(session) { const endpoint = new URL(`${SUPABASE_CONFIG.url}/rest/v1/user_preferences`); endpoint.searchParams.set('select', 'settings,updated_at'); endpoint.searchParams.set('user_id', `eq.${session.user.id}`); endpoint.searchParams.set('limit', '1'); const response = await fetchWithTimeout(endpoint, { headers: headers(session.access_token) }); if (!response.ok) throw await responseError(response, 'Lecture des préférences distante impossible.'); const payload = await response.json(); if (!Array.isArray(payload)) throw new Error('Réponse de préférences invalide.'); const [item] = payload; return item ? { settings: item.settings, updatedAt: item.updated_at } : null; }
 async function upsertRemotePreference(session, settings) { const response = await fetchWithTimeout(`${SUPABASE_CONFIG.url}/rest/v1/user_preferences?on_conflict=user_id`, { method: 'POST', headers: { ...headers(session.access_token), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' }, body: JSON.stringify([{ user_id: session.user.id, settings, updated_at: settings.updatedAt }]) }); if (!response.ok) throw await responseError(response, 'Enregistrement des préférences distant impossible.'); }
 async function fetchWithTimeout(url, options = {}) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS); try { return await fetch(url, { ...options, signal: controller.signal }); } catch (error) { if (error?.name === 'AbortError') throw new Error('La synchronisation a expiré après 12 secondes.'); throw error; } finally { clearTimeout(timer); } }
 

@@ -1,0 +1,3 @@
+# Le webhook Stripe n’envoie pas de JWT Supabase. Sa signature est validée dans stripe-webhook/index.ts.
+[functions.stripe-webhook]
+verify_jwt = false

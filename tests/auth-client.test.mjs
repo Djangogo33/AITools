@@ -38,7 +38,7 @@ globalThis.fetch = async (url, options = {}) => {
 
 function json(payload, status = 200) { return new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } }); }
 
-const { signInWithGoogle, isFeatureAllowed, signOut } = await import('../shared/auth-client.js');
+const { signInWithGoogle, isFeatureAllowed, signOut, getAccount, getValidSession } = await import('../shared/auth-client.js');
 const account = await signInWithGoogle();
 assert.equal(account.authenticated, true);
 assert.equal(account.user.email, 'alex@example.com');
@@ -48,4 +48,27 @@ assert.equal(await isFeatureAllowed('ai_chat'), false);
 const guest = await signOut();
 assert.equal(guest.authenticated, false);
 assert.ok(requests.some(({ url }) => url.includes('/auth/v1/logout')));
+
+chrome.identity.launchWebAuthFlow = async () => 'https://redirect-inattendu.example/auth?code=ignored';
+await assert.rejects(() => signInWithGoogle(), /redirection de connexion reçue est invalide/);
+
+let refreshCalls = 0;
+store.set('aitools.auth.session', { access_token: 'expired-access', refresh_token: 'expired-refresh', expires_at: Date.now() - 1, user: { id: 'user-1', email: 'alex@example.com', user_metadata: { full_name: 'Alex Martin' } } });
+globalThis.fetch = async (url, options = {}) => {
+  if (String(url).includes('/auth/v1/token?grant_type=refresh_token')) { refreshCalls += 1; return json({ access_token: 'renewed-access', refresh_token: 'renewed-refresh', expires_in: 3600, user: { id: 'user-1', email: 'alex@example.com', user_metadata: { full_name: 'Alex Martin' } } }); }
+  throw new Error(`Unexpected request: ${url}`);
+};
+const refreshed = await Promise.all([getValidSession(), getValidSession(), getValidSession()]);
+assert.equal(refreshCalls, 1);
+assert.ok(refreshed.every((session) => session.access_token === 'renewed-access'));
+
+store.delete('aitools.auth.account-cache');
+globalThis.fetch = async (url) => {
+  if (String(url).includes('/rest/v1/profiles') || String(url).includes('/rest/v1/subscriptions')) return json({ message: 'indisponible' }, 503);
+  throw new Error(`Unexpected request: ${url}`);
+};
+const degradedAccount = await getAccount({ force: true });
+assert.equal(degradedAccount.authenticated, true);
+assert.equal(degradedAccount.user.name, 'Alex Martin');
+assert.equal(degradedAccount.plan, 'free');
 console.log('auth-client integration simulation: ok');

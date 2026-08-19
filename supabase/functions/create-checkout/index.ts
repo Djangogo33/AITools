@@ -9,7 +9,7 @@ Deno.serve(async (request) => {
     const user = await requireUser(request);
     const { plan } = await request.json();
     const priceId = priceForPlan(plan);
-    const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '');
+    const stripe = new Stripe(requiredEnv('STRIPE_SECRET_KEY'));
     const admin = adminClient();
     const { data: subscriptions, error } = await admin.from('subscriptions').select('provider_customer_id').eq('user_id', user.id).not('provider_customer_id', 'is', null).limit(1);
     if (error) throw error;

@@ -9,6 +9,9 @@ const PLAN_ENTITLEMENTS = {
   max: [...FREE_ENTITLEMENTS, 'note_sync', 'custom_shortcuts', 'ai_summarizer', 'ai_translator', 'ai_chat', 'priority_features']
 };
 
+let refreshInFlight = null;
+let refreshInFlightToken = null;
+
 export async function signInWithGoogle() {
   const verifier = createCodeVerifier();
   const challenge = await createCodeChallenge(verifier);
@@ -24,6 +27,8 @@ export async function signInWithGoogle() {
   try {
     const responseUrl = await chrome.identity.launchWebAuthFlow({ url: authorizationUrl.toString(), interactive: true });
     const callback = new URL(responseUrl);
+    const expectedRedirect = new URL(redirectTo);
+    if (callback.origin !== expectedRedirect.origin || callback.pathname !== expectedRedirect.pathname) throw new Error('La redirection de connexion reçue est invalide.');
     const authError = callback.searchParams.get('error_description') || callback.searchParams.get('error');
     if (authError) throw new Error(authError);
     const code = callback.searchParams.get('code');
@@ -42,8 +47,9 @@ export async function getAccount({ force = false } = {}) {
   const cached = (await chrome.storage.local.get(SUPABASE_STORAGE_KEYS.accountCache))[SUPABASE_STORAGE_KEYS.accountCache];
   if (!force && cached?.user?.id === session.user?.id && Date.now() - cached.cachedAt < 60_000) return cached;
 
-  const profile = await getOrCreateProfile(session);
-  const subscription = await getSubscription(session);
+  const [profileResult, subscriptionResult] = await Promise.allSettled([getOrCreateProfile(session), getSubscription(session)]);
+  const profile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+  const subscription = subscriptionResult.status === 'fulfilled' ? subscriptionResult.value : { plan: 'free', entitlements: FREE_ENTITLEMENTS, expiresAt: null };
   const account = {
     authenticated: true,
     user: normalizeUser(session.user, profile),
@@ -61,11 +67,9 @@ export async function getValidSession() {
   if (!stored?.access_token || !stored?.refresh_token) return null;
   if (Number(stored.expires_at || 0) - Date.now() > CLOCK_SKEW_MS) return stored;
   try {
-    const refreshed = await refreshSession(stored.refresh_token);
-    await persistSession(refreshed);
-    return refreshed;
+    return await refreshStoredSession(stored);
   } catch {
-    await clearSession();
+    await clearSessionIfMatchingRefreshToken(stored.refresh_token);
     return null;
   }
 }
@@ -144,6 +148,14 @@ function normalizePlan(subscription) {
   return isCurrent && PLAN_ENTITLEMENTS[candidate] ? candidate : 'free';
 }
 
+async function refreshStoredSession(stored) {
+  if (!refreshInFlight || refreshInFlightToken !== stored.refresh_token) {
+    refreshInFlightToken = stored.refresh_token;
+    refreshInFlight = refreshSession(stored.refresh_token).then(persistSession).finally(() => { refreshInFlight = null; refreshInFlightToken = null; });
+  }
+  return refreshInFlight;
+}
+
 async function persistSession(session) {
   const normalized = { ...session, expires_at: session.expires_at ? Number(session.expires_at) * 1000 : Date.now() + Number(session.expires_in || 3600) * 1000 };
   await chrome.storage.local.set({ [SUPABASE_STORAGE_KEYS.session]: normalized });
@@ -151,6 +163,7 @@ async function persistSession(session) {
 }
 
 async function clearSession() { await chrome.storage.local.remove([SUPABASE_STORAGE_KEYS.session, SUPABASE_STORAGE_KEYS.accountCache, SUPABASE_STORAGE_KEYS.pkceVerifier]); }
+async function clearSessionIfMatchingRefreshToken(refreshToken) { const current = (await chrome.storage.local.get(SUPABASE_STORAGE_KEYS.session))[SUPABASE_STORAGE_KEYS.session]; if (current?.refresh_token === refreshToken) await clearSession(); }
 function createGuestAccount() { return { authenticated: false, user: null, plan: 'free', entitlements: FREE_ENTITLEMENTS, expiresAt: null, cachedAt: Date.now() }; }
 function normalizeUser(user, profile) { const metadata = user?.user_metadata || {}; return { id: user.id, email: user.email || '', name: profile?.display_name || metadata.full_name || metadata.name || user.email?.split('@')[0] || 'Utilisateur', avatarUrl: profile?.avatar_url || metadata.avatar_url || metadata.picture || null }; }
 function authHeaders(token) { return { apikey: SUPABASE_CONFIG.publishableKey, Authorization: `Bearer ${token}` }; }

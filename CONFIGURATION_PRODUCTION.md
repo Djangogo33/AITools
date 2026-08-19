@@ -126,10 +126,10 @@ supabase login
 supabase link --project-ref <project-ref>
 supabase functions deploy create-checkout
 supabase functions deploy create-portal
-supabase functions deploy stripe-webhook --no-verify-jwt
+supabase functions deploy stripe-webhook
 ```
 
-Les deux premières fonctions conservent la vérification JWT par défaut. La fonction `stripe-webhook` reçoit Stripe, pas un utilisateur Supabase, et doit donc être déployée avec `--no-verify-jwt` ; la signature Stripe reste alors la protection obligatoire du endpoint.
+Les deux premières fonctions conservent la vérification JWT par défaut. La fonction `stripe-webhook` reçoit Stripe, pas un utilisateur Supabase : le réglage versionné dans [`supabase/config.toml`](./supabase/config.toml) lui applique `verify_jwt = false`, tandis que la signature Stripe reste la protection obligatoire de l’endpoint.
 
 Dans **Supabase Dashboard → Edge Functions → Secrets**, créez les secrets suivants :
 
@@ -217,15 +217,13 @@ Depuis la racine du dépôt, construisez l’archive avec le manifeste à la rac
 
 ```bash
 cd /chemin/vers/AITools
-zip -r ../AITools-v7.0.zip . \
-  -x '.git/*' '.audit/*' 'tests/*' '.env*' '*.md' 'node_modules/*' \
-  -x '.chrome-validation.md'
+zip -rq ../AITools-v8.0.1.zip manifest.json assets background content newtab options popup shared
 ```
 
 Avant l’import Web Store, vérifiez que l’archive contient `manifest.json` au premier niveau :
 
 ```bash
-unzip -l ../AITools-v7.0.zip | head -30
+unzip -l ../AITools-v8.0.1.zip | head -30
 ```
 
 Dans le Chrome Web Store Developer Dashboard, créez l’élément, chargez le ZIP, ajoutez des captures d’écran, une politique de confidentialité, une explication honnête de chaque permission et les mentions concernant le traitement local de l’IA. Après attribution de l’ID définitif, retournez aux étapes 1 et 3 pour mettre à jour le client OAuth et l’URL de redirection de production.

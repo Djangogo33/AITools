@@ -39,7 +39,7 @@ Aucun compte n’est requis pour les six modules. Après une authentification Go
 
 Avant d’activer cette synchronisation, appliquez le schéma [`supabase/schema.sql`](./supabase/schema.sql) puis, pour une base déjà existante, la migration de reprise [`supabase/migrations/20260818_subscriptions_compatibility.sql`](./supabase/migrations/20260818_subscriptions_compatibility.sql). Les fonctions Edge Stripe restent à déployer côté Supabase avant de proposer un checkout ou un portail client.
 
-Les procédures complètes se trouvent dans [`CONFIGURATION_PRODUCTION.md`](./CONFIGURATION_PRODUCTION.md). Les documents de publication et de conformité sont [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) et [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). L’état de l’intégration distante est résumé dans [`SUPABASE_INTEGRATION_AUDIT_V7.md`](./SUPABASE_INTEGRATION_AUDIT_V7.md).
+La checklist opérationnelle ordonnée est dans [`FINALISATION_V8.md`](./FINALISATION_V8.md). Les procédures détaillées se trouvent dans [`CONFIGURATION_PRODUCTION.md`](./CONFIGURATION_PRODUCTION.md). Les documents de publication et de conformité sont [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) et [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). L’état de l’intégration distante est résumé dans [`SUPABASE_INTEGRATION_AUDIT_V7.md`](./SUPABASE_INTEGRATION_AUDIT_V7.md).
 
 ## Vérification de développement
 
