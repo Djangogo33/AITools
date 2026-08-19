@@ -1,4 +1,4 @@
-import { getPomodoroMinutes, getSettings, saveSettings } from '../shared/constants.js';
+import { getNewTabDestination, getNewTabSearchEngine, getNewTabSearchUrl, getPomodoroMinutes, getSettings, saveSettings } from '../shared/constants.js';
 import { getAIStatus } from '../popup/ai-runtime.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -13,6 +13,7 @@ async function init() {
   $('#option-compact').checked = settings.compactMode === true;
   $('#option-notifications').checked = settings.notifications !== false;
   $('#option-pomodoro-duration').value = getPomodoroMinutes(settings);
+  renderNewTabSettings(settings);
   bindActions(); await Promise.all([renderAIStatus(), renderAccount(), renderFocusStats(), renderWeeklyReview(), renderDndSettings(), renderTabRules(), renderPersonalSyncStatus()]);
 }
 
@@ -21,6 +22,8 @@ function bindActions() {
   $('#option-compact').addEventListener('change', (event) => saveSetting({ compactMode: event.target.checked }));
   $('#option-notifications').addEventListener('change', (event) => saveSetting({ notifications: event.target.checked }));
   $('#option-pomodoro-duration').addEventListener('change', async (event) => { const settings = await saveSettings({ pomodoroMinutes: event.target.value }); event.target.value = getPomodoroMinutes(settings); showToast(`Durée Pomodoro définie à ${event.target.value} minutes.`); });
+  $('#option-newtab-destination').addEventListener('change', async (event) => { const settings = await saveSettings({ newTabDestination: event.target.value }); renderNewTabSettings(settings); showToast('Destination du nouvel onglet enregistrée.'); });
+  $('#option-newtab-engine').addEventListener('change', async (event) => { const settings = await saveSettings({ newTabSearchEngine: event.target.value }); renderNewTabSettings(settings); showToast('Moteur de recherche enregistré.'); });
   $('#option-page-dark').addEventListener('click', () => runPageAction('page/toggle-dark', 'Mode sombre de la page mis à jour.'));
   $('#option-cookies').addEventListener('click', () => runPageAction('page/dismiss-cookies', 'Bannières de consentement masquées.'));
   $('#option-sponsored').addEventListener('click', () => runPageAction('page/block-sponsored', 'Résultats sponsorisés masqués.'));
@@ -40,6 +43,20 @@ function bindActions() {
   $('#option-save-dnd').addEventListener('click', saveDndSettings);
   $('#option-add-tab-rule').addEventListener('click', createTabRule);
   $('#option-apply-tab-rules').addEventListener('click', applyTabRules);
+}
+
+function renderNewTabSettings(settings) {
+  const destination = getNewTabDestination(settings);
+  const engine = getNewTabSearchEngine(settings);
+  $('#option-newtab-destination').value = destination;
+  $('#option-newtab-engine').value = engine;
+  $('#option-newtab-engine-row').hidden = destination !== 'search';
+  const note = destination === 'dashboard'
+    ? 'Le tableau de bord AITools s’affichera à chaque nouvel onglet.'
+    : destination === 'native'
+      ? 'La page Nouvel onglet interne de Chrome s’affichera ; AITools reste accessible depuis son icône.'
+      : `La page d’accueil ${$('#option-newtab-engine').selectedOptions[0]?.textContent || engine} s’ouvrira à chaque nouvel onglet (${getNewTabSearchUrl(settings)}).`;
+  $('#option-newtab-note').textContent = note;
 }
 
 async function syncPersonalWorkspace() { try { const response = await chrome.runtime.sendMessage({ type: 'personal/sync' }); await renderPersonalSyncStatus(); if (!response?.ok) return showToast(response?.error || 'Synchronisation impossible.'); const data = response.data || {}; const tasksCount = Number(data.tasks?.count || 0); const readingCount = Number(data.reading?.count || 0); const workspacesCount = Number(data.workspaces?.count || 0); showToast(`${tasksCount} tâche(s), ${readingCount} page(s), ${workspacesCount} espace(s) et vos préférences sont synchronisés.`); } catch (error) { await renderPersonalSyncStatus(); showToast(error.message || 'Synchronisation impossible.'); } }

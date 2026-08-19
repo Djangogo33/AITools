@@ -4,11 +4,23 @@ export const STORAGE_KEYS = {
   pomodoro: 'aitools.pomodoro'
 };
 
+export const NEW_TAB_DESTINATIONS = ['dashboard', 'native', 'search'];
+export const NEW_TAB_SEARCH_ENGINES = {
+  google: { label: 'Google', url: 'https://www.google.com/' },
+  qwant: { label: 'Qwant', url: 'https://www.qwant.com/' },
+  brave: { label: 'Brave Search', url: 'https://search.brave.com/' },
+  bing: { label: 'Bing', url: 'https://www.bing.com/' },
+  duckduckgo: { label: 'DuckDuckGo', url: 'https://duckduckgo.com/' },
+  ecosia: { label: 'Ecosia', url: 'https://www.ecosia.org/' }
+};
+
 export const DEFAULT_SETTINGS = {
   theme: 'dark',
   notifications: true,
   compactMode: false,
   pomodoroMinutes: 25,
+  newTabDestination: 'dashboard',
+  newTabSearchEngine: 'google',
   quickLinks: [
     { id: 'chatgpt', label: 'ChatGPT', url: 'https://chatgpt.com', tone: 'violet' },
     { id: 'perplexity', label: 'Perplexity', url: 'https://www.perplexity.ai', tone: 'blue' },
@@ -33,6 +45,10 @@ export const MESSAGE_TYPES = {
   pomodoroTick: 'pomodoro/tick',
   pomodoroState: 'pomodoro/state'
 };
+
+export function getNewTabDestination(settings) { return NEW_TAB_DESTINATIONS.includes(settings?.newTabDestination) ? settings.newTabDestination : DEFAULT_SETTINGS.newTabDestination; }
+export function getNewTabSearchEngine(settings) { return Object.hasOwn(NEW_TAB_SEARCH_ENGINES, settings?.newTabSearchEngine) ? settings.newTabSearchEngine : DEFAULT_SETTINGS.newTabSearchEngine; }
+export function getNewTabSearchUrl(settings) { return NEW_TAB_SEARCH_ENGINES[getNewTabSearchEngine(settings)].url; }
 
 export function getPomodoroMinutes(settings) {
   const value = Number(settings?.pomodoroMinutes);
@@ -60,6 +76,8 @@ export async function getSettings() {
 export async function saveSettings(patch) {
   const normalizedPatch = { ...patch };
   if (Object.hasOwn(normalizedPatch, 'pomodoroMinutes')) normalizedPatch.pomodoroMinutes = getPomodoroMinutes(normalizedPatch);
+  if (Object.hasOwn(normalizedPatch, 'newTabDestination')) normalizedPatch.newTabDestination = getNewTabDestination(normalizedPatch);
+  if (Object.hasOwn(normalizedPatch, 'newTabSearchEngine')) normalizedPatch.newTabSearchEngine = getNewTabSearchEngine(normalizedPatch);
   const settings = { ...(await getSettings()), ...normalizedPatch, updatedAt: new Date().toISOString() };
   await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });
   return settings;

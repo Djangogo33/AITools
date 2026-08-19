@@ -41,6 +41,10 @@ Avant d’activer cette synchronisation, appliquez le schéma [`supabase/schema.
 
 La checklist opérationnelle ordonnée est dans [`FINALISATION_V8.md`](./FINALISATION_V8.md). Les procédures détaillées se trouvent dans [`CONFIGURATION_PRODUCTION.md`](./CONFIGURATION_PRODUCTION.md). Les documents de publication et de conformité sont [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) et [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). L’état de l’intégration distante est résumé dans [`SUPABASE_INTEGRATION_AUDIT_V7.md`](./SUPABASE_INTEGRATION_AUDIT_V7.md).
 
+### Destination du nouvel onglet
+
+Dans **Préférences → Nouvel onglet**, choisissez l’une des destinations suivantes : le **tableau de bord AITools** (valeur par défaut), la page interne de **Nouvel onglet Chrome** ou la page d’accueil d’un moteur de recherche. Les moteurs proposés sont Google, Qwant, Brave Search, Bing, DuckDuckGo et Ecosia. Le choix est local au profil Chrome et prend effet au prochain onglet créé.
+
 ## Vérification de développement
 
 Les audits automatisés couvrent la syntaxe JavaScript, les services locaux, les préférences, les notes, les tâches récurrentes, la boîte À traiter, la lecture, les espaces de travail, l’IA locale, la synchronisation personnelle et les routes du service worker. Les audits Chromium valident également le rendu des six modules, le résumé de page, la transformation JSON et l’inventaire d’images, de vidéos et d’audios sur une fixture HTTP contrôlée.

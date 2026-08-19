@@ -1,0 +1,15 @@
+const endpoint = 'http://127.0.0.1:9333';
+const targets = await (await fetch(`${endpoint}/json/list`)).json();
+const worker = targets.find((item) => item.type === 'service_worker' && /\/background\/service-worker\.js$/.test(item.url));
+const extensionId = worker?.url.match(/^chrome-extension:\/\/([^/]+)\//)?.[1];
+if (!extensionId) throw new Error('Service worker AITools introuvable.');
+const options = await (await fetch(`${endpoint}/json/new?chrome-extension://${extensionId}/options/index.html`, { method: 'PUT' })).json();
+const socket = new WebSocket(options.webSocketDebuggerUrl);
+await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
+let sequence = 0;
+function evaluate(expression) { const id = ++sequence; return new Promise((resolve, reject) => { const listener = (event) => { const message = JSON.parse(event.data); if (message.id !== id) return; socket.removeEventListener('message', listener); if (message.error) reject(new Error(message.error.message)); else resolve(message.result.result?.value); }; socket.addEventListener('message', listener); socket.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true } })); }); }
+const result = await evaluate(`(async () => { const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms)); await delay(250); const destination = document.querySelector('#option-newtab-destination'); const engine = document.querySelector('#option-newtab-engine'); const engineRow = document.querySelector('#option-newtab-engine-row'); if (!destination || !engine || !engineRow) return { missing: true }; destination.value = 'search'; destination.dispatchEvent(new Event('change', { bubbles: true })); await delay(100); engine.value = 'brave'; engine.dispatchEvent(new Event('change', { bubbles: true })); await delay(160); const searchState = await chrome.storage.local.get('aitools.settings'); const visibleForSearch = !engineRow.hidden; destination.value = 'dashboard'; destination.dispatchEvent(new Event('change', { bubbles: true })); await delay(120); const dashboardState = await chrome.storage.local.get('aitools.settings'); return { searchState: searchState['aitools.settings'], dashboardState: dashboardState['aitools.settings'], visibleForSearch, hiddenForDashboard: engineRow.hidden, note: document.querySelector('#option-newtab-note')?.textContent }; })()`);
+socket.close();
+console.log(JSON.stringify(result, null, 2));
+if (result?.missing || result?.searchState?.newTabDestination !== 'search' || result?.searchState?.newTabSearchEngine !== 'brave' || !result.visibleForSearch || result?.dashboardState?.newTabDestination !== 'dashboard' || !result.hiddenForDashboard) throw new Error('Les préférences de nouvel onglet ne sont pas enregistrées ou affichées correctement.');
+console.log('runtime options new tab settings audit: ok');

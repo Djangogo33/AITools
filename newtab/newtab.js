@@ -1,4 +1,4 @@
-import { getPomodoroMinutes, getQuickLinks, getSettings } from '../shared/constants.js';
+import { getNewTabDestination, getNewTabSearchUrl, getPomodoroMinutes, getQuickLinks, getSettings } from '../shared/constants.js';
 import { buildGoogleUrl } from '../shared/search-service.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -8,8 +8,20 @@ let pomodoroTimer;
 init();
 
 async function init() {
+  const settings = await getSettings();
+  if (await redirectConfiguredDestination(settings)) return;
   renderDate(); bindActions();
   await Promise.all([renderAccount(), renderToday(), renderShortcuts(), renderNotes(), renderReadingList(), renderTasks(), refreshPomodoro()]);
+}
+
+async function redirectConfiguredDestination(settings) {
+  const destination = getNewTabDestination(settings);
+  if (destination === 'search') { location.replace(getNewTabSearchUrl(settings)); return true; }
+  if (destination !== 'native') return false;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: 'newtab/open-native' });
+    return response?.ok === true;
+  } catch { return false; }
 }
 
 function bindActions() {

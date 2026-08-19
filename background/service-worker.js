@@ -63,7 +63,7 @@ chrome.commands.onCommand.addListener(async (command) => {
 chrome.tabs.onActivated.addListener(async ({ tabId }) => { await applyDndToTab(tabId); });
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => { if (changeInfo.status === 'complete' && tab.active) await applyDndToTab(tabId, tab.url); });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
     'auth/get-account': () => getAccount(),
     'auth/sign-in-google': () => signInWithGoogle(),
@@ -118,13 +118,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     'pomodoro/reset': () => resetPomodoro(message.durationMinutes, message.cycle),
     'tabs/close-duplicates': () => closeDuplicateTabs(),
     'tabs/group-by-domain': () => groupTabsByDomain(),
-    'tabs/get-stats': () => getTabStats()
+    'tabs/get-stats': () => getTabStats(),
+    'newtab/open-native': () => openNativeNewTab(sender.tab?.id)
   };
   const handler = handlers[message?.type];
   if (!handler) return false;
   handler().then((data) => sendResponse({ ok: true, data })).catch((error) => sendResponse({ ok: false, error: normalizeError(error) }));
   return true;
 });
+
+async function openNativeNewTab(tabId) {
+  if (!Number.isInteger(tabId)) throw new Error('Onglet de nouvel onglet introuvable.');
+  await chrome.tabs.update(tabId, { url: 'chrome-search://local-ntp/local-ntp.html' });
+  return { redirected: true };
+}
 
 async function openCommandLauncher() {
   const url = chrome.runtime.getURL('popup/index.html#command');
