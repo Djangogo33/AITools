@@ -1,4 +1,4 @@
-import { MESSAGE_TYPES, NEW_TAB_SEARCH_ENGINES, STORAGE_KEYS, getPomodoroMinutes, getSettings, isFeatureEnabled } from '../shared/constants.js';
+import { MESSAGE_TYPES, NEW_TAB_SEARCH_ENGINES, STORAGE_KEYS, getPomodoroMinutes, getSettings, isFeatureEnabled, normalizeNewTabCustomUrl } from '../shared/constants.js';
 import { getAccount, isFeatureAllowed, signInWithGoogle, signOut } from '../shared/auth-client.js';
 import { createNote, deleteNote, importGuestNotes, listNotes, syncNotes } from '../shared/notes-service.js';
 import { createCheckout, createPortal } from '../shared/billing-client.js';
@@ -31,7 +31,7 @@ const MESSAGE_FEATURES = {
   'tab-rules/list': 'browser.rules', 'tab-rules/create': 'browser.rules', 'tab-rules/toggle': 'browser.rules', 'tab-rules/remove': 'browser.rules', 'tab-rules/apply': 'browser.rules', 'tabs/close-duplicates': 'browser.duplicates', 'tabs/group-by-domain': 'browser.grouping', 'tabs/get-stats': 'browser.finder',
   'workspaces/list': 'productivity.workspaces', 'workspaces/capture': 'productivity.workspaces', 'workspaces/restore': 'productivity.workspaces', 'workspaces/update': 'productivity.workspaces', 'workspaces/remove': 'productivity.workspaces',
   'tasks/list': 'productivity.tasks', 'tasks/create': 'productivity.tasks', 'tasks/toggle': 'productivity.tasks', 'tasks/update': 'productivity.tasks', 'tasks/remove': 'productivity.tasks', 'tasks/set-active': 'productivity.tasks', 'tasks/clear-completed': 'productivity.tasks',
-  'pomodoro/get': 'productivity.pomodoro', 'pomodoro/toggle': 'productivity.pomodoro', 'pomodoro/reset': 'productivity.pomodoro', 'newtab/open-search': 'newtab.search'
+  'pomodoro/get': 'productivity.pomodoro', 'pomodoro/toggle': 'productivity.pomodoro', 'pomodoro/reset': 'productivity.pomodoro', 'newtab/open-search': 'newtab.search', 'newtab/open-custom': 'newtab.custom'
 };
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -141,7 +141,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     'tabs/group-by-domain': () => groupTabsByDomain(),
     'tabs/get-stats': () => getTabStats(),
     'newtab/open-native': () => openNativeNewTab(sender.tab?.id),
-    'newtab/open-search': () => openNewTabSearch(sender.tab?.id, message.url)
+    'newtab/open-search': () => openNewTabSearch(sender.tab?.id, message.url),
+    'newtab/open-custom': () => openNewTabCustom(sender.tab?.id, message.url)
   };
   const handler = handlers[message?.type];
   if (!handler) return false;
@@ -169,6 +170,13 @@ async function openNewTabSearch(tabId, url) {
   const allowed = Object.values(NEW_TAB_SEARCH_ENGINES).some((engine) => engine.url === url);
   if (!allowed) throw new Error('Moteur de recherche non autorisé.');
   await chrome.tabs.update(await navigationTabId(tabId), { url });
+  return { redirected: true };
+}
+
+async function openNewTabCustom(tabId, url) {
+  const destination = normalizeNewTabCustomUrl(url);
+  if (!destination) throw new Error('URL personnalisée non autorisée.');
+  await chrome.tabs.update(await navigationTabId(tabId), { url: destination });
   return { redirected: true };
 }
 

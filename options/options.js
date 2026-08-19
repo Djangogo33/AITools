@@ -1,4 +1,4 @@
-import { DEFAULT_FEATURE_FLAGS, getFeatureFlags, getFeatureGroups, getNewTabDestination, getNewTabSearchEngine, getNewTabSearchUrl, getPomodoroMinutes, getSettings, isFeatureEnabled, saveSettings } from '../shared/constants.js';
+import { DEFAULT_FEATURE_FLAGS, getFeatureFlags, getFeatureGroups, getNewTabCustomUrl, getNewTabDestination, getNewTabSearchEngine, getNewTabSearchUrl, getPomodoroMinutes, getSettings, isFeatureEnabled, saveSettings } from '../shared/constants.js';
 import { getAIStatus } from '../popup/ai-runtime.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -35,6 +35,7 @@ function bindActions() {
   $('#option-pomodoro-duration').addEventListener('change', async (event) => { const settings = await saveSettings({ pomodoroMinutes: event.target.value }); event.target.value = getPomodoroMinutes(settings); showToast(`Durée Pomodoro définie à ${event.target.value} minutes.`); });
   $('#option-newtab-destination').addEventListener('change', async (event) => { const settings = await saveSettings({ newTabDestination: event.target.value }); renderNewTabSettings(settings); showToast('Destination du nouvel onglet enregistrée.'); });
   $('#option-newtab-engine').addEventListener('change', async (event) => { const settings = await saveSettings({ newTabSearchEngine: event.target.value }); renderNewTabSettings(settings); showToast('Moteur de recherche enregistré.'); });
+  $('#option-newtab-custom-url').addEventListener('change', async (event) => { const entered = event.target.value; const settings = await saveSettings({ newTabCustomUrl: entered }); renderNewTabSettings(settings); const validUrl = getNewTabCustomUrl(settings); showToast(entered.trim() && !validUrl ? 'URL refusée : utilisez HTTPS ou HTTP sur localhost.' : validUrl ? 'URL personnalisée enregistrée.' : 'URL personnalisée effacée.'); });
   $('#option-reset-features').addEventListener('click', async () => { const settings = await saveSettings({ featureFlags: DEFAULT_FEATURE_FLAGS }); renderFeatureCatalog(settings); applyFeatureActionVisibility(settings); renderNewTabSettings(settings); showToast('Toutes les fonctionnalités sont réactivées.'); });
   $('#option-page-dark').addEventListener('click', () => runPageAction('page/toggle-dark', 'Mode sombre de la page mis à jour.'));
   $('#option-cookies').addEventListener('click', () => runPageAction('page/dismiss-cookies', 'Bannières de consentement masquées.'));
@@ -74,18 +75,27 @@ function renderNewTabSettings(settings) {
   $('#option-newtab-engine').value = engine;
   const dashboardEnabled = isFeatureEnabled(settings, 'newtab.dashboard');
   const searchEnabled = isFeatureEnabled(settings, 'newtab.search');
+  const customEnabled = isFeatureEnabled(settings, 'newtab.custom');
+  const customUrl = getNewTabCustomUrl(settings);
+  $('#option-newtab-custom-url').value = customUrl;
   $('#option-newtab-destination').querySelector('[value="dashboard"]').disabled = !dashboardEnabled;
   $('#option-newtab-destination').querySelector('[value="search"]').disabled = !searchEnabled;
+  $('#option-newtab-destination').querySelector('[value="custom"]').disabled = !customEnabled;
   $('#option-newtab-engine-row').hidden = destination !== 'search' || !searchEnabled;
+  $('#option-newtab-custom-row').hidden = destination !== 'custom' || !customEnabled;
   const note = !dashboardEnabled && destination === 'dashboard'
     ? 'Le tableau de bord est désactivé : Chrome ouvrira son nouvel onglet natif.'
     : !searchEnabled && destination === 'search'
       ? 'La redirection moteur est désactivée : Chrome ouvrira son nouvel onglet natif.'
-      : destination === 'dashboard'
-        ? 'Le tableau de bord AITools s’affichera à chaque nouvel onglet.'
-        : destination === 'native'
-          ? 'La page Nouvel onglet interne de Chrome s’affichera ; AITools reste accessible depuis son icône.'
-          : `La page d’accueil ${$('#option-newtab-engine').selectedOptions[0]?.textContent || engine} s’ouvrira à chaque nouvel onglet (${getNewTabSearchUrl(settings)}).`;
+      : !customEnabled && destination === 'custom'
+        ? 'La destination personnalisée est désactivée : Chrome ouvrira son nouvel onglet natif.'
+        : destination === 'dashboard'
+          ? 'Le tableau de bord AITools s’affichera à chaque nouvel onglet.'
+          : destination === 'native'
+            ? 'La page Nouvel onglet interne de Chrome s’affichera ; AITools reste accessible depuis son icône.'
+            : destination === 'custom'
+              ? customUrl ? `Votre destination personnalisée s’ouvrira à chaque nouvel onglet (${customUrl}).` : 'Saisissez une URL HTTPS ou localhost ; tant qu’elle est vide, Chrome ouvrira son nouvel onglet natif.'
+              : `La page d’accueil ${$('#option-newtab-engine').selectedOptions[0]?.textContent || engine} s’ouvrira à chaque nouvel onglet (${getNewTabSearchUrl(settings)}).`;
   $('#option-newtab-note').textContent = note;
 }
 

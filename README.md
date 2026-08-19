@@ -49,7 +49,9 @@ La désactivation masque l’outil dans le popup, le lanceur de commandes, le no
 
 ### Destination du nouvel onglet
 
-Dans **Préférences → Nouvel onglet**, choisissez l’une des destinations suivantes : le **tableau de bord AITools** (valeur par défaut), la page interne de **Nouvel onglet Chrome** ou la page d’accueil d’un moteur de recherche. Les moteurs proposés sont Google, Qwant, Brave Search, Bing, DuckDuckGo et Ecosia. Le choix est local au profil Chrome et prend effet au prochain onglet créé. Si la destination choisie est désactivée dans le catalogue, l’extension bascule sans boucle vers le nouvel onglet natif de Chrome.
+Dans **Préférences → Nouvel onglet**, choisissez l’une des destinations suivantes : le **tableau de bord AITools** (valeur par défaut), la page interne de **Nouvel onglet Chrome**, la page d’accueil d’un moteur de recherche ou une **URL personnalisée**. Les moteurs proposés sont Google, Qwant, Brave Search, Bing, DuckDuckGo, Ecosia et Startpage. L’URL personnalisée accepte HTTPS et, pour le développement local, HTTP sur `localhost` uniquement ; les autres protocoles ou URL HTTP sont refusés.
+
+Le choix est local au profil Chrome et prend effet au prochain onglet créé. La barre de recherche du tableau de bord utilise également le moteur sélectionné ; les catégories Google restent disponibles lorsque Google est choisi. Appuyez sur **/** ou **Ctrl/Cmd + K** pour placer immédiatement le curseur dans la recherche, puis sur **Échap** pour l’effacer. Si la destination choisie est désactivée dans le catalogue, absente ou invalide, l’extension bascule sans boucle vers le nouvel onglet natif de Chrome.
 
 ## Vérification de développement
 

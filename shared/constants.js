@@ -4,14 +4,15 @@ export const STORAGE_KEYS = {
   pomodoro: 'aitools.pomodoro'
 };
 
-export const NEW_TAB_DESTINATIONS = ['dashboard', 'native', 'search'];
+export const NEW_TAB_DESTINATIONS = ['dashboard', 'native', 'search', 'custom'];
 export const NEW_TAB_SEARCH_ENGINES = {
   google: { label: 'Google', url: 'https://www.google.com/' },
   qwant: { label: 'Qwant', url: 'https://www.qwant.com/' },
   brave: { label: 'Brave Search', url: 'https://search.brave.com/' },
   bing: { label: 'Bing', url: 'https://www.bing.com/' },
   duckduckgo: { label: 'DuckDuckGo', url: 'https://duckduckgo.com/' },
-  ecosia: { label: 'Ecosia', url: 'https://www.ecosia.org/' }
+  ecosia: { label: 'Ecosia', url: 'https://www.ecosia.org/' },
+  startpage: { label: 'Startpage', url: 'https://www.startpage.com/' }
 };
 
 export const FEATURE_CATALOG = [
@@ -56,6 +57,7 @@ export const FEATURE_CATALOG = [
   { id: 'search.history', group: 'Recherche', label: 'Historique et opérateurs', description: 'Historique local et requêtes avancées.' },
   { id: 'newtab.dashboard', group: 'Nouvel onglet', label: 'Tableau de bord', description: 'Affichage du tableau de bord AITools.' },
   { id: 'newtab.search', group: 'Nouvel onglet', label: 'Recherche de nouvel onglet', description: 'Redirection vers un moteur choisi.' },
+  { id: 'newtab.custom', group: 'Nouvel onglet', label: 'Destination personnalisée', description: 'URL HTTPS ou service local choisi par l’utilisateur.' },
   { id: 'newtab.shortcuts', group: 'Nouvel onglet', label: 'Raccourcis', description: 'Sites favoris du nouvel onglet.' },
   { id: 'newtab.productivity', group: 'Nouvel onglet', label: 'Widgets productivité', description: 'Notes, tâches, lecture et Pomodoro.' },
   { id: 'service.auth', group: 'Services optionnels', label: 'Connexion Google', description: 'Authentification Supabase via Google.' },
@@ -71,6 +73,7 @@ export const DEFAULT_SETTINGS = {
   pomodoroMinutes: 25,
   newTabDestination: 'dashboard',
   newTabSearchEngine: 'google',
+  newTabCustomUrl: '',
   featureFlags: DEFAULT_FEATURE_FLAGS,
   quickLinks: [
     { id: 'chatgpt', label: 'ChatGPT', url: 'https://chatgpt.com', tone: 'violet' },
@@ -107,6 +110,16 @@ export function getFeatureGroups() { return FEATURE_CATALOG.reduce((groups, feat
 export function getNewTabDestination(settings) { return NEW_TAB_DESTINATIONS.includes(settings?.newTabDestination) ? settings.newTabDestination : DEFAULT_SETTINGS.newTabDestination; }
 export function getNewTabSearchEngine(settings) { return Object.hasOwn(NEW_TAB_SEARCH_ENGINES, settings?.newTabSearchEngine) ? settings.newTabSearchEngine : DEFAULT_SETTINGS.newTabSearchEngine; }
 export function getNewTabSearchUrl(settings) { return NEW_TAB_SEARCH_ENGINES[getNewTabSearchEngine(settings)].url; }
+export function normalizeNewTabCustomUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    const localHost = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    return url.protocol === 'https:' || (url.protocol === 'http:' && localHost) ? url.toString() : '';
+  } catch { return ''; }
+}
+export function getNewTabCustomUrl(settings) { return normalizeNewTabCustomUrl(settings?.newTabCustomUrl); }
 
 export function getPomodoroMinutes(settings) {
   const value = Number(settings?.pomodoroMinutes);
@@ -136,6 +149,7 @@ export async function saveSettings(patch) {
   if (Object.hasOwn(normalizedPatch, 'pomodoroMinutes')) normalizedPatch.pomodoroMinutes = getPomodoroMinutes(normalizedPatch);
   if (Object.hasOwn(normalizedPatch, 'newTabDestination')) normalizedPatch.newTabDestination = getNewTabDestination(normalizedPatch);
   if (Object.hasOwn(normalizedPatch, 'newTabSearchEngine')) normalizedPatch.newTabSearchEngine = getNewTabSearchEngine(normalizedPatch);
+  if (Object.hasOwn(normalizedPatch, 'newTabCustomUrl')) normalizedPatch.newTabCustomUrl = normalizeNewTabCustomUrl(normalizedPatch.newTabCustomUrl);
   if (Object.hasOwn(normalizedPatch, 'featureFlags')) normalizedPatch.featureFlags = getFeatureFlags({ featureFlags: normalizedPatch.featureFlags });
   const settings = { ...(await getSettings()), ...normalizedPatch, updatedAt: new Date().toISOString() };
   await chrome.storage.local.set({ [STORAGE_KEYS.settings]: settings });

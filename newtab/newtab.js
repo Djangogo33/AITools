@@ -1,17 +1,19 @@
-import { getNewTabDestination, getNewTabSearchUrl, getPomodoroMinutes, getQuickLinks, getSettings, isFeatureEnabled } from '../shared/constants.js';
+import { NEW_TAB_SEARCH_ENGINES, getNewTabCustomUrl, getNewTabDestination, getNewTabSearchEngine, getNewTabSearchUrl, getPomodoroMinutes, getQuickLinks, getSettings, isFeatureEnabled } from '../shared/constants.js';
 import { buildGoogleUrl } from '../shared/search-service.js';
 
 const $ = (selector) => document.querySelector(selector);
 let category = 'web';
 let pomodoroTimer;
+let newTabSettings;
 
 init();
 
 async function init() {
   const settings = await getSettings();
+  newTabSettings = settings;
   if (await redirectConfiguredDestination(settings)) return;
   applyFeatureVisibility(settings);
-  renderDate(); bindActions();
+  renderDate(); renderSearchEngine(settings); bindActions();
   await Promise.all([renderAccount(), renderToday(), renderShortcuts(), renderNotes(), renderReadingList(), renderTasks(), refreshPomodoro()]);
 }
 
@@ -19,9 +21,12 @@ async function redirectConfiguredDestination(settings) {
   const destination = getNewTabDestination(settings);
   if (destination === 'dashboard' && isFeatureEnabled(settings, 'newtab.dashboard')) return false;
   try {
+    const customUrl = getNewTabCustomUrl(settings);
     const response = destination === 'search' && isFeatureEnabled(settings, 'newtab.search')
       ? await chrome.runtime.sendMessage({ type: 'newtab/open-search', url: getNewTabSearchUrl(settings) })
-      : await chrome.runtime.sendMessage({ type: 'newtab/open-native' });
+      : destination === 'custom' && isFeatureEnabled(settings, 'newtab.custom') && customUrl
+        ? await chrome.runtime.sendMessage({ type: 'newtab/open-custom', url: customUrl })
+        : await chrome.runtime.sendMessage({ type: 'newtab/open-native' });
     return response?.ok === true;
   } catch { return false; }
 }
@@ -36,6 +41,7 @@ function applyFeatureVisibility(settings) {
 function bindActions() {
   $('#newtab-search-button').addEventListener('click', runSearch);
   $('#newtab-search').addEventListener('keydown', (event) => { if (event.key === 'Enter') runSearch(); });
+  document.addEventListener('keydown', (event) => { if ((event.key === '/' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k')) && !event.altKey) { const target = event.target; if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return; event.preventDefault(); $('#newtab-search').focus(); } if (event.key === 'Escape' && document.activeElement === $('#newtab-search')) { $('#newtab-search').value = ''; $('#newtab-search').blur(); } });
   document.querySelectorAll('.search-modes button').forEach((button) => button.addEventListener('click', () => { category = button.dataset.category; document.querySelectorAll('.search-modes button').forEach((item) => item.classList.toggle('active', item === button)); }));
   $('#open-options').addEventListener('click', () => chrome.runtime.openOptionsPage());
   $('#manage-shortcuts').addEventListener('click', () => chrome.runtime.openOptionsPage());
@@ -48,7 +54,7 @@ function bindActions() {
 }
 
 async function renderAccount() {
-  try { const response = await chrome.runtime.sendMessage({ type: 'auth/get-account' }); const name = response?.data?.user?.name; $('#greeting').textContent = name ? `Bonjour, ${name.split(' ')[0]}.` : 'Bonjour.'; $('#account-summary').textContent = name ? `Plan ${String(response.data.plan || 'free').toUpperCase()} · Vos outils sont synchronisés.` : 'Votre espace de travail local est prêt.'; } catch { /* mode local */ }
+  try { const response = await chrome.runtime.sendMessage({ type: 'auth/get-account' }); const name = response?.data?.user?.name; $('#greeting').textContent = name ? `${dayGreeting()}, ${name.split(' ')[0]}.` : `${dayGreeting()}.`; $('#account-summary').textContent = name ? `Plan ${String(response.data.plan || 'free').toUpperCase()} · Vos outils sont synchronisés.` : 'Votre espace de travail local est prêt.'; } catch { $('#greeting').textContent = `${dayGreeting()}.`; }
 }
 
 async function renderToday() { try { const [tasksResponse, inboxResponse, focusResponse] = await Promise.all([chrome.runtime.sendMessage({ type: 'tasks/list', period: 'today', includeDone: false }), chrome.runtime.sendMessage({ type: 'inbox/list' }), chrome.runtime.sendMessage({ type: 'focus/stats', days: 7 })]); const tasks = tasksResponse?.ok ? tasksResponse.data : []; const inbox = inboxResponse?.ok ? inboxResponse.data : []; const focus = focusResponse?.ok ? focusResponse.data : { minutes: 0 }; $('#newtab-today').innerHTML = `<div><strong>${tasks.length}</strong><span>échéance(s) aujourd’hui</span></div><div><strong>${inbox.length}</strong><span>capture(s) à traiter</span></div><div><strong>${focus.minutes || 0}</strong><span>minutes de concentration</span></div>${tasks[0] ? `<p>Prochaine action : ${escapeHtml(tasks[0].title)}</p>` : '<p>Aucune échéance urgente.</p>'}`; } catch { $('#newtab-today').textContent = 'Tableau de bord indisponible.'; } }
@@ -87,8 +93,10 @@ async function refreshPomodoro() {
 
 async function togglePomodoro() { const settings = await getSettings(); const response = await chrome.runtime.sendMessage({ type: 'pomodoro/toggle', durationMinutes: getPomodoroMinutes(settings), cycle: 'focus' }); if (!response?.ok) { $('#newtab-pomodoro-label').textContent = response?.error || 'Pomodoro indisponible.'; return; } await refreshPomodoro(); }
 async function resetPomodoro() { const settings = await getSettings(); const response = await chrome.runtime.sendMessage({ type: 'pomodoro/reset', durationMinutes: getPomodoroMinutes(settings), cycle: 'focus' }); if (!response?.ok) { $('#newtab-pomodoro-label').textContent = response?.error || 'Pomodoro indisponible.'; return; } await refreshPomodoro(); }
-function runSearch() { const query = $('#newtab-search').value.trim(); if (query) location.href = buildGoogleUrl(query, category); }
+async function runSearch() { const query = $('#newtab-search').value.trim(); if (!query) return; const settings = newTabSettings || await getSettings(); const engine = getNewTabSearchEngine(settings); if (engine === 'google') { location.href = buildGoogleUrl(query, category); return; } const url = new URL(getNewTabSearchUrl(settings)); url.searchParams.set('q', query); location.href = url.toString(); }
+function renderSearchEngine(settings) { const engine = getNewTabSearchEngine(settings); const label = NEW_TAB_SEARCH_ENGINES[engine]?.label || 'Google'; $('#newtab-search').placeholder = `Rechercher avec ${label}…`; $('#newtab-search-button').textContent = `Rechercher · ${label}`; $('.search-modes').hidden = engine !== 'google'; }
 function renderDate() { $('#current-date').textContent = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()).toUpperCase(); }
+function dayGreeting() { const hour = new Date().getHours(); return hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'; }
 function formatDuration(milliseconds = 0) { const minutes = Math.floor(Math.max(0, milliseconds) / 60_000); const seconds = Math.floor((Math.max(0, milliseconds) % 60_000) / 1000); return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; }
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
 function escapeAttribute(value) { return escapeHtml(value).replace(/`/g, '&#96;'); }
