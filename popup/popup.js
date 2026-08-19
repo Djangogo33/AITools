@@ -34,7 +34,7 @@ async function init() {
   bindNavigation();
   bindActions();
   const requestedView = location.hash.slice(1);
-  if (['home', 'search', 'tools', 'ai', 'notes', 'tasks', 'inbox', 'workspaces', 'settings'].includes(requestedView)) showView(requestedView);
+  if (['home', 'web', 'text', 'browser', 'media', 'ai', 'productivity', 'search', 'notes', 'tasks', 'inbox', 'workspaces', 'settings'].includes(requestedView)) showView(requestedView);
   if (requestedView === 'command') openCommandLauncher();
   await refreshAccount();
   await loadNotes();
@@ -45,20 +45,24 @@ async function init() {
   await refreshTodayDashboard();
   await refreshPomodoro();
   await refreshTabStats();
+  await renderBrowserTabFinder();
   await refreshAIStatus();
+  updateTextStats();
 }
 
 function bindNavigation() {
-  $$('.nav-item').forEach((button) => button.addEventListener('click', () => showView(button.dataset.view)));
+  $$('[data-view]').forEach((button) => button.addEventListener('click', () => showView(button.dataset.view)));
   $('#account-shortcut').addEventListener('click', () => showView('settings'));
 }
 
 function showView(view) {
   $$('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   $$('.view').forEach((section) => section.classList.toggle('active', section.id === `view-${view}`));
-  const titles = { home: ['VOTRE ESPACE DE TRAVAIL', 'Bonjour, Alex'], search: ['RECHERCHE UNIVERSELLE', 'Rechercher mieux'], tools: ['BOÎTE À OUTILS', 'Travaillez plus vite'], ai: ['IA LOCALE ET PRIVÉE', 'Analyse assistée'], notes: ['VOTRE CARNET', 'Notes rapides'], tasks: ['PLAN DE TRAVAIL', 'Prochaines actions'], inbox: ['BOÎTE DE RÉCEPTION', 'Captures à traiter'], workspaces: ['SESSIONS D’ONGLETS', 'Espaces de travail'], settings: ['PERSONNALISATION', 'Préférences'] };
-  $('#view-eyebrow').textContent = titles[view][0];
-  $('#view-title').innerHTML = `${titles[view][1]} <span>✦</span>`;
+  const titles = { home: ['COUTEAU SUISSE POUR CHROME', 'Vos outils'], web: ['MODULE PAGE WEB', 'Comprendre une page'], text: ['MODULE TEXTE & DONNÉES', 'Transformer localement'], browser: ['MODULE ONGLETS & NAVIGATEUR', 'Gérer vos onglets'], media: ['MODULE MÉDIAS', 'Inspecter les médias'], ai: ['MODULE IA LOCALE', 'Analyse assistée'], productivity: ['MODULE PRODUCTIVITÉ', 'Organiser si besoin'], search: ['RECHERCHE UNIVERSELLE', 'Rechercher mieux'], notes: ['PRODUCTIVITÉ · CARNET', 'Notes rapides'], tasks: ['PRODUCTIVITÉ · PLAN', 'Prochaines actions'], inbox: ['PRODUCTIVITÉ · BOÎTE DE RÉCEPTION', 'Captures à traiter'], workspaces: ['PRODUCTIVITÉ · SESSIONS', 'Espaces de travail'], settings: ['PERSONNALISATION', 'Préférences'] };
+  const title = titles[view] || titles.home;
+  $('#view-eyebrow').textContent = title[0];
+  $('#view-title').innerHTML = `${title[1]} <span>✦</span>`;
+  if (view === 'browser') renderBrowserTabFinder();
 }
 
 function bindActions() {
@@ -87,16 +91,35 @@ function bindActions() {
   $('#youtube-theater').addEventListener('click', () => runYouTubeAction('page/youtube-theater'));
   $('#youtube-speed').addEventListener('click', () => runYouTubeAction('page/youtube-speed'));
   $('#home-summarize').addEventListener('click', () => runPageAction(MESSAGE_TYPES.summarizePage));
-  $('#home-note').addEventListener('click', () => { showView('notes'); $('#note-input').focus(); });
   $('#home-capture').addEventListener('click', captureCurrentPage);
   $('#tool-summarize').addEventListener('click', () => runPageAction(MESSAGE_TYPES.summarizePage));
   $('#tool-anonymize').addEventListener('click', () => runPageAction(MESSAGE_TYPES.anonymizePage));
+  $('#tool-page-dark').addEventListener('click', () => runWebAction(MESSAGE_TYPES.togglePageDark));
+  $('#tool-dismiss-cookies').addEventListener('click', () => runWebAction(MESSAGE_TYPES.dismissCookies));
+  $('#tool-block-sponsored').addEventListener('click', () => runWebAction(MESSAGE_TYPES.blockSponsored));
   $('#tool-duplicates').addEventListener('click', closeDuplicates);
   $('#tool-group-tabs').addEventListener('click', groupTabsByDomain);
   $('#tool-reading').addEventListener('click', () => runProductivityAction(MESSAGE_TYPES.getReadingTime));
   $('#tool-focus').addEventListener('click', () => runProductivityAction(MESSAGE_TYPES.toggleFocus));
   $('#tool-highlight').addEventListener('click', () => runProductivityAction(MESSAGE_TYPES.highlightSelection));
   $('#tool-print').addEventListener('click', () => runProductivityAction(MESSAGE_TYPES.printPage));
+  $('#text-input').addEventListener('input', updateTextStats);
+  $('#text-clean').addEventListener('click', () => transformText('clean'));
+  $('#text-upper').addEventListener('click', () => transformText('upper'));
+  $('#text-lower').addEventListener('click', () => transformText('lower'));
+  $('#text-title').addEventListener('click', () => transformText('title'));
+  $('#text-json').addEventListener('click', () => transformText('json'));
+  $('#text-url-encode').addEventListener('click', () => transformText('url-encode'));
+  $('#text-url-decode').addEventListener('click', () => transformText('url-decode'));
+  $('#text-base64-encode').addEventListener('click', () => transformText('base64-encode'));
+  $('#text-base64-decode').addEventListener('click', () => transformText('base64-decode'));
+  $('#text-copy').addEventListener('click', copyTextOutput);
+  $('#text-use-output').addEventListener('click', useTextOutput);
+  $('#text-clear').addEventListener('click', clearTextWorkbench);
+  $('#browser-copy-links').addEventListener('click', copyWindowLinks);
+  $('#browser-tab-query').addEventListener('input', renderBrowserTabFinder);
+  $('#media-inspect').addEventListener('click', inspectPageMedia);
+  $('#media-palette').addEventListener('click', createMediaPalette);
   $('#save-note').addEventListener('click', saveNote);
   $('#sync-notes').addEventListener('click', syncNotesNow);
   $('#import-local-notes').addEventListener('click', importLocalNotes);
@@ -122,13 +145,15 @@ function bindActions() {
 
 function commandItems() {
   return [
-    { label: 'Créer une tâche', hint: 'Ouvrir le plan de travail', run: () => { showView('tasks'); $('#task-input').focus(); } },
-    { label: 'Créer une note', hint: 'Ouvrir le carnet', run: () => { showView('notes'); $('#note-input').focus(); } },
+    { label: 'Résumer la page', hint: 'Extraire les idées principales de l’onglet actif', run: () => runPageAction(MESSAGE_TYPES.summarizePage) },
+    { label: 'Mode lecture', hint: 'Réduire les distractions de la page', run: () => runProductivityAction(MESSAGE_TYPES.toggleFocus) },
+    { label: 'Outils texte et données', hint: 'JSON, URL, Base64, nettoyage et casse', run: () => { showView('text'); $('#text-input').focus(); } },
+    { label: 'Gérer les onglets', hint: 'Doublons, groupes, liens et filtre', run: () => showView('browser') },
+    { label: 'Inspecter les médias', hint: 'Lister les images, vidéos et audios de la page', run: () => { showView('media'); inspectPageMedia(); } },
     { label: 'Capturer la page', hint: 'Ajouter la page à À traiter', run: captureCurrentPage },
-    { label: 'Enregistrer à lire', hint: 'Ajouter l’onglet actif à la liste', run: saveCurrentPageToReadingList },
+    { label: 'Créer une note', hint: 'Ouvrir le carnet productivité', run: () => { showView('notes'); $('#note-input').focus(); } },
+    { label: 'Créer une tâche', hint: 'Ouvrir le plan de travail', run: () => { showView('tasks'); $('#task-input').focus(); } },
     { label: 'Démarrer le Pomodoro', hint: 'Lancer ou suspendre la session', run: togglePomodoro },
-    { label: 'Ouvrir À traiter', hint: 'Trier les captures', run: () => showView('inbox') },
-    { label: 'Enregistrer cet espace', hint: 'Capturer les onglets de la fenêtre', run: () => { showView('workspaces'); $('#workspace-name').focus(); } },
     { label: 'Rechercher dans AITools', hint: 'Notes, tâches, lecture et espaces', run: () => { showView('search'); $('#search-input').focus(); } }
   ];
 }
@@ -442,6 +467,90 @@ async function runProductivityAction(type) {
     if (type === MESSAGE_TYPES.highlightSelection) return showToast(response.highlighted ? 'Sélection surlignée.' : 'Sélectionnez du texte dans la page avant de surligner.');
     if (type === MESSAGE_TYPES.printPage) return showToast('Boîte d’impression ouverte. Choisissez « Enregistrer au format PDF ».');
   } catch (error) { showToast(error.message || 'Impossible d’utiliser cet outil sur la page actuelle. Rechargez-la puis réessayez.'); }
+}
+
+async function runWebAction(type) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !/^https?:/i.test(tab.url || '')) return showToast('Cette page ne permet pas cette action.');
+  try {
+    const response = await sendPageMessage(tab.id, { type });
+    if (!response?.ok) throw new Error(response?.error || 'Action indisponible.');
+    let message = 'Action appliquée.';
+    if (type === MESSAGE_TYPES.togglePageDark) message = response.enabled ? 'Filtre sombre activé.' : 'Filtre sombre désactivé.';
+    if (type === MESSAGE_TYPES.dismissCookies) message = `${response.removed || 0} bannière(s) de consentement masquée(s).`;
+    if (type === MESSAGE_TYPES.blockSponsored) message = `${response.removed || 0} résultat(s) sponsorisé(s) masqué(s).`;
+    $('#web-output').textContent = message;
+    showToast(message);
+  } catch (error) { const message = error.message || 'Impossible d’utiliser cet outil sur cette page.'; $('#web-output').textContent = message; showToast(message); }
+}
+
+function updateTextStats() {
+  const text = $('#text-input').value;
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const lines = text ? text.split(/\r?\n/).length : 0;
+  $('#text-stats').textContent = `${text.length.toLocaleString('fr-FR')} caractère(s) · ${words.toLocaleString('fr-FR')} mot(s) · ${lines.toLocaleString('fr-FR')} ligne(s)`;
+}
+
+function setTextOutput(value) { $('#text-output').textContent = value || 'Le résultat est vide.'; }
+
+function base64Encode(value) { const bytes = new TextEncoder().encode(value); let binary = ''; for (let index = 0; index < bytes.length; index += 0x4000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x4000)); return btoa(binary); }
+function base64Decode(value) { const binary = atob(value.trim()); const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0)); return new TextDecoder().decode(bytes); }
+
+function transformText(type) {
+  const input = $('#text-input').value;
+  if (!input.trim() && type !== 'clean') return showToast('Saisissez du texte à transformer.');
+  try {
+    let result = input;
+    if (type === 'clean') result = input.replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    if (type === 'upper') result = input.toLocaleUpperCase('fr-FR');
+    if (type === 'lower') result = input.toLocaleLowerCase('fr-FR');
+    if (type === 'title') result = input.toLocaleLowerCase('fr-FR').replace(/(^|[\s\-–—/])([\p{L}\p{N}])/gu, (_, prefix, letter) => `${prefix}${letter.toLocaleUpperCase('fr-FR')}`);
+    if (type === 'json') result = JSON.stringify(JSON.parse(input), null, 2);
+    if (type === 'url-encode') result = encodeURIComponent(input);
+    if (type === 'url-decode') result = decodeURIComponent(input.replace(/\+/g, ' '));
+    if (type === 'base64-encode') result = base64Encode(input);
+    if (type === 'base64-decode') result = base64Decode(input);
+    setTextOutput(result); showToast('Transformation terminée.');
+  } catch (error) { const message = type === 'json' ? `JSON invalide : ${error.message}` : `Transformation impossible : ${error.message}`; setTextOutput(message); showToast(message); }
+}
+
+async function copyTextOutput() { const text = $('#text-output').textContent; if (!text || text === 'Le résultat apparaîtra ici.') return showToast('Aucun résultat à copier.'); try { await navigator.clipboard.writeText(text); showToast('Résultat copié.'); } catch { showToast('Copie impossible.'); } }
+function useTextOutput() { const value = $('#text-output').textContent; if (!value || value === 'Le résultat apparaîtra ici.') return showToast('Aucun résultat à réutiliser.'); $('#text-input').value = value; updateTextStats(); showToast('Résultat placé dans l’entrée.'); }
+function clearTextWorkbench() { $('#text-input').value = ''; setTextOutput('Le résultat apparaîtra ici.'); updateTextStats(); }
+
+async function renderBrowserTabFinder() {
+  const container = $('#browser-tab-results'); if (!container) return;
+  const query = $('#browser-tab-query')?.value.trim().toLocaleLowerCase('fr-FR') || '';
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const matching = tabs.filter((tab) => `${tab.title || ''} ${tab.url || ''}`.toLocaleLowerCase('fr-FR').includes(query));
+  container.innerHTML = matching.length ? matching.map((tab) => `<button class="browser-tab-item" data-browser-tab-id="${tab.id}"><span>${tab.favIconUrl ? `<img src="${escapeAttribute(tab.favIconUrl)}" alt="">` : '◌'}</span><span><strong>${escapeHtml(tab.title || 'Onglet sans titre')}</strong><small>${escapeHtml(tab.url || '')}</small></span></button>`).join('') : '<p class="history-empty">Aucun onglet correspondant.</p>';
+  $$('[data-browser-tab-id]').forEach((button) => button.addEventListener('click', async () => { const id = Number(button.dataset.browserTabId); await chrome.tabs.update(id, { active: true }); }));
+}
+
+async function copyWindowLinks() {
+  const tabs = (await chrome.tabs.query({ currentWindow: true })).filter((tab) => /^https?:/i.test(tab.url || ''));
+  if (!tabs.length) return showToast('Aucun lien web dans cette fenêtre.');
+  const text = tabs.map((tab) => `${tab.title || 'Sans titre'}\n${tab.url}`).join('\n\n');
+  try { await navigator.clipboard.writeText(text); showToast(`${tabs.length} lien(s) copié(s).`); } catch { showToast('Copie des liens impossible.'); }
+}
+
+async function inspectPageMedia() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !/^https?:/i.test(tab.url || '')) return showToast('Cette page ne peut pas être inspectée.');
+  try {
+    const response = await sendPageMessage(tab.id, { type: MESSAGE_TYPES.getMediaInfo });
+    if (!response?.ok) throw new Error(response?.error || 'Inspection impossible.');
+    const items = response.items || []; const counts = response.counts || {};
+    $('#media-results').innerHTML = `<p class="media-summary">${counts.images || 0} image(s) · ${counts.videos || 0} vidéo(s) · ${counts.audios || 0} audio(s)</p>${items.length ? items.map((item) => `<a class="media-item" href="${escapeAttribute(item.url)}" target="_blank" rel="noreferrer"><span>${item.type === 'image' ? '▧' : item.type === 'video' ? '▶' : '♪'}</span><span><strong>${escapeHtml(item.alt || item.type)}</strong><small>${escapeHtml(item.url)}</small></span></a>`).join('') : '<p class="history-empty">Aucun média exploitable détecté.</p>'}`;
+    showToast(`${items.length} média(s) inspecté(s).`);
+  } catch (error) { const message = error.message || 'Inspection des médias impossible.'; $('#media-results').innerHTML = `<p class="history-empty">${escapeHtml(message)}</p>`; showToast(message); }
+}
+
+async function createMediaPalette() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const colors = paletteFromText(`${tab?.title || ''} ${tab?.url || ''}`.trim() || 'AITools');
+  $('#media-results').innerHTML = `<p class="media-summary">Palette locale déterministe</p><div class="palette-preview">${colors.map((color) => `<button class="palette-swatch" data-color="${escapeAttribute(color)}" style="--swatch:${escapeAttribute(color)}"><span></span><small>${escapeHtml(color)}</small></button>`).join('')}</div>`;
+  $$('.palette-swatch').forEach((button) => button.addEventListener('click', async () => { try { await navigator.clipboard.writeText(button.dataset.color); showToast(`${button.dataset.color} copié.`); } catch { showToast('Copie impossible.'); } }));
 }
 
 async function closeDuplicates() {

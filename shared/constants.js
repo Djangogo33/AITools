@@ -29,6 +29,7 @@ export const MESSAGE_TYPES = {
   togglePageDark: 'page/toggle-dark',
   dismissCookies: 'page/dismiss-cookies',
   blockSponsored: 'page/block-sponsored',
+  getMediaInfo: 'page/get-media-info',
   pomodoroTick: 'pomodoro/tick',
   pomodoroState: 'pomodoro/state'
 };

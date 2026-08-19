@@ -1,42 +1,57 @@
-# AITools 7.0
+# AITools 8
 
-AITools 7 est une extension Chrome **Manifest V3** recréée comme espace de travail moderne, local-first et extensible. Elle réunit capture web, planification, organisation des onglets, recherche locale, IA intégrée à Chrome, données privées et services distants optionnels.
+**AITools** est une extension Chrome **Manifest V3** conçue comme un couteau suisse local-first. Son popup réunit six modules complémentaires pour agir rapidement sur la page ouverte, transformer du texte, organiser les onglets, explorer les médias, exploiter les capacités IA locales de Chrome et conserver un espace personnel de productivité.
 
-## Fonctionnalités livrées
+> Les fonctionnalités essentielles restent disponibles sans compte. L’authentification Google et la synchronisation Supabase sont des services optionnels, activés explicitement par l’utilisateur.
 
-| Espace | Fonctions |
+## Les six modules
+
+| Module | Finalité | Principales fonctions disponibles |
+|---|---|---|
+| **Page web** | Améliorer la consultation de l’onglet actif. | Résumé local avec repli heuristique, temps de lecture, mode lecture, filtre sombre, masquage des bannières de consentement et des résultats sponsorisés. |
+| **Texte & données** | Transformer un contenu sans service distant. | Nettoyage, majuscules, minuscules, capitalisation, validation et mise en forme JSON, encodage/décodage URL et Base64, statistiques et copie. |
+| **Onglets & navigateur** | Retrouver et remettre en ordre la fenêtre courante. | Recherche instantanée parmi les onglets, nettoyage des doublons, regroupement par domaine, copie des titres et URL, enregistrement et restauration d’espaces. |
+| **Médias** | Identifier les ressources de la page sans les télécharger automatiquement. | Inventaire des images, vidéos et pistes audio accessibles sur la page, copie d’URL et palette locale déterministe liée au titre de la page. |
+| **IA** | Utiliser les API IA intégrées à Chrome lorsqu’elles sont disponibles. | Résumé, traduction, détection de langue et analyse stylistique indicative, avec des replis locaux explicites lorsque l’API n’est pas disponible. |
+| **Productivité** | Conserver un espace personnel au sein de l’extension. | Notes, tâches, boîte À traiter, liste de lecture, Pomodoro persistant, rappels, statistiques locales, recherche et rétrospective. |
+
+Le lanceur de commandes est disponible avec `Alt` + `Maj` + `K` ou `Ctrl`/`⌘` + `K`. Il donne accès aux actions majeures sans traverser la navigation.
+
+## Principes de conception
+
+| Principe | Application dans AITools |
 |---|---|
-| Accueil et Aujourd’hui | Accès rapides personnalisables, résumé de l’onglet, ajout de note, capture enrichie et tableau Aujourd’hui réunissant échéances, captures et concentration. |
-| Recherche | Recherche Google par catégories, opérateurs avancés, historique local, raccourcis configurables et recherche transversale dans les données AITools. |
-| Capture, boîte À traiter et tags | Une capture conserve son titre, son URL et ses tags, puis peut être transformée plus tard en note, tâche ou page à lire, ou être écartée. |
-| Espaces de travail | Enregistrement de la fenêtre courante sous un nom, avec ses onglets web, puis restauration explicite ultérieure. |
-| Tâches | Priorités, tâche active, échéances, rappels, tags, vues temporelles et récurrence quotidienne, hebdomadaire ou mensuelle avec génération de l’occurrence suivante. |
-| Concentration | Pomodoro persistant, rappels de tâches, historique privé des sessions, statistiques locales sur sept jours et tâche active visible pendant une session. |
-| Ne pas déranger | Application automatique du mode concentration sur une liste de domaines contrôlée depuis Préférences. |
-| Onglets | Nettoyage des doublons, regroupement par domaine et règles locales d’organisation appliquées explicitement à la fenêtre courante. |
-| Lecture | Ajout de pages, suivi lu/à lire, tags, reprise depuis le Nouvel onglet et synchronisation optionnelle. |
-| IA locale | Résumé, traduction selon disponibilité Chrome, analyse stylistique indicative, palettes, contrôles YouTube et synthèse sourcée de jusqu’à huit onglets ouverts. |
-| Commandes rapides | Palette de commandes depuis `Alt` + `Maj` + `K` ou `Ctrl`/`⌘` + `K` pour créer, capturer, enregistrer, lancer un Pomodoro et naviguer rapidement. |
-| Données | Sauvegarde/restauration JSON, migration locale versionnée, export Markdown, CSV et diagnostic, avec exclusion stricte des jetons d’authentification. |
-| Compte | Google OAuth PKCE, session renouvelée, profil et droits d’abonnement. |
-| Synchronisation | Notes, tâches, lecture, espaces de travail et préférences peuvent être synchronisés volontairement avec Supabase après application de la migration SQL. Le fonctionnement local ne dépend pas du compte. |
-| Rétrospective | Analyse hebdomadaire strictement locale des tâches, échéances, sessions Pomodoro, domaines déjà enregistrés et état de synchronisation. |
-| Facturation | Checkout Stripe, portail client et synchronisation de plan par webhook Edge sécurisé. |
+| **Local-first** | Les notes, tâches, préférences et résultats d’outils sont stockés localement par défaut. |
+| **Contrôle explicite** | Les captures, synchronisations, restaurations d’onglets et actions sur la page sont déclenchées par l’utilisateur. |
+| **Sans dépendance CDN** | L’interface n’utilise ni police distante ni bibliothèque chargée à l’exécution. |
+| **Aucun secret distribué** | L’extension ne contient ni clé Stripe secrète ni clé Supabase `service_role`. |
+| **Dégradation fiable** | Les API IA Chrome sont facultatives ; les fonctions proposent un repli local lorsqu’il est pertinent. |
 
 ## Installation locale
 
-Ouvrez `chrome://extensions`, activez **Mode développeur**, choisissez **Charger l’extension non empaquetée**, puis sélectionnez le dossier racine du dépôt. Après une modification du manifeste, utilisez **Recharger** sur la carte de l’extension.
+Ouvrez `chrome://extensions`, activez le **Mode développeur**, choisissez **Charger l’extension non empaquetée**, puis sélectionnez le dossier racine de ce dépôt. Après chaque modification du manifeste, utilisez **Recharger** depuis la carte de l’extension.
 
-L’archive de distribution ne contient que les fichiers exécutables de l’extension. Les documents, tests et dossiers `supabase/` restent dans le dépôt pour le développement et la configuration.
+L’archive de distribution inclut uniquement les ressources exécutables de l’extension. Les tests, documents de configuration et migrations Supabase restent dans le dépôt de développement.
 
-## Synchronisation et configuration de production
+## Compte, synchronisation et facturation optionnels
 
-Le parcours local ne nécessite aucun compte. Les fonctions distantes — connexion Google, synchronisation Supabase et abonnement Stripe — nécessitent l’accès administrateur aux services concernés. Avant d’activer la synchronisation personnelle, exécutez la version à jour de [`supabase/schema.sql`](./supabase/schema.sql) dans Supabase : elle ajoute les tables `tasks`, `reading_items`, `workspaces` et `user_preferences`, les colonnes de récurrence et les politiques RLS qui limitent chaque ligne à son propriétaire authentifié.
+Aucun compte n’est requis pour les six modules. Après une authentification Google facultative, l’utilisateur peut choisir de synchroniser ses notes, tâches, éléments de lecture, espaces de travail et préférences avec Supabase. Les politiques RLS limitent les données synchronisées au propriétaire authentifié.
 
-Le guide détaillé est disponible dans [`CONFIGURATION_PRODUCTION.md`](./CONFIGURATION_PRODUCTION.md). La politique de confidentialité prête à publier est dans [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md), le dossier de soumission Chrome Web Store dans [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md) et le résultat du contrôle de livraison dans [`VERIFICATION_V7.md`](./VERIFICATION_V7.md). L’audit ciblé de fiabilité du résumé et des replis est disponible dans [`RELIABILITY_AUDIT_V7.md`](./RELIABILITY_AUDIT_V7.md). L’état de l’intégration Supabase activée, les optimisations de synchronisation et les fonctions Edge encore à déployer sont documentés dans [`SUPABASE_INTEGRATION_AUDIT_V7.md`](./SUPABASE_INTEGRATION_AUDIT_V7.md). Les documents complémentaires sont [`AUTH_ARCHITECTURE.md`](./AUTH_ARCHITECTURE.md), [`FULL_FEATURE_ARCHITECTURE.md`](./FULL_FEATURE_ARCHITECTURE.md), [`supabase/functions/`](./supabase/functions) et [`EXTERNAL_CONFIGURATION_SOURCES.md`](./EXTERNAL_CONFIGURATION_SOURCES.md).
+Avant d’activer cette synchronisation, appliquez le schéma [`supabase/schema.sql`](./supabase/schema.sql) puis, pour une base déjà existante, la migration de reprise [`supabase/migrations/20260818_subscriptions_compatibility.sql`](./supabase/migrations/20260818_subscriptions_compatibility.sql). Les fonctions Edge Stripe restent à déployer côté Supabase avant de proposer un checkout ou un portail client.
 
-## Vérifications effectuées
+Les procédures complètes se trouvent dans [`CONFIGURATION_PRODUCTION.md`](./CONFIGURATION_PRODUCTION.md). Les documents de publication et de conformité sont [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) et [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). L’état de l’intégration distante est résumé dans [`SUPABASE_INTEGRATION_AUDIT_V7.md`](./SUPABASE_INTEGRATION_AUDIT_V7.md).
 
-Les contrôles automatisés couvrent la syntaxe de tous les modules JavaScript, le manifeste JSON, les chemins déclarés, la simulation OAuth PKCE, les préférences, les notes, la liste de lecture, les tâches récurrentes, la boîte À traiter, les migrations locales, l’IA locale, les analyses privées ainsi que la normalisation des tags et statistiques de concentration. Aucune clé Stripe secrète ni clé Supabase `service_role` n’est présente dans les modules client.
+## Vérification de développement
 
-> L’analyse stylistique IA est une estimation heuristique. Elle ne prouve jamais l’origine humaine ou artificielle d’un texte.
+Les audits automatisés couvrent la syntaxe JavaScript, les services locaux, les préférences, les notes, les tâches récurrentes, la boîte À traiter, la lecture, les espaces de travail, l’IA locale, la synchronisation personnelle et les routes du service worker. Les audits Chromium valident également le rendu des six modules, le résumé de page, la transformation JSON et l’inventaire d’images, de vidéos et d’audios sur une fixture HTTP contrôlée.
+
+```bash
+cd /home/ubuntu/AITools
+find background content newtab options popup shared -name '*.js' -print0 | xargs -0 -n1 node --check
+for test in tests/*.test.mjs; do node "$test" || exit 1; done
+node tests/supabase-readonly-health.mjs
+```
+
+Pour les audits Chromium, lancez d’abord l’instance de test avec l’extension chargée, puis exécutez `node tests/runtime-popup-audit.mjs`. Le test dédié aux médias nécessite en plus `node tests/fixture-server.mjs` et `node tests/runtime-media-audit.mjs`.
+
+> L’analyse stylistique IA est une estimation heuristique. Elle ne permet pas d’établir l’origine humaine ou artificielle d’un texte.

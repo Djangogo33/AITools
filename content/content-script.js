@@ -12,7 +12,8 @@ const MESSAGE_TYPES = {
   dismissCookies: 'page/dismiss-cookies',
   blockSponsored: 'page/block-sponsored',
   youtubeTheater: 'page/youtube-theater',
-  youtubeSpeed: 'page/youtube-speed'
+  youtubeSpeed: 'page/youtube-speed',
+  getMediaInfo: 'page/get-media-info'
 };
 
 const FOCUS_STYLE_ID = 'aitools-focus-style';
@@ -32,7 +33,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     [MESSAGE_TYPES.dismissCookies]: () => ({ removed: dismissCookieBanners() }),
     [MESSAGE_TYPES.blockSponsored]: () => ({ removed: blockSponsoredResults() }),
     [MESSAGE_TYPES.youtubeTheater]: () => youtubeTheaterMode(),
-    [MESSAGE_TYPES.youtubeSpeed]: () => youtubePlaybackSpeed()
+    [MESSAGE_TYPES.youtubeSpeed]: () => youtubePlaybackSpeed(),
+    [MESSAGE_TYPES.getMediaInfo]: () => getMediaInfo()
   };
   const handler = handlers[message?.type];
   if (!handler) return false;
@@ -145,6 +147,17 @@ function blockSponsoredResults() {
     if ((text === 'sponsorisé' || text === 'sponsored' || text.startsWith('sponsorisé\n')) && !element.dataset.aitoolsBlocked) { element.dataset.aitoolsBlocked = 'true'; element.closest('[data-text-ad], [data-ved], div.g')?.style.setProperty('display', 'none', 'important'); removed += 1; }
   });
   return removed;
+}
+
+function getMediaInfo() {
+  const normalize = (value) => { try { const url = new URL(value, location.href); return ['https:', 'http:'].includes(url.protocol) ? url.toString() : null; } catch { return null; } };
+  const collect = (selector, type, source) => [...document.querySelectorAll(selector)].map((element) => ({ type, url: normalize(source(element)), alt: String(element.getAttribute('alt') || element.getAttribute('aria-label') || '').trim().slice(0, 180) || null })).filter((item) => item.url);
+  const images = collect('img', 'image', (element) => element.currentSrc || element.src);
+  const videos = collect('video', 'video', (element) => element.currentSrc || element.src || element.querySelector('source')?.src);
+  const audios = collect('audio', 'audio', (element) => element.currentSrc || element.src || element.querySelector('source')?.src);
+  const unique = new Map();
+  [...images, ...videos, ...audios].forEach((item) => { if (!unique.has(item.url)) unique.set(item.url, item); });
+  return { items: [...unique.values()].slice(0, 80), counts: { images: images.length, videos: videos.length, audios: audios.length } };
 }
 
 function anonymizeVisibleText() {
