@@ -150,11 +150,12 @@ Effectuez une souscription avec une carte de test Stripe. Vérifiez, dans cet or
 
 ## 7. Finaliser la publication Chrome Web Store
 
-1. Rechargez l’extension dans `chrome://extensions` et vérifiez l’absence d’erreur dans le service worker.
-2. Chargez l’archive `AITools-v8.3.0.zip` ou reconstruisez-la avec le manifeste à la racine.
-3. Dans le Chrome Web Store Developer Dashboard, renseignez des captures réelles, la politique de confidentialité et une justification honnête de chaque permission demandée.
-4. Après attribution de l’ID Web Store définitif, revenez aux sections 2, 3 et 4 de ce document pour enregistrer l’ID final dans Google Cloud et l’URI de retour exacte dans Supabase.
-5. Répétez une connexion Google et une synchronisation sur l’extension installée depuis le canal de publication, pas seulement sur le dossier de développement.
+1. Appliquez d’abord `supabase/migrations/20260819_user_backups.sql` si votre base Supabase existait avant AITools 8.4, puis validez avec `REQUIRE_USER_BACKUPS=1 node tests/supabase-readonly-health.mjs`.
+2. Rechargez l’extension dans `chrome://extensions` et vérifiez l’absence d’erreur dans le service worker.
+3. Chargez l’archive `AITools-v8.4.0.zip` ou reconstruisez-la avec le manifeste à la racine.
+4. Dans le Chrome Web Store Developer Dashboard, renseignez des captures réelles, la politique de confidentialité et une justification honnête de chaque permission demandée.
+5. Après attribution de l’ID Web Store définitif, revenez aux sections 2, 3 et 4 de ce document pour enregistrer l’ID final dans Google Cloud et l’URI de retour exacte dans Supabase.
+6. Répétez une connexion Google et une synchronisation sur l’extension installée depuis le canal de publication, pas seulement sur le dossier de développement.
 
 ## 8. Limites opérationnelles à connaître
 

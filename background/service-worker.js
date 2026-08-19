@@ -1,5 +1,5 @@
 import { MESSAGE_TYPES, NEW_TAB_SEARCH_ENGINES, STORAGE_KEYS, getPomodoroMinutes, getSettings, isFeatureEnabled, normalizeNewTabCustomUrl } from '../shared/constants.js';
-import { getAccount, isFeatureAllowed, signInWithGoogle, signOut } from '../shared/auth-client.js';
+import { getAccount, getValidSession, isFeatureAllowed, signInWithGoogle, signOut } from '../shared/auth-client.js';
 import { createNote, deleteNote, importGuestNotes, listNotes, syncNotes } from '../shared/notes-service.js';
 import { createCheckout, createPortal } from '../shared/billing-client.js';
 import { listReadingItems, removeReadingItem, saveCurrentPage, toggleReadingItem, updateReadingItem } from '../shared/reading-list-service.js';
@@ -17,6 +17,12 @@ import { migrateLocalData } from '../shared/migration-service.js';
 
 const POMODORO_ALARM = 'aitools-pomodoro-complete';
 const TASK_REMINDER_PREFIX = 'aitools-task-reminder:';
+const PERSONAL_SYNC_ALARM = 'aitools-personal-sync';
+const AUTO_SYNC_DELAY_MS = 5_000;
+const AUTO_SYNC_COOLDOWN_MS = 20_000;
+const AUTO_SYNC_RETRY_MS = 5 * 60_000;
+const AUTO_SYNC_KEYS = new Set(['aitools.settings', 'aitools.tasks', 'aitools.reading-list', 'aitools.workspaces', 'aitools.capture-inbox', 'aitools.focus-history', 'aitools.dnd-settings', 'aitools.tab-rules', 'aitools.search.history', 'aitools.tasks.active']);
+let lastAutoSyncAt = 0;
 let pomodoroCompletionInFlight = null;
 let pomodoroCompletionEndAt = null;
 const DEFAULT_POMODORO = { status: 'idle', durationMs: 25 * 60_000, remainingMs: 25 * 60_000, endAt: null, cycle: 'focus' };
@@ -41,11 +47,13 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (!current[STORAGE_KEYS.notes]) await chrome.storage.local.set({ [STORAGE_KEYS.notes]: [] });
   if (!current[STORAGE_KEYS.pomodoro]) await chrome.storage.local.set({ [STORAGE_KEYS.pomodoro]: DEFAULT_POMODORO });
   await rescheduleTaskReminders();
+  await queuePersonalSync(500);
 });
 
-chrome.runtime.onStartup.addListener(() => { migrateLocalData().then(rescheduleTaskReminders).catch(() => rescheduleTaskReminders()); });
+chrome.runtime.onStartup.addListener(async () => { await migrateLocalData().catch(() => undefined); await rescheduleTaskReminders(); await queuePersonalSync(500); });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === PERSONAL_SYNC_ALARM) { await runQueuedPersonalSync(); return; }
   if (alarm.name.startsWith(TASK_REMINDER_PREFIX)) {
     const taskId = alarm.name.slice(TASK_REMINDER_PREFIX.length);
     const task = (await listTasks()).find((item) => item.id === taskId);
@@ -76,9 +84,12 @@ chrome.commands.onCommand.addListener(async (command) => {
 });
 
 chrome.storage.onChanged.addListener(async (changes, areaName) => {
-  if (areaName !== 'local' || !changes[STORAGE_KEYS.settings]) return;
-  const nextSettings = changes[STORAGE_KEYS.settings].newValue || {};
-  if (!isFeatureEnabled(nextSettings, 'productivity.pomodoro')) { await chrome.alarms.clear(POMODORO_ALARM); await savePomodoro({ ...DEFAULT_POMODORO, durationMs: getPomodoroMinutes(nextSettings) * 60_000, remainingMs: getPomodoroMinutes(nextSettings) * 60_000 }); }
+  if (areaName !== 'local') return;
+  if (changes[STORAGE_KEYS.settings]) {
+    const nextSettings = changes[STORAGE_KEYS.settings].newValue || {};
+    if (!isFeatureEnabled(nextSettings, 'productivity.pomodoro')) { await chrome.alarms.clear(POMODORO_ALARM); await savePomodoro({ ...DEFAULT_POMODORO, durationMs: getPomodoroMinutes(nextSettings) * 60_000, remainingMs: getPomodoroMinutes(nextSettings) * 60_000 }); }
+  }
+  if (Object.keys(changes).some(isAutoSyncKey)) await queuePersonalSync();
 });
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => { await applyDndToTab(tabId); });
@@ -87,7 +98,7 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => { if (change
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
     'auth/get-account': () => getAccount(),
-    'auth/sign-in-google': () => signInWithGoogle(),
+    'auth/sign-in-google': async () => { const account = await signInWithGoogle(); await syncPersonalData().catch(() => undefined); await queuePersonalSync(250); return account; },
     'auth/sign-out': () => signOut(),
     'auth/is-feature-allowed': () => isFeatureAllowed(message.feature),
     'billing/create-checkout': () => createCheckout(message.plan),
@@ -149,6 +160,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   Promise.resolve().then(async () => { const featureId = MESSAGE_FEATURES[message?.type]; if (featureId && !isFeatureEnabled(await getSettings(), featureId)) throw new Error('Cette fonctionnalité est désactivée dans vos préférences.'); return handler(); }).then((data) => sendResponse({ ok: true, data })).catch((error) => sendResponse({ ok: false, error: normalizeError(error) }));
   return true;
 });
+
+function isAutoSyncKey(key) { return AUTO_SYNC_KEYS.has(key) || key.startsWith('aitools.notes.account.') || key.startsWith('aitools.notes.deleted.'); }
+
+async function queuePersonalSync(delayMs = AUTO_SYNC_DELAY_MS) {
+  try {
+    const delay = Math.max(100, Number(delayMs) || AUTO_SYNC_DELAY_MS);
+    const cooldown = Math.max(0, AUTO_SYNC_COOLDOWN_MS - (Date.now() - lastAutoSyncAt));
+    const when = Date.now() + Math.max(delay, cooldown);
+    const existing = await chrome.alarms.get(PERSONAL_SYNC_ALARM);
+    if (existing?.scheduledTime && existing.scheduledTime <= when) return;
+    await chrome.alarms.create(PERSONAL_SYNC_ALARM, { when });
+  } catch { /* la synchronisation reste disponible manuellement */ }
+}
+
+async function runQueuedPersonalSync() {
+  const settings = await getSettings();
+  if (!isFeatureEnabled(settings, 'service.sync') || !(await getValidSession())) return;
+  try { await syncPersonalData(); lastAutoSyncAt = Date.now(); } catch { await queuePersonalSync(AUTO_SYNC_RETRY_MS); }
+}
 
 async function navigationTabId(tabId) {
   if (Number.isInteger(tabId)) return tabId;

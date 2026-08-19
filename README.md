@@ -35,11 +35,11 @@ L’archive de distribution inclut uniquement les ressources exécutables de l�
 
 ## Compte, synchronisation et facturation optionnels
 
-Aucun compte n’est requis pour les six modules. Après une authentification Google facultative, l’utilisateur peut choisir de synchroniser ses notes, tâches, éléments de lecture, espaces de travail et préférences avec Supabase. Les politiques RLS limitent les données synchronisées au propriétaire authentifié.
+Aucun compte n’est requis pour les six modules. Après une authentification Google facultative, l’utilisateur peut choisir de synchroniser ses notes, tâches, éléments de lecture, espaces de travail, préférences, captures, historique de concentration, règles d’onglets, mode Ne pas déranger et historique de recherche avec Supabase. Les politiques RLS limitent les données synchronisées au propriétaire authentifié ; les jetons OAuth et diagnostics restent locaux.
 
-Avant d’activer cette synchronisation, appliquez le schéma [`supabase/schema.sql`](./supabase/schema.sql) puis, pour une base déjà existante, la migration de reprise [`supabase/migrations/20260818_subscriptions_compatibility.sql`](./supabase/migrations/20260818_subscriptions_compatibility.sql). Les fonctions Edge Stripe restent à déployer côté Supabase avant de proposer un checkout ou un portail client.
+Avant d’activer cette synchronisation, appliquez le schéma [`supabase/schema.sql`](./supabase/schema.sql) puis, pour une base déjà existante, la migration de reprise [`supabase/migrations/20260818_subscriptions_compatibility.sql`](./supabase/migrations/20260818_subscriptions_compatibility.sql) et la migration de sauvegarde restaurable [`supabase/migrations/20260819_user_backups.sql`](./supabase/migrations/20260819_user_backups.sql). Les fonctions Edge Stripe restent à déployer côté Supabase avant de proposer un checkout ou un portail client.
 
-La checklist opérationnelle ordonnée est dans [`FINALISATION_V8.md`](./FINALISATION_V8.md). Les procédures détaillées se trouvent dans [`CONFIGURATION_PRODUCTION.md`](./CONFIGURATION_PRODUCTION.md). Les documents de publication et de conformité sont [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) et [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). L’état de l’intégration distante est résumé dans [`SUPABASE_INTEGRATION_AUDIT_V7.md`](./SUPABASE_INTEGRATION_AUDIT_V7.md).
+La procédure de restauration après suppression du cache est dans [`SUPABASE_RESTORE_V8_4.md`](./SUPABASE_RESTORE_V8_4.md). La checklist opérationnelle ordonnée est dans [`FINALISATION_V8.md`](./FINALISATION_V8.md). Les procédures détaillées se trouvent dans [`CONFIGURATION_PRODUCTION.md`](./CONFIGURATION_PRODUCTION.md). Les documents de publication et de conformité sont [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) et [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). L’état de l’intégration distante est résumé dans [`SUPABASE_INTEGRATION_AUDIT_V7.md`](./SUPABASE_INTEGRATION_AUDIT_V7.md).
 
 ### Personnalisation des fonctionnalités
 

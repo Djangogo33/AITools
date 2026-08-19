@@ -46,9 +46,9 @@ export const SUPABASE_CONFIG = {
 
 ### 2.2 Créer le schéma, les politiques et les données synchronisées
 
-Dans **Supabase Dashboard → SQL Editor**, ouvrez une nouvelle requête, collez intégralement le contenu de [`supabase/schema.sql`](./supabase/schema.sql), puis choisissez **Run**. Cette migration crée les tables `profiles`, `subscriptions`, `notes`, `tasks`, `reading_items`, `workspaces` et `user_preferences`, déclenche la création du profil et active les politiques RLS. Elle est idempotente : les `create table if not exists` et `alter table ... if not exists` permettent de la relancer pour appliquer les évolutions v7.
+Dans **Supabase Dashboard → SQL Editor**, ouvrez une nouvelle requête, collez intégralement le contenu de [`supabase/schema.sql`](./supabase/schema.sql), puis choisissez **Run**. Cette migration crée les tables `profiles`, `subscriptions`, `notes`, `tasks`, `reading_items`, `workspaces`, `user_preferences` et `user_backups`, déclenche la création du profil et active les politiques RLS. Elle est idempotente : les `create table if not exists` et `alter table ... if not exists` permettent de la relancer pour appliquer les évolutions v8.4, dont la restauration après suppression du cache.
 
-> **Reprise d’une base existante.** Si l’exécution échoue avec `column "provider_subscription_id" does not exist`, n’effacez aucune table. Exécutez d’abord [`supabase/migrations/20260818_subscriptions_compatibility.sql`](./supabase/migrations/20260818_subscriptions_compatibility.sql) dans une nouvelle requête SQL, puis relancez intégralement `supabase/schema.sql`. Cette migration ajoute de façon idempotente les colonnes historiques de facturation avant la création de l’index Stripe.
+> **Reprise d’une base existante.** Si l’exécution échoue avec `column "provider_subscription_id" does not exist`, n’effacez aucune table. Exécutez d’abord [`supabase/migrations/20260818_subscriptions_compatibility.sql`](./supabase/migrations/20260818_subscriptions_compatibility.sql) dans une nouvelle requête SQL, puis relancez intégralement `supabase/schema.sql`. Cette migration ajoute de façon idempotente les colonnes historiques de facturation avant la création de l’index Stripe. Pour une base déjà déployée, exécutez également [`supabase/migrations/20260819_user_backups.sql`](./supabase/migrations/20260819_user_backups.sql) afin d’activer la sauvegarde restaurable.
 
 Vérifiez ensuite dans **Table Editor** les résultats suivants :
 
@@ -217,13 +217,13 @@ Depuis la racine du dépôt, construisez l’archive avec le manifeste à la rac
 
 ```bash
 cd /chemin/vers/AITools
-zip -rq ../AITools-v8.3.0.zip manifest.json assets background content newtab options popup shared
+zip -rq ../AITools-v8.4.0.zip manifest.json assets background content newtab options popup shared
 ```
 
 Avant l’import Web Store, vérifiez que l’archive contient `manifest.json` au premier niveau :
 
 ```bash
-unzip -l ../AITools-v8.3.0.zip | head -30
+unzip -l ../AITools-v8.4.0.zip | head -30
 ```
 
 Dans le Chrome Web Store Developer Dashboard, créez l’élément, chargez le ZIP, ajoutez des captures d’écran, une politique de confidentialité, une explication honnête de chaque permission et les mentions concernant le traitement local de l’IA. Après attribution de l’ID définitif, retournez aux étapes 1 et 3 pour mettre à jour le client OAuth et l’URL de redirection de production.
