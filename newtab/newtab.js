@@ -1,4 +1,4 @@
-import { getNewTabDestination, getNewTabSearchUrl, getPomodoroMinutes, getQuickLinks, getSettings } from '../shared/constants.js';
+import { getNewTabDestination, getNewTabSearchUrl, getPomodoroMinutes, getQuickLinks, getSettings, isFeatureEnabled } from '../shared/constants.js';
 import { buildGoogleUrl } from '../shared/search-service.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -10,18 +10,27 @@ init();
 async function init() {
   const settings = await getSettings();
   if (await redirectConfiguredDestination(settings)) return;
+  applyFeatureVisibility(settings);
   renderDate(); bindActions();
   await Promise.all([renderAccount(), renderToday(), renderShortcuts(), renderNotes(), renderReadingList(), renderTasks(), refreshPomodoro()]);
 }
 
 async function redirectConfiguredDestination(settings) {
   const destination = getNewTabDestination(settings);
-  if (destination === 'search') { location.replace(getNewTabSearchUrl(settings)); return true; }
-  if (destination !== 'native') return false;
+  if (destination === 'dashboard' && isFeatureEnabled(settings, 'newtab.dashboard')) return false;
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'newtab/open-native' });
+    const response = destination === 'search' && isFeatureEnabled(settings, 'newtab.search')
+      ? await chrome.runtime.sendMessage({ type: 'newtab/open-search', url: getNewTabSearchUrl(settings) })
+      : await chrome.runtime.sendMessage({ type: 'newtab/open-native' });
     return response?.ok === true;
   } catch { return false; }
+}
+
+function applyFeatureVisibility(settings) {
+  const visibility = {
+    'newtab.search': '.search-area', 'newtab.shortcuts': '.shortcuts-card', 'newtab.productivity': '.today-card, .notes-card, .focus-card, .reading-card, .tasks-card', 'productivity.notes': '.notes-card', 'productivity.reading': '.reading-card', 'productivity.tasks': '.tasks-card', 'productivity.inbox': '.today-card', 'productivity.pomodoro': '.focus-card'
+  };
+  Object.entries(visibility).forEach(([featureId, selector]) => document.querySelectorAll(selector).forEach((element) => { element.hidden = !isFeatureEnabled(settings, featureId); }));
 }
 
 function bindActions() {

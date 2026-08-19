@@ -41,9 +41,15 @@ Avant d’activer cette synchronisation, appliquez le schéma [`supabase/schema.
 
 La checklist opérationnelle ordonnée est dans [`FINALISATION_V8.md`](./FINALISATION_V8.md). Les procédures détaillées se trouvent dans [`CONFIGURATION_PRODUCTION.md`](./CONFIGURATION_PRODUCTION.md). Les documents de publication et de conformité sont [`PRIVACY_POLICY.md`](./PRIVACY_POLICY.md) et [`CHROME_WEB_STORE.md`](./CHROME_WEB_STORE.md). L’état de l’intégration distante est résumé dans [`SUPABASE_INTEGRATION_AUDIT_V7.md`](./SUPABASE_INTEGRATION_AUDIT_V7.md).
 
+### Personnalisation des fonctionnalités
+
+Dans **Préférences → Composer votre AITools**, chaque sous-fonction peut être activée ou désactivée individuellement. Le catalogue couvre les outils de page, les transformations de texte, les actions sur les onglets, les médias, chaque capacité IA, les briques de productivité, la recherche, les widgets du nouvel onglet et les services distants optionnels.
+
+La désactivation masque l’outil dans le popup, le lanceur de commandes, le nouvel onglet ou les préférences concernées, et bloque également les routes persistantes correspondantes dans le service worker. Les données existantes ne sont jamais supprimées : il suffit de réactiver une fonctionnalité pour les retrouver. Le bouton **Tout réactiver** restaure le comportement par défaut.
+
 ### Destination du nouvel onglet
 
-Dans **Préférences → Nouvel onglet**, choisissez l’une des destinations suivantes : le **tableau de bord AITools** (valeur par défaut), la page interne de **Nouvel onglet Chrome** ou la page d’accueil d’un moteur de recherche. Les moteurs proposés sont Google, Qwant, Brave Search, Bing, DuckDuckGo et Ecosia. Le choix est local au profil Chrome et prend effet au prochain onglet créé.
+Dans **Préférences → Nouvel onglet**, choisissez l’une des destinations suivantes : le **tableau de bord AITools** (valeur par défaut), la page interne de **Nouvel onglet Chrome** ou la page d’accueil d’un moteur de recherche. Les moteurs proposés sont Google, Qwant, Brave Search, Bing, DuckDuckGo et Ecosia. Le choix est local au profil Chrome et prend effet au prochain onglet créé. Si la destination choisie est désactivée dans le catalogue, l’extension bascule sans boucle vers le nouvel onglet natif de Chrome.
 
 ## Vérification de développement
 

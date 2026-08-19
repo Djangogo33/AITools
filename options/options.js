@@ -1,8 +1,17 @@
-import { getNewTabDestination, getNewTabSearchEngine, getNewTabSearchUrl, getPomodoroMinutes, getSettings, saveSettings } from '../shared/constants.js';
+import { DEFAULT_FEATURE_FLAGS, getFeatureFlags, getFeatureGroups, getNewTabDestination, getNewTabSearchEngine, getNewTabSearchUrl, getPomodoroMinutes, getSettings, isFeatureEnabled, saveSettings } from '../shared/constants.js';
 import { getAIStatus } from '../popup/ai-runtime.js';
 
 const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => [...document.querySelectorAll(selector)];
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const OPTIONS_FEATURE_SELECTORS = {
+  'web.appearance': '#option-page-dark', 'web.cleaning': '#option-cookies, #option-sponsored',
+  'service.sync': '#option-sync-notes, #option-import-notes, #option-sync-personal, #personal-sync-status',
+  'productivity.focus': '#option-refresh-focus, #focus-diagnostic, #option-dnd-enabled, #option-dnd-domains, #option-save-dnd',
+  'browser.rules': '#option-apply-tab-rules, #option-rule-domain, #option-rule-color, #option-add-tab-rule, #tab-rules-list',
+  'data.backup': '#option-export, #option-export-markdown, #option-export-csv, #option-import-file, #option-reset',
+  diagnostics: '#option-export-diagnostics'
+};
 async function sendPageMessage(tabId, message, attempts = 3) { let lastError; for (let attempt = 0; attempt < attempts; attempt += 1) { try { return await chrome.tabs.sendMessage(tabId, message); } catch (error) { lastError = error; if (attempt === 0 && /Receiving end does not exist/i.test(String(error?.message || error))) { try { await chrome.scripting.executeScript({ target: { tabId }, files: ['content/content-script.js'] }); } catch { /* la page peut interdire l’injection ; le message d’origine reste utile */ } } if (attempt < attempts - 1) await wait(180 * (attempt + 1)); } } throw lastError || new Error('Script de contenu indisponible.'); }
 
 init();
@@ -14,6 +23,8 @@ async function init() {
   $('#option-notifications').checked = settings.notifications !== false;
   $('#option-pomodoro-duration').value = getPomodoroMinutes(settings);
   renderNewTabSettings(settings);
+  renderFeatureCatalog(settings);
+  applyFeatureActionVisibility(settings);
   bindActions(); await Promise.all([renderAIStatus(), renderAccount(), renderFocusStats(), renderWeeklyReview(), renderDndSettings(), renderTabRules(), renderPersonalSyncStatus()]);
 }
 
@@ -24,6 +35,7 @@ function bindActions() {
   $('#option-pomodoro-duration').addEventListener('change', async (event) => { const settings = await saveSettings({ pomodoroMinutes: event.target.value }); event.target.value = getPomodoroMinutes(settings); showToast(`Durée Pomodoro définie à ${event.target.value} minutes.`); });
   $('#option-newtab-destination').addEventListener('change', async (event) => { const settings = await saveSettings({ newTabDestination: event.target.value }); renderNewTabSettings(settings); showToast('Destination du nouvel onglet enregistrée.'); });
   $('#option-newtab-engine').addEventListener('change', async (event) => { const settings = await saveSettings({ newTabSearchEngine: event.target.value }); renderNewTabSettings(settings); showToast('Moteur de recherche enregistré.'); });
+  $('#option-reset-features').addEventListener('click', async () => { const settings = await saveSettings({ featureFlags: DEFAULT_FEATURE_FLAGS }); renderFeatureCatalog(settings); applyFeatureActionVisibility(settings); renderNewTabSettings(settings); showToast('Toutes les fonctionnalités sont réactivées.'); });
   $('#option-page-dark').addEventListener('click', () => runPageAction('page/toggle-dark', 'Mode sombre de la page mis à jour.'));
   $('#option-cookies').addEventListener('click', () => runPageAction('page/dismiss-cookies', 'Bannières de consentement masquées.'));
   $('#option-sponsored').addEventListener('click', () => runPageAction('page/block-sponsored', 'Résultats sponsorisés masqués.'));
@@ -45,17 +57,35 @@ function bindActions() {
   $('#option-apply-tab-rules').addEventListener('click', applyTabRules);
 }
 
+function applyFeatureActionVisibility(settings) {
+  Object.entries(OPTIONS_FEATURE_SELECTORS).forEach(([featureId, selector]) => $$(selector).forEach((element) => { element.hidden = !isFeatureEnabled(settings, featureId); }));
+}
+
+function renderFeatureCatalog(settings) {
+  const flags = getFeatureFlags(settings);
+  $('#feature-catalog').innerHTML = Object.entries(getFeatureGroups()).map(([group, features]) => `<section class="feature-group"><h3>${escapeHtml(group)}</h3><div class="feature-list">${features.map((feature) => `<label class="feature-row"><span><strong>${escapeHtml(feature.label)}</strong><small>${escapeHtml(feature.description)}</small></span><input type="checkbox" data-feature-flag="${escapeHtml(feature.id)}" ${flags[feature.id] ? 'checked' : ''} aria-label="${escapeHtml(feature.label)}"></label>`).join('')}</div></section>`).join('');
+  $$('[data-feature-flag]').forEach((input) => input.addEventListener('change', async (event) => { const featureId = event.target.dataset.featureFlag; const nextFlags = { ...getFeatureFlags(settings), [featureId]: event.target.checked }; settings = await saveSettings({ featureFlags: nextFlags }); renderFeatureCatalog(settings); applyFeatureActionVisibility(settings); renderNewTabSettings(settings); showToast(event.target.checked ? 'Fonctionnalité activée.' : 'Fonctionnalité désactivée.'); }));
+}
+
 function renderNewTabSettings(settings) {
   const destination = getNewTabDestination(settings);
   const engine = getNewTabSearchEngine(settings);
   $('#option-newtab-destination').value = destination;
   $('#option-newtab-engine').value = engine;
-  $('#option-newtab-engine-row').hidden = destination !== 'search';
-  const note = destination === 'dashboard'
-    ? 'Le tableau de bord AITools s’affichera à chaque nouvel onglet.'
-    : destination === 'native'
-      ? 'La page Nouvel onglet interne de Chrome s’affichera ; AITools reste accessible depuis son icône.'
-      : `La page d’accueil ${$('#option-newtab-engine').selectedOptions[0]?.textContent || engine} s’ouvrira à chaque nouvel onglet (${getNewTabSearchUrl(settings)}).`;
+  const dashboardEnabled = isFeatureEnabled(settings, 'newtab.dashboard');
+  const searchEnabled = isFeatureEnabled(settings, 'newtab.search');
+  $('#option-newtab-destination').querySelector('[value="dashboard"]').disabled = !dashboardEnabled;
+  $('#option-newtab-destination').querySelector('[value="search"]').disabled = !searchEnabled;
+  $('#option-newtab-engine-row').hidden = destination !== 'search' || !searchEnabled;
+  const note = !dashboardEnabled && destination === 'dashboard'
+    ? 'Le tableau de bord est désactivé : Chrome ouvrira son nouvel onglet natif.'
+    : !searchEnabled && destination === 'search'
+      ? 'La redirection moteur est désactivée : Chrome ouvrira son nouvel onglet natif.'
+      : destination === 'dashboard'
+        ? 'Le tableau de bord AITools s’affichera à chaque nouvel onglet.'
+        : destination === 'native'
+          ? 'La page Nouvel onglet interne de Chrome s’affichera ; AITools reste accessible depuis son icône.'
+          : `La page d’accueil ${$('#option-newtab-engine').selectedOptions[0]?.textContent || engine} s’ouvrira à chaque nouvel onglet (${getNewTabSearchUrl(settings)}).`;
   $('#option-newtab-note').textContent = note;
 }
 

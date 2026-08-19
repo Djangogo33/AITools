@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 const store = new Map();
 globalThis.chrome = { storage: { local: { async get(key) { return { [key]: store.get(key) }; }, async set(values) { Object.entries(values).forEach(([key, value]) => store.set(key, value)); } } } };
-const { getNewTabDestination, getNewTabSearchEngine, getNewTabSearchUrl, getPomodoroMinutes, getQuickLinks, getSettings, saveSettings } = await import('../shared/constants.js');
+const { DEFAULT_FEATURE_FLAGS, getFeatureFlags, isFeatureEnabled, getNewTabDestination, getNewTabSearchEngine, getNewTabSearchUrl, getPomodoroMinutes, getQuickLinks, getSettings, saveSettings } = await import('../shared/constants.js');
 assert.equal(getPomodoroMinutes({ pomodoroMinutes: 2 }), 5);
 assert.equal(getPomodoroMinutes({ pomodoroMinutes: 150 }), 120);
 assert.equal(getPomodoroMinutes({ pomodoroMinutes: 34.7 }), 35);
@@ -12,12 +12,17 @@ assert.equal(getNewTabDestination({ newTabDestination: 'invalide' }), 'dashboard
 assert.equal(getNewTabSearchEngine({ newTabSearchEngine: 'qwant' }), 'qwant');
 assert.equal(getNewTabSearchEngine({ newTabSearchEngine: 'invalide' }), 'google');
 assert.equal(getNewTabSearchUrl({ newTabSearchEngine: 'brave' }), 'https://search.brave.com/');
+assert.equal(isFeatureEnabled({}, 'web.summary'), true);
+assert.equal(isFeatureEnabled({ featureFlags: { 'web.summary': false } }, 'web.summary'), false);
+assert.equal(getFeatureFlags({ featureFlags: { inconnue: false } }).inconnue, undefined);
 assert.equal(getQuickLinks({ quickLinks: [] }).length, 0);
 assert.equal(getQuickLinks({ quickLinks: [{ label: 'Invalide', url: 'javascript:alert(1)' }] }).length, 0);
-await saveSettings({ pomodoroMinutes: 200, quickLinks: [], newTabDestination: 'search', newTabSearchEngine: 'bing' });
+await saveSettings({ pomodoroMinutes: 200, quickLinks: [], newTabDestination: 'search', newTabSearchEngine: 'bing', featureFlags: { ...DEFAULT_FEATURE_FLAGS, 'media.inspect': false } });
 const settings = await getSettings();
 assert.equal(settings.pomodoroMinutes, 120);
 assert.deepEqual(settings.quickLinks, []);
 assert.equal(settings.newTabDestination, 'search');
 assert.equal(settings.newTabSearchEngine, 'bing');
+assert.equal(settings.featureFlags['media.inspect'], false);
+assert.equal(settings.featureFlags['web.summary'], true);
 console.log('constants preferences simulation: ok');

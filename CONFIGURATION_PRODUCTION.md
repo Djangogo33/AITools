@@ -217,13 +217,13 @@ Depuis la racine du dépôt, construisez l’archive avec le manifeste à la rac
 
 ```bash
 cd /chemin/vers/AITools
-zip -rq ../AITools-v8.1.0.zip manifest.json assets background content newtab options popup shared
+zip -rq ../AITools-v8.2.0.zip manifest.json assets background content newtab options popup shared
 ```
 
 Avant l’import Web Store, vérifiez que l’archive contient `manifest.json` au premier niveau :
 
 ```bash
-unzip -l ../AITools-v8.1.0.zip | head -30
+unzip -l ../AITools-v8.2.0.zip | head -30
 ```
 
 Dans le Chrome Web Store Developer Dashboard, créez l’élément, chargez le ZIP, ajoutez des captures d’écran, une politique de confidentialité, une explication honnête de chaque permission et les mentions concernant le traitement local de l’IA. Après attribution de l’ID définitif, retournez aux étapes 1 et 3 pour mettre à jour le client OAuth et l’URL de redirection de production.

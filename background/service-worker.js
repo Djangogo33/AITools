@@ -1,4 +1,4 @@
-import { MESSAGE_TYPES, STORAGE_KEYS, getPomodoroMinutes } from '../shared/constants.js';
+import { MESSAGE_TYPES, NEW_TAB_SEARCH_ENGINES, STORAGE_KEYS, getPomodoroMinutes, getSettings, isFeatureEnabled } from '../shared/constants.js';
 import { getAccount, isFeatureAllowed, signInWithGoogle, signOut } from '../shared/auth-client.js';
 import { createNote, deleteNote, importGuestNotes, listNotes, syncNotes } from '../shared/notes-service.js';
 import { createCheckout, createPortal } from '../shared/billing-client.js';
@@ -20,6 +20,19 @@ const TASK_REMINDER_PREFIX = 'aitools-task-reminder:';
 let pomodoroCompletionInFlight = null;
 let pomodoroCompletionEndAt = null;
 const DEFAULT_POMODORO = { status: 'idle', durationMs: 25 * 60_000, remainingMs: 25 * 60_000, endAt: null, cycle: 'focus' };
+const MESSAGE_FEATURES = {
+  'auth/sign-in-google': 'service.auth', 'auth/sign-out': 'service.auth',
+  'billing/create-checkout': 'service.billing', 'billing/create-portal': 'service.billing',
+  'notes/list': 'productivity.notes', 'notes/create': 'productivity.notes', 'notes/delete': 'productivity.notes', 'notes/sync': 'service.sync', 'notes/import-guest': 'service.sync',
+  'inbox/list': 'productivity.inbox', 'inbox/add': 'productivity.inbox', 'inbox/process': 'productivity.inbox', 'inbox/dismiss': 'productivity.inbox',
+  'reading/list': 'productivity.reading', 'reading/save-current': 'productivity.reading', 'reading/toggle': 'productivity.reading', 'reading/remove': 'productivity.reading', 'reading/update': 'productivity.reading',
+  'personal/sync': 'service.sync', 'personal/sync-status': 'service.sync', 'search/unified': 'search.local',
+  'export/create': 'data.backup', 'diagnostics/list': 'diagnostics', 'diagnostics/export': 'diagnostics', 'focus/stats': 'productivity.focus', 'analytics/weekly-review': 'productivity.focus', 'focus/get-dnd': 'productivity.focus', 'focus/save-dnd': 'productivity.focus',
+  'tab-rules/list': 'browser.rules', 'tab-rules/create': 'browser.rules', 'tab-rules/toggle': 'browser.rules', 'tab-rules/remove': 'browser.rules', 'tab-rules/apply': 'browser.rules', 'tabs/close-duplicates': 'browser.duplicates', 'tabs/group-by-domain': 'browser.grouping', 'tabs/get-stats': 'browser.finder',
+  'workspaces/list': 'productivity.workspaces', 'workspaces/capture': 'productivity.workspaces', 'workspaces/restore': 'productivity.workspaces', 'workspaces/update': 'productivity.workspaces', 'workspaces/remove': 'productivity.workspaces',
+  'tasks/list': 'productivity.tasks', 'tasks/create': 'productivity.tasks', 'tasks/toggle': 'productivity.tasks', 'tasks/update': 'productivity.tasks', 'tasks/remove': 'productivity.tasks', 'tasks/set-active': 'productivity.tasks', 'tasks/clear-completed': 'productivity.tasks',
+  'pomodoro/get': 'productivity.pomodoro', 'pomodoro/toggle': 'productivity.pomodoro', 'pomodoro/reset': 'productivity.pomodoro', 'newtab/open-search': 'newtab.search'
+};
 
 chrome.runtime.onInstalled.addListener(async () => {
   await migrateLocalData();
@@ -48,16 +61,24 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 chrome.commands.onCommand.addListener(async (command) => {
   try {
     if (command === 'toggle-pomodoro') {
-      const settings = (await chrome.storage.local.get(STORAGE_KEYS.settings))[STORAGE_KEYS.settings] || {};
+      const settings = await getSettings();
+      if (!isFeatureEnabled(settings, 'productivity.pomodoro')) return notifyCommand('Pomodoro AITools', 'Cette fonctionnalité est désactivée dans vos préférences.');
       const state = await togglePomodoro(getPomodoroMinutes(settings), 'focus');
       await notifyCommand('Pomodoro AITools', state.status === 'running' ? 'Session démarrée.' : 'Session suspendue.');
     }
     if (command === 'save-to-reading-list') {
+      if (!isFeatureEnabled(await getSettings(), 'productivity.reading')) return notifyCommand('Liste de lecture AITools', 'Cette fonctionnalité est désactivée dans vos préférences.');
       const result = await saveCurrentPage();
       await notifyCommand('Liste de lecture AITools', result.created ? 'Page ajoutée à votre liste.' : 'Cette page est déjà enregistrée.');
     }
     if (command === 'open-command-launcher') await openCommandLauncher();
   } catch (error) { await notifyCommand('AITools', normalizeError(error)); }
+});
+
+chrome.storage.onChanged.addListener(async (changes, areaName) => {
+  if (areaName !== 'local' || !changes[STORAGE_KEYS.settings]) return;
+  const nextSettings = changes[STORAGE_KEYS.settings].newValue || {};
+  if (!isFeatureEnabled(nextSettings, 'productivity.pomodoro')) { await chrome.alarms.clear(POMODORO_ALARM); await savePomodoro({ ...DEFAULT_POMODORO, durationMs: getPomodoroMinutes(nextSettings) * 60_000, remainingMs: getPomodoroMinutes(nextSettings) * 60_000 }); }
 });
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => { await applyDndToTab(tabId); });
@@ -119,17 +140,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     'tabs/close-duplicates': () => closeDuplicateTabs(),
     'tabs/group-by-domain': () => groupTabsByDomain(),
     'tabs/get-stats': () => getTabStats(),
-    'newtab/open-native': () => openNativeNewTab(sender.tab?.id)
+    'newtab/open-native': () => openNativeNewTab(sender.tab?.id),
+    'newtab/open-search': () => openNewTabSearch(sender.tab?.id, message.url)
   };
   const handler = handlers[message?.type];
   if (!handler) return false;
-  handler().then((data) => sendResponse({ ok: true, data })).catch((error) => sendResponse({ ok: false, error: normalizeError(error) }));
+  Promise.resolve().then(async () => { const featureId = MESSAGE_FEATURES[message?.type]; if (featureId && !isFeatureEnabled(await getSettings(), featureId)) throw new Error('Cette fonctionnalité est désactivée dans vos préférences.'); return handler(); }).then((data) => sendResponse({ ok: true, data })).catch((error) => sendResponse({ ok: false, error: normalizeError(error) }));
   return true;
 });
 
+async function navigationTabId(tabId) {
+  if (Number.isInteger(tabId)) return tabId;
+  const newTabUrl = chrome.runtime.getURL('newtab/index.html');
+  const candidates = await chrome.tabs.query({ url: newTabUrl });
+  const newest = candidates.filter((tab) => Number.isInteger(tab.id)).sort((left, right) => (Number(right.lastAccessed || 0) - Number(left.lastAccessed || 0)) || (Number(right.id) - Number(left.id)))[0];
+  if (Number.isInteger(newest?.id)) return newest.id;
+  const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (!Number.isInteger(activeTab?.id)) throw new Error('Onglet de nouvel onglet introuvable.');
+  return activeTab.id;
+}
+
 async function openNativeNewTab(tabId) {
-  if (!Number.isInteger(tabId)) throw new Error('Onglet de nouvel onglet introuvable.');
-  await chrome.tabs.update(tabId, { url: 'chrome-search://local-ntp/local-ntp.html' });
+  await chrome.tabs.update(await navigationTabId(tabId), { url: 'chrome-search://local-ntp/local-ntp.html' });
+  return { redirected: true };
+}
+
+async function openNewTabSearch(tabId, url) {
+  const allowed = Object.values(NEW_TAB_SEARCH_ENGINES).some((engine) => engine.url === url);
+  if (!allowed) throw new Error('Moteur de recherche non autorisé.');
+  await chrome.tabs.update(await navigationTabId(tabId), { url });
   return { redirected: true };
 }
 

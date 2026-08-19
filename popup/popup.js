@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, MESSAGE_TYPES, getPomodoroMinutes, getQuickLinks, getSettings, saveSettings } from '../shared/constants.js';
+import { DEFAULT_SETTINGS, MESSAGE_TYPES, isFeatureEnabled, getPomodoroMinutes, getQuickLinks, getSettings, saveSettings } from '../shared/constants.js';
 import { SEARCH_PRESETS, buildGoogleUrl, clearSearchHistory, getSearchHistory, saveSearch } from '../shared/search-service.js';
 import { formatTags, tagsFromText } from '../shared/tags-service.js';
 import { analyzeAIProbability, getAIStatus, paletteFromText, summarizeWithAI, translateWithAI } from './ai-runtime.js';
@@ -17,12 +17,36 @@ let activeTaskTitle = '';
 let taskPeriod = 'all';
 let commandSelection = 0;
 
+const FEATURE_SELECTORS = {
+  'web.summary': '#home-summarize, #tool-summarize', 'web.reading': '#tool-reading, #tool-focus', 'web.appearance': '#tool-page-dark', 'web.cleaning': '#tool-dismiss-cookies, #tool-block-sponsored', 'web.privacy': '#tool-anonymize, #tool-highlight', 'web.print': '#tool-print',
+  'text.clean': '#text-clean', 'text.case': '#text-upper, #text-lower, #text-title', 'text.json': '#text-json', 'text.url': '#text-url-encode, #text-url-decode', 'text.base64': '#text-base64-encode, #text-base64-decode', 'text.clipboard': '#text-copy, #text-use-output, #text-clear',
+  'browser.finder': '.tab-finder', 'browser.duplicates': '#tool-duplicates', 'browser.grouping': '#tool-group-tabs', 'browser.links': '#browser-copy-links',
+  'media.inspect': '#media-inspect', 'media.palette': '#media-palette', 'media.youtube': '.youtube-card',
+  'ai.page': '#ai-from-page', 'ai.summary': '#ai-summarize', 'ai.translation': '#ai-target-language, #ai-translate', 'ai.analysis': '#ai-detect', 'ai.palette': '#ai-palette', 'ai.tabs': '#ai-research-tabs', 'ai.clipboard': '#ai-copy',
+  'productivity.notes': '[data-view="notes"], #view-notes', 'productivity.reading': '.reading-list-card', 'productivity.tasks': '[data-view="tasks"], #view-tasks', 'productivity.inbox': '[data-view="inbox"], #view-inbox, #home-capture', 'productivity.workspaces': '[data-view="workspaces"], #view-workspaces', 'productivity.pomodoro': '.pomodoro-card',
+  'search.web': '#search-submit, .search-categories, .search-tags', 'search.local': '#local-search-submit', 'search.history': '#operator-grid, .search-history-heading, #search-history',
+  'service.auth': '#auth-action, #sign-out, #account-shortcut', 'service.sync': '#sync-notes, #import-local-notes', 'service.billing': '#billing-actions'
+};
+const MODULE_FEATURES = { web: ['web.summary', 'web.reading', 'web.appearance', 'web.cleaning', 'web.privacy', 'web.print'], text: ['text.clean', 'text.case', 'text.json', 'text.url', 'text.base64', 'text.clipboard'], browser: ['browser.finder', 'browser.duplicates', 'browser.grouping', 'browser.links'], media: ['media.inspect', 'media.palette', 'media.youtube'], ai: ['ai.page', 'ai.summary', 'ai.translation', 'ai.analysis', 'ai.palette', 'ai.tabs', 'ai.clipboard'], productivity: ['productivity.notes', 'productivity.reading', 'productivity.tasks', 'productivity.inbox', 'productivity.workspaces', 'productivity.pomodoro'], search: ['search.web', 'search.local', 'search.history'] };
+const VIEW_FEATURES = { notes: 'productivity.notes', tasks: 'productivity.tasks', inbox: 'productivity.inbox', workspaces: 'productivity.workspaces' };
+
+chrome.storage.onChanged.addListener(async (changes, areaName) => {
+  if (areaName !== 'local' || !changes['aitools.settings']) return;
+  settings = await getSettings();
+  applyFeatureVisibility();
+  const activeSection = $$('.view').find((section) => section.classList.contains('active'));
+  const activeView = activeSection?.id?.replace('view-', '');
+  if (activeView && ((VIEW_FEATURES[activeView] && !featureIsEnabled(VIEW_FEATURES[activeView])) || (MODULE_FEATURES[activeView] && !moduleIsEnabled(activeView)))) showView('home');
+  if (!$('#command-overlay').hidden) renderCommandList();
+});
+
 init();
 
 async function init() {
   settings = await getSettings();
   await loadNotes();
   applyTheme(settings.theme);
+  applyFeatureVisibility();
   $('#dark-mode-setting').checked = settings.theme === 'dark';
   $('#notifications-setting').checked = settings.notifications !== false;
   $('#compact-setting').checked = settings.compactMode === true;
@@ -55,7 +79,17 @@ function bindNavigation() {
   $('#account-shortcut').addEventListener('click', () => showView('settings'));
 }
 
+function featureIsEnabled(featureId) { return isFeatureEnabled(settings, featureId); }
+function moduleIsEnabled(module) { return (MODULE_FEATURES[module] || []).some(featureIsEnabled); }
+function applyFeatureVisibility() {
+  Object.entries(FEATURE_SELECTORS).forEach(([featureId, selector]) => $$(selector).forEach((element) => { element.hidden = !featureIsEnabled(featureId); }));
+  Object.entries(MODULE_FEATURES).forEach(([module]) => $$(`[data-view="${module}"]`).forEach((element) => { element.hidden = !moduleIsEnabled(module); }));
+  Object.entries(VIEW_FEATURES).forEach(([view, featureId]) => { const section = $(`#view-${view}`); if (section) section.hidden = !featureIsEnabled(featureId); });
+}
+
 function showView(view) {
+  if (VIEW_FEATURES[view] && !featureIsEnabled(VIEW_FEATURES[view])) { showToast('Cette fonctionnalité est désactivée dans vos préférences.'); view = 'home'; }
+  if (MODULE_FEATURES[view] && !moduleIsEnabled(view)) { showToast('Ce module ne contient aucune fonctionnalité active.'); view = 'home'; }
   $$('.nav-item').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   $$('.view').forEach((section) => section.classList.toggle('active', section.id === `view-${view}`));
   const titles = { home: ['COUTEAU SUISSE POUR CHROME', 'Vos outils'], web: ['MODULE PAGE WEB', 'Comprendre une page'], text: ['MODULE TEXTE & DONNÉES', 'Transformer localement'], browser: ['MODULE ONGLETS & NAVIGATEUR', 'Gérer vos onglets'], media: ['MODULE MÉDIAS', 'Inspecter les médias'], ai: ['MODULE IA LOCALE', 'Analyse assistée'], productivity: ['MODULE PRODUCTIVITÉ', 'Organiser si besoin'], search: ['RECHERCHE UNIVERSELLE', 'Rechercher mieux'], notes: ['PRODUCTIVITÉ · CARNET', 'Notes rapides'], tasks: ['PRODUCTIVITÉ · PLAN', 'Prochaines actions'], inbox: ['PRODUCTIVITÉ · BOÎTE DE RÉCEPTION', 'Captures à traiter'], workspaces: ['PRODUCTIVITÉ · SESSIONS', 'Espaces de travail'], settings: ['PERSONNALISATION', 'Préférences'] };
@@ -145,17 +179,17 @@ function bindActions() {
 
 function commandItems() {
   return [
-    { label: 'Résumer la page', hint: 'Extraire les idées principales de l’onglet actif', run: () => runPageAction(MESSAGE_TYPES.summarizePage) },
-    { label: 'Mode lecture', hint: 'Réduire les distractions de la page', run: () => runProductivityAction(MESSAGE_TYPES.toggleFocus) },
-    { label: 'Outils texte et données', hint: 'JSON, URL, Base64, nettoyage et casse', run: () => { showView('text'); $('#text-input').focus(); } },
-    { label: 'Gérer les onglets', hint: 'Doublons, groupes, liens et filtre', run: () => showView('browser') },
-    { label: 'Inspecter les médias', hint: 'Lister les images, vidéos et audios de la page', run: () => { showView('media'); inspectPageMedia(); } },
-    { label: 'Capturer la page', hint: 'Ajouter la page à À traiter', run: captureCurrentPage },
-    { label: 'Créer une note', hint: 'Ouvrir le carnet productivité', run: () => { showView('notes'); $('#note-input').focus(); } },
-    { label: 'Créer une tâche', hint: 'Ouvrir le plan de travail', run: () => { showView('tasks'); $('#task-input').focus(); } },
-    { label: 'Démarrer le Pomodoro', hint: 'Lancer ou suspendre la session', run: togglePomodoro },
-    { label: 'Rechercher dans AITools', hint: 'Notes, tâches, lecture et espaces', run: () => { showView('search'); $('#search-input').focus(); } }
-  ];
+    { feature: 'web.summary', label: 'Résumer la page', hint: 'Extraire les idées principales de l’onglet actif', run: () => runPageAction(MESSAGE_TYPES.summarizePage) },
+    { feature: 'web.reading', label: 'Mode lecture', hint: 'Réduire les distractions de la page', run: () => runProductivityAction(MESSAGE_TYPES.toggleFocus) },
+    { feature: 'text.clean', label: 'Outils texte et données', hint: 'JSON, URL, Base64, nettoyage et casse', run: () => { showView('text'); $('#text-input').focus(); } },
+    { feature: 'browser.finder', label: 'Gérer les onglets', hint: 'Doublons, groupes, liens et filtre', run: () => showView('browser') },
+    { feature: 'media.inspect', label: 'Inspecter les médias', hint: 'Lister les images, vidéos et audios de la page', run: () => { showView('media'); inspectPageMedia(); } },
+    { feature: 'productivity.inbox', label: 'Capturer la page', hint: 'Ajouter la page à À traiter', run: captureCurrentPage },
+    { feature: 'productivity.notes', label: 'Créer une note', hint: 'Ouvrir le carnet productivité', run: () => { showView('notes'); $('#note-input').focus(); } },
+    { feature: 'productivity.tasks', label: 'Créer une tâche', hint: 'Ouvrir le plan de travail', run: () => { showView('tasks'); $('#task-input').focus(); } },
+    { feature: 'productivity.pomodoro', label: 'Démarrer le Pomodoro', hint: 'Lancer ou suspendre la session', run: togglePomodoro },
+    { feature: 'search.local', label: 'Rechercher dans AITools', hint: 'Notes, tâches, lecture et espaces', run: () => { showView('search'); $('#search-input').focus(); } }
+  ].filter((item) => !item.feature || featureIsEnabled(item.feature));
 }
 
 function openCommandLauncher() {
