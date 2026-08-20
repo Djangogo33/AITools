@@ -1,4 +1,4 @@
-const endpoint = 'http://127.0.0.1:9333';
+const endpoint = process.env.AITOOLS_CDP_ENDPOINT || 'http://127.0.0.1:9333';
 const targets = await (await fetch(`${endpoint}/json/list`)).json();
 const popup = targets.find((item) => item.type === 'page' && /\/popup\/index\.html$/.test(item.url));
 if (!popup) throw new Error('Popup AITools introuvable.');
@@ -7,15 +7,18 @@ await new Promise((resolve, reject) => { socket.addEventListener('open', resolve
 let sequence = 0;
 const evaluate = (expression) => new Promise((resolve, reject) => {
   const id = ++sequence;
-  const listener = (event) => { const message = JSON.parse(event.data); if (message.id !== id) return; socket.removeEventListener('message', listener); if (message.error) reject(new Error(message.error.message)); else resolve(message.result.result?.value); };
+  const listener = (event) => { const message = JSON.parse(event.data); if (message.id !== id) return; socket.removeEventListener('message', listener); if (message.error) reject(new Error(message.error.message)); else if (message.result.exceptionDetails) reject(new Error(message.result.exceptionDetails.text || 'Échec de Runtime.evaluate')); else resolve(message.result.result?.value); };
   socket.addEventListener('message', listener);
   socket.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true } }));
 });
-const result = await evaluate(`(() => { const main = document.querySelector('.main-content'); const root = document.scrollingElement; main.scrollTop = 84; return { rootScrollable: root.scrollHeight > root.clientHeight, bodyOverflow: getComputedStyle(document.body).overflowY, mainOverflow: getComputedStyle(main).overflowY, mainScrollable: main.scrollHeight > main.clientHeight, mainScrollTop: main.scrollTop, windowScrollY: window.scrollY, sidebarOverflow: getComputedStyle(document.querySelector('.sidebar')).overflowY }; })()`);
+const ready = await evaluate(`new Promise((resolve) => { const deadline = Date.now() + 5000; const waitForPopup = () => { if (document.readyState === 'complete' && document.querySelector('.main-content') && document.querySelector('.sidebar')) return resolve(true); if (Date.now() >= deadline) return resolve(false); setTimeout(waitForPopup, 80); }; waitForPopup(); })`);
+if (!ready) throw new Error('Le popup AITools n’a pas terminé son chargement avant l’audit.');
+const result = await evaluate(`(() => { const main = document.querySelector('.main-content'); const root = document.scrollingElement; main.scrollTop = 84; return { rootScrollable: root.scrollHeight > root.clientHeight, rootOverflow: getComputedStyle(root).overflowY, bodyOverflow: getComputedStyle(document.body).overflowY, mainOverflow: getComputedStyle(main).overflowY, mainScrollable: main.scrollHeight > main.clientHeight, mainScrollTop: main.scrollTop, windowScrollY: window.scrollY, sidebarOverflow: getComputedStyle(document.querySelector('.sidebar')).overflowY, popupHeight: Math.round(document.documentElement.getBoundingClientRect().height), shellHeight: Math.round(document.querySelector('.app-shell').getBoundingClientRect().height) }; })()`);
 socket.close();
 console.log(JSON.stringify(result, null, 2));
-if (result.rootScrollable) throw new Error('Le document du popup ne doit pas défiler.');
+if (result.rootOverflow !== 'hidden') throw new Error('La racine du popup doit masquer le débordement vertical.');
 if (result.bodyOverflow !== 'hidden') throw new Error('Le body du popup doit masquer le débordement vertical.');
 if (!['auto', 'scroll'].includes(result.mainOverflow) || !result.mainScrollable || result.mainScrollTop < 1) throw new Error('Le panneau principal doit rester la seule zone défilable.');
 if (result.windowScrollY !== 0 || result.sidebarOverflow !== 'hidden') throw new Error('La fenêtre et la barre latérale ne doivent pas défiler.');
+if (result.popupHeight < 640 || result.shellHeight < 640) throw new Error(`Le popup est comprimé (${result.popupHeight}px / ${result.shellHeight}px) au lieu de conserver une hauteur exploitable.`);
 console.log('runtime popup single-scroll audit: ok');

@@ -44,6 +44,8 @@ init();
 
 async function init() {
   settings = await getSettings();
+  const versionLabel = $('.about-card strong');
+  if (versionLabel) versionLabel.textContent = `AITools ${chrome.runtime.getManifest().version}`;
   await loadNotes();
   applyTheme(settings.theme);
   applyFeatureVisibility();
