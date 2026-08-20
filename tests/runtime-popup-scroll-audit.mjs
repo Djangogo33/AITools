@@ -1,0 +1,21 @@
+const endpoint = 'http://127.0.0.1:9333';
+const targets = await (await fetch(`${endpoint}/json/list`)).json();
+const popup = targets.find((item) => item.type === 'page' && /\/popup\/index\.html$/.test(item.url));
+if (!popup) throw new Error('Popup AITools introuvable.');
+const socket = new WebSocket(popup.webSocketDebuggerUrl);
+await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, { once: true }); socket.addEventListener('error', reject, { once: true }); });
+let sequence = 0;
+const evaluate = (expression) => new Promise((resolve, reject) => {
+  const id = ++sequence;
+  const listener = (event) => { const message = JSON.parse(event.data); if (message.id !== id) return; socket.removeEventListener('message', listener); if (message.error) reject(new Error(message.error.message)); else resolve(message.result.result?.value); };
+  socket.addEventListener('message', listener);
+  socket.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true } }));
+});
+const result = await evaluate(`(() => { const main = document.querySelector('.main-content'); const root = document.scrollingElement; main.scrollTop = 84; return { rootScrollable: root.scrollHeight > root.clientHeight, bodyOverflow: getComputedStyle(document.body).overflowY, mainOverflow: getComputedStyle(main).overflowY, mainScrollable: main.scrollHeight > main.clientHeight, mainScrollTop: main.scrollTop, windowScrollY: window.scrollY, sidebarOverflow: getComputedStyle(document.querySelector('.sidebar')).overflowY }; })()`);
+socket.close();
+console.log(JSON.stringify(result, null, 2));
+if (result.rootScrollable) throw new Error('Le document du popup ne doit pas défiler.');
+if (result.bodyOverflow !== 'hidden') throw new Error('Le body du popup doit masquer le débordement vertical.');
+if (!['auto', 'scroll'].includes(result.mainOverflow) || !result.mainScrollable || result.mainScrollTop < 1) throw new Error('Le panneau principal doit rester la seule zone défilable.');
+if (result.windowScrollY !== 0 || result.sidebarOverflow !== 'hidden') throw new Error('La fenêtre et la barre latérale ne doivent pas défiler.');
+console.log('runtime popup single-scroll audit: ok');

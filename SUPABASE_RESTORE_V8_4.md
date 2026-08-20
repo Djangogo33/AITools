@@ -1,4 +1,4 @@
-# Sauvegarde et restauration Supabase — AITools 8.4
+# Sauvegarde et restauration Supabase — AITools 8.4.1
 
 Cette version ajoute une **sauvegarde restaurable** aux données AITools déjà synchronisées. Son objectif est de permettre à un utilisateur qui a supprimé les données de son navigateur de retrouver son espace personnel après reconnexion.
 
@@ -64,4 +64,4 @@ Une suppression de cache ne restaure pas l’authentification : reconnectez-vous
 
 ## 6. Publication
 
-Chargez l’archive `AITools-v8.4.0.zip` seulement après avoir appliqué la migration et validé le contrôle strict ci-dessus. Pour un nouveau projet Supabase, `supabase/schema.sql` contient également la table `user_backups`.
+Chargez l’archive `AITools-v8.4.1.zip` seulement après avoir appliqué la migration et validé le contrôle strict ci-dessus. Pour un nouveau projet Supabase, `supabase/schema.sql` contient également la table `user_backups`.
