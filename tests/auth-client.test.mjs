@@ -52,6 +52,9 @@ assert.ok(requests.some(({ url }) => url.includes('/auth/v1/logout')));
 chrome.identity.launchWebAuthFlow = async () => 'https://redirect-inattendu.example/auth?code=ignored';
 await assert.rejects(() => signInWithGoogle(), /redirection de connexion reçue est invalide/);
 
+chrome.identity.launchWebAuthFlow = async () => { throw new Error('Authorization page could not be loaded.'); };
+await assert.rejects(() => signInWithGoogle(), /Redirect URLs.*abcdefghijklmnop\.chromiumapp\.org\/auth/);
+
 let refreshCalls = 0;
 store.set('aitools.auth.session', { access_token: 'expired-access', refresh_token: 'expired-refresh', expires_at: Date.now() - 1, user: { id: 'user-1', email: 'alex@example.com', user_metadata: { full_name: 'Alex Martin' } } });
 globalThis.fetch = async (url, options = {}) => {

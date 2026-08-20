@@ -84,15 +84,15 @@ supabase readonly health audit: ok (sauvegarde restaurable disponible)
 1. Dans **Google Cloud Console**, créez ou sélectionnez le projet dédié à AITools.
 2. Dans **Google Auth Platform → Branding**, renseignez le nom de l’application, une adresse e-mail de support, une URL de politique de confidentialité et, si vous en avez une, une URL de conditions d’utilisation.
 3. Dans **Data Access**, conservez uniquement `openid`, `userinfo.email` et `userinfo.profile`. N’ajoutez pas de portée sensible sans besoin réel.
-4. Dans **Clients**, créez un client OAuth de type **Chrome Extension**. Associez-le à l’ID de l’extension de l’environnement concerné.
-5. Dans **Supabase → Authentication → Providers → Google**, activez Google et renseignez le Client ID. Ajoutez le secret Google uniquement dans Supabase si l’interface le demande.
-6. Dans Google Cloud, ajoutez l’URL de callback Supabase affichée dans la configuration du fournisseur Google, normalement :
+4. Dans **Clients**, créez un client OAuth de type **Application Web**. C’est ce client qui doit être renseigné dans **Supabase → Authentication → Providers → Google** avec son Client ID et son Client Secret.
+5. Sur ce client **Application Web**, ajoutez l’URL de callback Supabase affichée dans la configuration du fournisseur Google, normalement :
 
    ```text
    https://<project-ref>.supabase.co/auth/v1/callback
    ```
 
-7. Dans **Supabase → Authentication → URL Configuration**, définissez une **Site URL** HTTPS que vous contrôlez, puis ajoutez l’URL exacte `https://<extension-id>.chromiumapp.org/auth` aux **Redirect URLs**.
+6. Vous pouvez aussi créer un client de type **Chrome Extension** et lui associer l’Item ID de l’extension. Il n’a pas de champ callback : c’est normal. Il ne remplace pas le client Web qui porte la callback Supabase.
+7. Dans **Supabase → Authentication → URL Configuration**, définissez une **Site URL** HTTPS que vous contrôlez, puis ajoutez aux **Redirect URLs** l’URL exacte retournée sur **votre** Chrome par `chrome.identity.getRedirectURL('auth')`, soit `https://<votre-extension-id>.chromiumapp.org/auth`. N’utilisez jamais l’ID d’un autre navigateur ou d’une capture de test.
 8. Ajoutez aussi vos futures URLs HTTPS de paiement, par exemple `https://votre-domaine.example/billing/success` et `https://votre-domaine.example/billing/cancel`.
 9. Dans AITools, cliquez sur **Se connecter avec Google**. Vérifiez l’apparition d’une ligne dans `auth.users`, puis dans `public.profiles`, et enfin votre identité dans le popup.
 

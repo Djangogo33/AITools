@@ -36,6 +36,11 @@ export async function signInWithGoogle() {
     const session = await exchangeCodeForSession(code, verifier);
     await persistSession(session);
     return await getAccount({ force: true });
+  } catch (error) {
+    if (/authorization page could not be loaded/i.test(String(error?.message || error))) {
+      throw new Error(`La page d’autorisation n’a pas atteint le retour de l’extension. Dans Supabase → Authentication → URL Configuration → Redirect URLs, ajoutez exactement : ${redirectTo}`);
+    }
+    throw error;
   } finally {
     await chrome.storage.local.remove(SUPABASE_STORAGE_KEYS.pkceVerifier);
   }
