@@ -53,6 +53,12 @@ function bindActions() {
   $('#newtab-pomodoro-reset').addEventListener('click', resetPomodoro);
 }
 
+function focusDashboardSearch() {
+  const input = $('#newtab-search');
+  const focus = () => { if (input && input.offsetParent !== null) input.focus({ preventScroll: true }); };
+  requestAnimationFrame(() => setTimeout(focus, 0));
+}
+
 async function renderAccount() {
   try { const response = await chrome.runtime.sendMessage({ type: 'auth/get-account' }); const name = response?.data?.user?.name; $('#greeting').textContent = name ? `${dayGreeting()}, ${name.split(' ')[0]}.` : `${dayGreeting()}.`; $('#account-summary').textContent = name ? `Plan ${String(response.data.plan || 'free').toUpperCase()} · Vos outils sont synchronisés.` : 'Votre espace de travail local est prêt.'; } catch { $('#greeting').textContent = `${dayGreeting()}.`; }
 }

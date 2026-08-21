@@ -25,6 +25,7 @@ const AUTO_SYNC_KEYS = new Set(['aitools.settings', 'aitools.tasks', 'aitools.re
 let lastAutoSyncAt = 0;
 let pomodoroCompletionInFlight = null;
 let pomodoroCompletionEndAt = null;
+const pendingNewTabSearchFocus = new Map();
 const DEFAULT_POMODORO = { status: 'idle', durationMs: 25 * 60_000, remainingMs: 25 * 60_000, endAt: null, cycle: 'focus' };
 const MESSAGE_FEATURES = {
   'auth/sign-in-google': 'service.auth', 'auth/sign-out': 'service.auth',
@@ -93,7 +94,11 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
 });
 
 chrome.tabs.onActivated.addListener(async ({ tabId }) => { await applyDndToTab(tabId); });
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => { if (changeInfo.status === 'complete' && tab.active) await applyDndToTab(tabId, tab.url); });
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status !== 'complete') return;
+  if (tab.active) await applyDndToTab(tabId, tab.url);
+  await focusPendingNewTabSearch(tabId, tab);
+});
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handlers = {
@@ -199,8 +204,25 @@ async function openNativeNewTab(tabId) {
 async function openNewTabSearch(tabId, url) {
   const allowed = Object.values(NEW_TAB_SEARCH_ENGINES).some((engine) => engine.url === url);
   if (!allowed) throw new Error('Moteur de recherche non autorisé.');
-  await chrome.tabs.update(await navigationTabId(tabId), { url });
+  const targetTabId = await navigationTabId(tabId);
+  pendingNewTabSearchFocus.set(targetTabId, new URL(url).origin);
+  await chrome.tabs.update(targetTabId, { url });
   return { redirected: true };
+}
+
+async function focusPendingNewTabSearch(tabId, tab) {
+  const expectedOrigin = pendingNewTabSearchFocus.get(tabId);
+  if (!expectedOrigin) return;
+  pendingNewTabSearchFocus.delete(tabId);
+  if (!tab.url || !tab.url.startsWith(expectedOrigin)) return;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      await chrome.tabs.sendMessage(tabId, { type: 'page/focus-search' });
+      return;
+    } catch {
+      if (attempt < 7) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
 }
 
 async function openNewTabCustom(tabId, url) {

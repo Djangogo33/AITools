@@ -1,4 +1,4 @@
-const endpoint = 'http://127.0.0.1:9333';
+const endpoint = process.env.AITOOLS_CDP_ENDPOINT || 'http://127.0.0.1:9333';
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 let targets = await (await fetch(`${endpoint}/json/list`)).json();
 let worker = targets.find((item) => item.type === 'service_worker' && /\/background\/service-worker\.js$/.test(item.url));

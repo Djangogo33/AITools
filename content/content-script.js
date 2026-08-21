@@ -13,7 +13,8 @@ const MESSAGE_TYPES = {
   blockSponsored: 'page/block-sponsored',
   youtubeTheater: 'page/youtube-theater',
   youtubeSpeed: 'page/youtube-speed',
-  getMediaInfo: 'page/get-media-info'
+  getMediaInfo: 'page/get-media-info',
+  focusSearch: 'page/focus-search'
 };
 
 const FOCUS_STYLE_ID = 'aitools-focus-style';
@@ -34,7 +35,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     [MESSAGE_TYPES.blockSponsored]: () => ({ removed: blockSponsoredResults() }),
     [MESSAGE_TYPES.youtubeTheater]: () => youtubeTheaterMode(),
     [MESSAGE_TYPES.youtubeSpeed]: () => youtubePlaybackSpeed(),
-    [MESSAGE_TYPES.getMediaInfo]: () => getMediaInfo()
+    [MESSAGE_TYPES.getMediaInfo]: () => getMediaInfo(),
+    [MESSAGE_TYPES.focusSearch]: () => ({ focused: focusSearchField() })
   };
   const handler = handlers[message?.type];
   if (!handler) return false;
@@ -46,6 +48,21 @@ function captureContext() {
   const selected = String(window.getSelection?.()?.toString() || '').replace(/\s+/g, ' ').trim();
   const text = selected || extractReadableText().slice(0, 1_200);
   return { title: document.title || location.hostname, url: location.href, text, selection: Boolean(selected) };
+}
+
+function focusSearchField() {
+  const selectors = ['textarea[name="q"]', 'input[name="q"]:not([type="hidden"])', '#sb_form_q', '#search_form_input', '#search_form_input_homepage', 'textarea[aria-label*="recherch" i]', 'input[aria-label*="recherch" i]', 'input[type="search"]'];
+  const focus = () => {
+    const field = selectors.map((selector) => document.querySelector(selector)).find((element) => element && !element.disabled && element.getClientRects().length);
+    if (!field) return false;
+    field.focus({ preventScroll: true });
+    return document.activeElement === field;
+  };
+  if (focus()) return true;
+  const observer = new MutationObserver(() => { if (focus()) observer.disconnect(); });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  setTimeout(() => observer.disconnect(), 2_500);
+  return false;
 }
 
 function extractReadableText() {
