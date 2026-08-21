@@ -25,3 +25,6 @@ html,body{width:620px;height:700px;min-height:700px;max-height:700px;overflow:hi
 .app-shell{width:100%;height:100%;min-height:0;max-height:100%;overflow:hidden}
 .sidebar{height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
 .main-content{height:100%;min-height:0;max-height:none;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+
+/* Une seule barre verticale dans tout le popup : les résultats restent dans le flux principal. */
+.ai-result,.module-output,.browser-tab-results,.media-results{max-height:none;overflow:visible}

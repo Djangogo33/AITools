@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "AITools",
-  "version": "8.4.3",
+  "version": "8.4.4",
   "description": "Le couteau suisse local-first pour la page web, le texte, les onglets, les médias, l’IA et la productivité.",
   "permissions": ["storage", "tabs", "tabGroups", "alarms", "scripting", "activeTab", "notifications", "identity"],
   "host_permissions": ["https://yvtukwaepqqsvacbbyou.supabase.co/*"],
